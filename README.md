@@ -7,7 +7,7 @@ kressel.js loads the src of `<meta id="kressel-load-project" src="" />` (should 
 
 gm2kr.js creates a page that converts supplied GameMaker projects (must include data.win & referenced assets) to a downloadable .zip with a game.krpj
 
-By default, kressel loads from .krpj (JSON) project files. These contain everything (room data, custom scripting, settings, etc.) as long as it's not a resource () 
+By default, kressel loads from .krpj (JSON) project files. These contain everything (room data, custom scripting, settings, etc.) as long as it's not a resource (audio, image, etc.) 
 
 ## Docs
 * /docs/gm2kr_compat.md -> GameMaker compatibility reference
