@@ -153,3 +153,6 @@ vite.config.ts.timestamp-*
 
 # gm2kr dev bundle
 gm2kr/public/gm2kr.js*
+
+# stray output from tools writing to /proc/self/fd/* on Windows
+/proc/
