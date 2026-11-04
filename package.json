@@ -4,6 +4,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
+    "test": "echo no tests yet",
     "dev:editor": "pnpm --filter kreditor dev",
     "dev:player": "pnpm --filter krplayer dev",
     "dev:gm2kr": "pnpm --filter gm2kr dev"

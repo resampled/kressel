@@ -32,7 +32,10 @@ Note that most of these opcodes are (near-)exact representations of how they app
 * `fnc_*` - Functions
 * `opr_*` - Operators (e.g. eq, neq, gt)
 * `var_*` - Variables
+* `mov_*` - Movement
+* `snd_*` - Sound
 * `_*` - Declarations 
+(add more where it's reasonable)
 
 # Values
 Plain values can often be read directly:
