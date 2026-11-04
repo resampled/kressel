@@ -8,14 +8,22 @@ export type VoiceId = number;
 
 export interface Renderer {
   loadTexture(url: string): Promise<TextureId>;
-  beginFrame(): void;
+  /** [width, height] of a loaded texture. */
+  textureSize(tex: TextureId): Promise<[number, number]>;
+  /** Starts a frame on a w x h surface (the application surface / GUI size). */
+  beginFrame(w: number, h: number): void;
   endFrame(): void;
   /** color is GML BGR. */
   clear(color: number, alpha: number): void;
+  /** Draws [sx, sy, sw, sh] of tex with its (ox, oy) pixel at (x, y), scaled, then rotated (degrees, counter-clockwise). */
   drawImage(
     tex: TextureId, sx: number, sy: number, sw: number, sh: number,
-    x: number, y: number, xscale: number, yscale: number, rot: number, color: number, alpha: number,
+    x: number, y: number, ox: number, oy: number, xscale: number, yscale: number, rot: number, color: number, alpha: number,
   ): void;
+  rect(x1: number, y1: number, x2: number, y2: number, color: number, alpha: number, outline: boolean): void;
+  circle(x: number, y: number, r: number, color: number, alpha: number, outline: boolean): void;
+  /** Text in a built-in fallback font (GM's default font when none is set). */
+  systemText(text: string, x: number, y: number, color: number, alpha: number): void;
 }
 
 export interface Audio {
@@ -25,8 +33,11 @@ export interface Audio {
 }
 
 export interface Input {
-  /** Indexed by GML key code; 1 while held. The runtime derives pressed/released per step. */
+  /** Indexed by GML key code; 1 while held. */
   readonly keys: Uint8Array;
+  /** Latched by the platform when a key goes down/up; the runtime clears them after each step. */
+  readonly pressed: Uint8Array;
+  readonly released: Uint8Array;
   mouseX: number;
   mouseY: number;
   /** Bit 0 left, 1 right, 2 middle. */

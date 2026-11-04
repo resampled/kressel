@@ -3,13 +3,22 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Where "Play" opens krplayer. The dev player runs on :8000 (pnpm dev:player); the site sets its own. -->
+  <meta name="gm2kr-player-url" content="http://localhost:8000/" />
   <title>gm2kr</title>
-  <style>body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }</style>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+    .actions { margin: 12px 0; display: flex; gap: 8px; }
+  </style>
 </head>
 <body>
   <h1>GameMaker → Kratience</h1>
   <p>Select your GameMaker game folder (must include <code>data.win</code> and referenced assets).</p>
   <input id="input" type="file" webkitdirectory multiple />
+  <div class="actions">
+    <button id="download" disabled>Download .zip</button>
+    <button id="play" disabled>Play in krplayer</button>
+  </div>
   <pre id="log"></pre>
   <script src="./gm2kr.js"></script>
 </body>

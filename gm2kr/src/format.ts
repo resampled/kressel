@@ -14,6 +14,8 @@ export interface GmFormat {
   gms2: boolean;
   /** GMS 2.3+ (functions, structs, sequences). Detected by the SEQN chunk. */
   gms23: boolean;
+  /** GM 2022.1+: room layers carry filter/effect fields. Detected by chunks added in 2022.x (FEAT/FEDS). */
+  layerEffects: boolean;
 }
 
 const SUPPORTED_BYTECODE = [15, 16, 17];
@@ -25,5 +27,5 @@ export function detectFormat(gen8: Gen8, chunks: Chunk[]): GmFormat {
     throw new FormatError(`unsupported bytecode version ${bytecode} (supported: ${SUPPORTED_BYTECODE.join(', ')})`, 1);
   }
   const gms23 = has('SEQN');
-  return { bytecode, gms2: gms23 || gen8.version[0] >= 2, gms23 };
+  return { bytecode, gms2: gms23 || gen8.version[0] >= 2, gms23, layerEffects: has('FEAT') || has('FEDS') };
 }

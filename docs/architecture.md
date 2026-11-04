@@ -16,22 +16,27 @@ gm2kr/src/
   io/reader.ts      the ONLY code that touches data.win bytes (bounds checks, count caps, offsets in errors)
   datawin.ts        FORM/chunk listing
   format.ts         version detection, once → GmFormat flags
-  chunks/           one parser per chunk (gen8.ts, strg.ts, code.ts, ...)
-  model.ts          GmModel: GameMaker-side types, not krpj        (todo)
-  decompile/        disasm → cfg → structure → toKrpj, separate passes (todo)
-  emit/             krpj, textures (TPAG → PNGs), audio            (todo)
+  io/bzip2.ts       bzip2 decoder for "2zoq" textures (bounded output)
+  chunks/           one parser per chunk (gen8, strg, tpag, txtr, sprt, font, objt, room, code)
+  model.ts          GmModel: GameMaker-side types, not krpj
+  decompile/        disasm.ts → structure.ts (stack sim + pattern structuring → krpj);
+                    builtins.ts (GML name → opcode, derived from the opcode table)
+  emit/             krpj.ts, textures.ts (QOI → RGBA → PNG), zip.ts; audio (todo)
+  convert.ts        data.win → { krpj, files }, no DOM
   index.ts          UI only
 
 krplayer/src/
   krpj.ts           shared format types (imported by gm2kr/kreditor)
   opcodes.ts        opcode registry (+ opcodes.gen.ts, generated)
   config.ts         base URLs, injected by the host page
-  platform/         Renderer/Audio/Input/Storage interfaces + headless (webgl/webaudio todo)
-  compile/          tree → bytecode, name resolution              (todo)
-  vm/               dispatch loop, call frames, with-stack       (todo)
-  value.ts          all GML coercion/equality/int64/undefined rules (todo)
-  runtime/          instances (creation/iteration order), events, rooms, collision (todo)
-  builtins/         one file per opcode category: ins.ts, drw.ts, snd.ts, ...   (todo)
+  platform/         Renderer/Audio/Input/Storage interfaces, headless, web (Canvas2D + keyboard; WebGL/WebAudio todo)
+  loader/           project sources (URL, in-memory files, zip) and the gm2kr handoff
+  compile/          tree → bytecode, name resolution
+  vm/               dispatch loop, with-stack (user function calls todo)
+  value.ts          all GML coercion/equality/undefined rules (int64 todo)
+  runtime/          assets (load + compile), instances, game (rooms, event order, drawing), collision, effects
+  builtins/         one file per opcode category (ins.ts, drw.ts, ...); registry.ts maps opcode id → implementation
+  play.ts           source + platform → running Game (browser and headless)
 ```
 
 ## Rules
@@ -47,6 +52,11 @@ krplayer/src/
 ## Decisions
 * **Unstructurable control flow fails loudly.** krpj has no goto. If the decompiler can't rebuild structured control flow (`if`/loops/`switch`/`with`) for a code entry, conversion fails with the code entry name and bytecode offset. It doesn't emit a fallback opcode or skip the code. GML has no goto, so this should only happen through compiler quirks. Add a hidden compat opcode only if real games need it, and update this note and krpj_opcodes.md when you do.
 * **Supported bytecode versions are 15–17.** Anything else is rejected by `detectFormat`.
+* **Built-in calls are opcodes, resolved at load.** The krplayer compiler maps each opcode name to its id and refuses ones with no implementation in `builtins/`, so a project that would hit an unimplemented builtin fails before it starts, naming the script path.
+* **Getting a converted project into krplayer.** gm2kr's output is a set of files (`game.krpj` + `./` assets). It reaches the player one of three ways, all ending in the same `ProjectSource` (`{ krpj, url(path) }`):
+  1. a URL, for published projects on the CDN;
+  2. a zip the user opens in the player;
+  3. **in-memory handoff**: gm2kr opens the player with `?from=opener`, the player posts `kr-player-ready` to its opener, and gm2kr replies with the files as transferred ArrayBuffers (`loader/handoff.ts`). The player only accepts that message from its own opener and serves the files from blob URLs. Nothing is uploaded and the Django site isn't involved.
 
 ## Testing
 `pnpm test` runs `node --test` on `gm2kr/test` and `krplayer/test` (Node ≥ 23 for type stripping).
@@ -57,6 +67,8 @@ krplayer/src/
 
 ## Build order
 Get a thin end-to-end slice working first, then widen one opcode category at a time, updating the compat matrix "Build progress" as you go:
+Steps 1–3 are done for the asteroids sample (plus collisions, alarms, fonts and room restart).
+
 1. **Chunks:** GEN8, STRG, CODE, VARI, FUNC, OBJT, ROOM, SPRT, TPAG, TXTR
 2. **Runtime:** create/step/draw events, `draw_sprite`, keyboard input
 3. **Result:** a sprite moving in krplayer

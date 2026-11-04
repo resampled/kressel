@@ -71,6 +71,19 @@ export class Reader {
     return p;
   }
 
+  /** A GameMaker pointer list: u32 count (capped), then that many absolute pointers. */
+  ptrList(max: number): number[] {
+    const n = this.count(max), out: number[] = [];
+    for (let i = 0; i < n; i++) out.push(this.ptr());
+    return out;
+  }
+
+  /** A u32 bool (GameMaker stores most bools as 4 bytes). */
+  bool(): boolean { return this.u32() !== 0; }
+
+  /** A reader over [at, this.end), positioned at at. For following pointers inside a chunk. */
+  at(at: number): Reader { return new Reader(this.buf, at, this.end).seek(at); }
+
   /** A pointer to a GameMaker string: the pointer targets the chars, the u32 length sits just before. */
   strPtr(maxLen = 1 << 20): string {
     const p = this.ptr(true);

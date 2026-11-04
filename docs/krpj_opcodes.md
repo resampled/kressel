@@ -657,6 +657,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_shader_uniform_f` (hidden) | num uniform, num... | `shader_set_uniform_f` | |
 | `drw_getpixel` (compat) | num x, num y | `draw_getpixel` | Stubbed. |
 | `drw_surface_getpixel` (compat) | num surf, num x, num y | `surface_getpixel` | Stubbed. |
+| `drw_effect` | ref `above`/`below`, num kind, num x, num y, num size, col colour | `effect_create_above` / `effect_create_below` | Built-in one-shot effects. kind: `ef_explosion` = 0, `ef_ring` 1, `ef_ellipse` 2, `ef_firework` 3, `ef_smoke` 4, `ef_smokeup` 5, `ef_star` 6, `ef_spark` 7, `ef_flare` 8, `ef_cloud` 9, `ef_rain` 10, `ef_snow` 11; size 0-2 (small/medium/large). Drawn by krplayer as an approximation, not GM's exact particles. |
 | `drw_part` (hidden, family) | ref fn, ... | `part_*` | ref drops `part_` (`["drw_part","particles_create",ps,x,y,pt,10]`). Only `system_create`, `particles_create` and `system_destroy` get custom labels. |
 
 ## Rooms

@@ -24,9 +24,9 @@ test('GEN8 fields', () => {
 
 test('format flags', () => {
   const g1 = game(16, 1);
-  assert.deepEqual(detectFormat(g1.gen8, g1.chunks), { bytecode: 16, gms2: false, gms23: false });
+  assert.deepEqual(detectFormat(g1.gen8, g1.chunks), { bytecode: 16, gms2: false, gms23: false, layerEffects: false });
   const g23 = game(17, 2, [['SEQN', []]]);
-  assert.deepEqual(detectFormat(g23.gen8, g23.chunks), { bytecode: 17, gms2: true, gms23: true });
+  assert.deepEqual(detectFormat(g23.gen8, g23.chunks), { bytecode: 17, gms2: true, gms23: true, layerEffects: false });
 });
 
 test('unsupported bytecode fails loudly', () => {

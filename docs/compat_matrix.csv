@@ -1,7 +1,7 @@
 ID,Section,Category,Applies to,Status,Included In…,Notes,Build progress
 1.01,Core language & flow,Visual script graph serialised to JSON,Visual scripting,Supported,Early,"Versioned schema, liberal use of arrays. Validate server-side (Django) on publish. Not required to follow GML to the letter.",Not started
-1.02,Core language & flow,"Variables, operators, control flow",Both,Supported,Early,Visual nodes for authoring; interpreter handles imported code.,Not started
-1.03,Core language & flow,"with, self / other / all / noone",Both,Supported,Early,Interpreter must match GML semantics exactly for imported games (main semantic risk). Visual scripts can expose this as a 'for each instance of' node.,Not started
+1.02,Core language & flow,"Variables, operators, control flow",Both,Supported,Early,Visual nodes for authoring; interpreter handles imported code.,"Started: interpreter runs if/else, while, do/until, for, repeat, switch, compound assignment; GML value rules in value.ts"
+1.03,Core language & flow,"with, self / other / all / noone",Both,Supported,Early,Interpreter must match GML semantics exactly for imported games (main semantic risk). Visual scripts can expose this as a 'for each instance of' node.,Started: with/self/other/all/noone in compiler + VM; iteration order not yet verified against GM
 1.04,Core language & flow,"Functions, scripts, static, argument[]",Both,Supported,Early,,Not started
 1.05,Core language & flow,"Structs, constructors, method variables",Bytecode,Partial,Early,Needed by GMS2.3+ code. Prototype/inheritance behaviour needs testing. Visual scripts use JSON objects instead.,Not started
 1.06,Core language & flow,"Arrays (incl. 2D), array_*",Both,Supported,Early,JSON arrays in visual scripts. Interpreter must replicate GML copy-on-write for imported code.,Not started
@@ -12,13 +12,13 @@ ID,Section,Category,Applies to,Status,Included In…,Notes,Build progress
 1.11,Core language & flow,"game_end, game_restart",Both,Partial,Early,"Maps to 'return to menu' or reload, not process exit.",Not started
 1.12,Core language & flow,"show_debug_message, debug_*",Both,Supported,Early,Routes to the dev console.,Not started
 1.13,Core language & flow,Macros and enums,Both,Supported,Early,Compile-time.,Not started
-2.01,Project resources,"Sprites (frames, origin, masks, 9-slice)",Both,Supported,Early,Shared asset candidate (/kr/sa/*).,Not started
+2.01,Project resources,"Sprites (frames, origin, masks, 9-slice)",Both,Supported,Early,Shared asset candidate (/kr/sa/*).,"Started: sprite frames (untrimmed PNGs), origin, bbox; precise masks not read yet"
 2.02,Project resources,Tile sets and backgrounds,Both,Supported,Early,,Not started
-2.03,Project resources,"Objects, events, parenting",Both,Supported,Early,"Create, Destroy, Step, Begin/End Step, Alarm 0-11, Draw variants, Collision, Keyboard, Other.",Not started
-2.04,Project resources,"Rooms, layers, instances, views",Both,Supported,Early,Up to 8 views.,Not started
+2.03,Project resources,"Objects, events, parenting",Both,Supported,Early,"Create, Destroy, Step, Begin/End Step, Alarm 0-11, Draw variants, Collision, Keyboard, Other.","Started: create, destroy, cleanup, step x3, alarm, collision, keyboard, other (outside room, room/game start/end, animation end, user), draw x9; parent inheritance"
+2.04,Project resources,"Rooms, layers, instances, views",Both,Supported,Early,Up to 8 views.,"Started: rooms, instance + background (colour) layers; views, tiles, asset layers not yet"
 2.05,Project resources,Room instance creation code,Both,Supported,Early,,Not started
 2.06,Project resources,Scripts / functions,Both,Supported,Early,,Not started
-2.07,Project resources,Fonts (sprite and TTF),Both,Partial,Early,TTF rasterisation differs from GM. Prefer pre-baked glyph sheets.,Not started
+2.07,Project resources,Fonts (sprite and TTF),Both,Partial,Early,TTF rasterisation differs from GM. Prefer pre-baked glyph sheets.,"Started: sprite fonts (glyph atlas, draw_text with align); TTF/SDF not yet"
 2.08,Project resources,Sounds,Both,Partial,Early,See Audio section.,Not started
 2.09,Project resources,Paths,Both,Supported,Later,,Not started
 2.1,Project resources,Timelines,Both,Supported,Later,,Not started
@@ -28,16 +28,16 @@ ID,Section,Category,Applies to,Status,Included In…,Notes,Build progress
 2.14,Project resources,Included files,Both,Partial,Later,"Read-only, served from the project CDN path (/kr/pj/<slug>/*).",Not started
 2.15,Project resources,Audio groups,Both,Partial,Early,Treated as loading hints.,Not started
 2.16,Project resources,Native extensions,Both,Unsupported,None,Platform binaries; cannot load in a browser.,Not started
-3.01,"Instances, collisions & movement","instance_* (create, destroy, find, exists, number)",Both,Supported,Early,,Not started
-3.02,"Instances, collisions & movement","Built-in movement (speed, direction, hspeed, friction, gravity)",Both,Supported,Early,,Not started
-3.03,"Instances, collisions & movement","Collision functions (place_*, position_*, collision_*, instance_place)",Both,Supported,Early,Precise collision needs per-sprite masks.,Not started
+3.01,"Instances, collisions & movement","instance_* (create, destroy, find, exists, number)",Both,Supported,Early,,"Started: instance_create_layer/depth, instance_destroy, instance_exists, instance_number"
+3.02,"Instances, collisions & movement","Built-in movement (speed, direction, hspeed, friction, gravity)",Both,Supported,Early,,"Started: speed/direction/hspeed/vspeed sync, friction, gravity, motion_set/add, move_wrap"
+3.03,"Instances, collisions & movement","Collision functions (place_*, position_*, collision_*, instance_place)",Both,Supported,Early,Precise collision needs per-sprite masks.,"Started: place_meeting, instance_place, collision events (rect + rotated rect SAT); precise masks not yet"
 3.04,"Instances, collisions & movement",Pixel-precise masks and rotated bounding boxes,Both,Partial,Early,Performance cost on large rooms. Add a spatial hash.,Not started
 3.05,"Instances, collisions & movement",mp_* motion planning,Both,Partial,Later,,Not started
 3.06,"Instances, collisions & movement","Physics world (physics_*, phy_*)",Both,Unsupported,None,Not bit-identical to GM's Box2D. Revisit only if demanded.,Not started
 3.07,"Instances, collisions & movement",Persistent instances and room transitions,Both,Supported,Early,Critical for Deltarune-style controller objects.,Not started
 3.08,"Instances, collisions & movement","Fixed-step timing (room_speed, delta_time, game_get_speed)",Both,Supported,Early,"Accumulator loop, independent of display refresh rate.",Not started
-4.01,Rendering,"draw_sprite*, draw_text*, shapes, primitives",Both,Supported,Early,,Not started
-4.02,Rendering,"draw_set_* (colour, alpha, font, halign/valign)",Both,Supported,Early,,Not started
+4.01,Rendering,"draw_sprite*, draw_text*, shapes, primitives",Both,Supported,Early,,"Started: draw_self, draw_text; Canvas2D renderer (WebGL todo)"
+4.02,Rendering,"draw_set_* (colour, alpha, font, halign/valign)",Both,Supported,Early,,Started: draw_set_font/colour/alpha/halign/valign
 4.03,Rendering,"Blend modes (bm_*, gpu_set_blendmode)",Both,Supported,Early,,Not started
 4.04,Rendering,"gpu_set_blendmode_ext, gpu_set_alphatestenable, gpu_set_* state",Both,Partial,Later,,Not started
 4.05,Rendering,"Surfaces (surface_*, application_surface)",Both,Partial,Early,Framebuffer-backed. Lost WebGL context needs handling.,Not started
@@ -57,7 +57,7 @@ ID,Section,Category,Applies to,Status,Included In…,Notes,Build progress
 5.06,Audio,Audio buses and effects,Both,Stubbed,Later,,Not started
 5.07,Audio,Recording and capture (audio_start_recording),Both,Unsupported,None,Microphone permission and privacy.,Not started
 5.08,Audio,Format handling,Both,Partial,Early,Transcode to OGG/MP3 on upload; browser support varies.,Not started
-6.01,Input,"Keyboard (keyboard_check*, vk_*)",Both,Supported,Early,"Use KeyboardEvent.code, not key, for layout independence.",Not started
+6.01,Input,"Keyboard (keyboard_check*, vk_*)",Both,Supported,Early,"Use KeyboardEvent.code, not key, for layout independence.",Started: keyboard_check/_pressed/_released and key events (KeyboardEvent.keyCode = GM vk codes)
 6.02,Input,"keyboard_lastchar, keyboard_string",Both,Partial,Later,IME and locale differences.,Not started
 6.03,Input,Mouse,Both,Supported,Early,,Not started
 6.04,Input,Gamepad (gamepad_*),Both,Partial,Later,Button mappings vary by controller.,Not started
@@ -84,11 +84,11 @@ ID,Section,Category,Applies to,Status,Included In…,Notes,Build progress
 8.08,Networking & platform,"url_open, url_get_domain",Both,Partial,Later,"Open in a new tab, behind a confirmation.",Not started
 8.09,Networking & platform,"date_*, current_time, timers",Both,Supported,Early,,Not started
 8.1,Networking & platform,"Other async events (Social, Save/Load, Dialog, Audio Playback)",Both,Partial,Later,Only events backed by supported APIs fire.,Not started
-9.01,Import pipeline & security,Bytecode interpreter for data.win CODE chunk,Bytecode,Supported,Early,DECISION: imports run original bytecode. Biggest single engineering item.,Not started
-9.02,Import pipeline & security,Multiple bytecode versions,Bytecode,Partial,Early,Format differs by GameMaker version. Support the versions used by target Deltarune builds first.,Not started
+9.01,Import pipeline & security,Bytecode interpreter for data.win CODE chunk,Bytecode,Supported,Early,DECISION: imports run original bytecode. Biggest single engineering item.,Started: bytecode 15-17 disassembler + structuring decompiler to krpj; asteroids sample converts
+9.02,Import pipeline & security,Multiple bytecode versions,Bytecode,Partial,Early,Format differs by GameMaker version. Support the versions used by target Deltarune builds first.,Started: bytecode 17 (GM 2024) verified on one sample; 15-16 untested
 9.03,Import pipeline & security,YYC-compiled builds (native code),Bytecode,Unsupported,None,No usable bytecode. Reject on import.,Not started
 9.04,Import pipeline & security,Interpreter instruction budget / watchdog,Bytecode,Supported,Early,Stops infinite loops from freezing the tab.,Not started
-9.05,Import pipeline & security,"Asset extraction: SPRT, SOND, FONT, BGND, AUDO, TPAG, TXTR",Bytecode,Supported,Early,Output to shared assets (/kr/sa/*).,Not started
-9.06,Import pipeline & security,"Project data extraction: OBJT, ROOM, SCPT, TMLN, PATH",Bytecode,Supported,Early,Output to project data (/kr/pj/<slug>/*).,Not started
+9.05,Import pipeline & security,"Asset extraction: SPRT, SOND, FONT, BGND, AUDO, TPAG, TXTR",Bytecode,Supported,Early,Output to shared assets (/kr/sa/*).,"Started: SPRT, FONT, TPAG, TXTR (QOI and BZ2+QOI; PNG pages not yet)"
+9.06,Import pipeline & security,"Project data extraction: OBJT, ROOM, SCPT, TMLN, PATH",Bytecode,Supported,Early,Output to project data (/kr/pj/<slug>/*).,"Started: OBJT, ROOM, CODE, VARI, FUNC; SCPT/GLOB/TMLN/PATH fail loudly"
 9.07,Import pipeline & security,Compatibility report on import,Bytecode,Supported,Early,"Scans the FUNC table for unsupported or stubbed functions, listing them by object and event.",Not started
 9.08,Import pipeline & security,"Sandboxed player (iframe sandbox, separate origin, strict CSP)",Both,Supported,Early,Keep project code away from Django session cookies.,Not started

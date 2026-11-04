@@ -311,6 +311,7 @@ export const OPCODES: readonly OpcodeDef[] = [
   {"name":"drw_shader_uniform_f","flags":["hidden"],"args":"num uniform, num...","gml":"`shader_set_uniform_f`"},
   {"name":"drw_getpixel","flags":["compat"],"args":"num x, num y","gml":"`draw_getpixel`"},
   {"name":"drw_surface_getpixel","flags":["compat"],"args":"num surf, num x, num y","gml":"`surface_getpixel`"},
+  {"name":"drw_effect","flags":[],"args":"ref `above`/`below`, num kind, num x, num y, num size, col colour","gml":"`effect_create_above` / `effect_create_below`"},
   {"name":"drw_part","flags":["hidden","family"],"args":"ref fn, ...","gml":"`part_*`"},
   {"name":"rom_goto","flags":[],"args":"room r","gml":"`room_goto`"},
   {"name":"rom_change","flags":[],"args":"ref `next`/`previous`/`restart`","gml":"`room_goto_next` / `room_goto_previous` / `room_restart`"},

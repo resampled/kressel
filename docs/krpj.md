@@ -162,3 +162,33 @@ Roughly equivalent GML for `obj_player`'s step event:
 if (keyboard_check(vk_right)) x = x + move_speed;
 if (keyboard_check(vk_left))  x = x - move_speed;
 ```
+
+## Field reference
+Fields beyond the example above. All are optional unless noted; the types live in `krplayer/src/krpj.ts`.
+
+* `cfg_gm_compat.imported_from`: `null`, or `{ "tool": "gm2kr", "game": <GM project name>, "bytecode": <15-17>, "gm_version": [major, minor, release, build] }`.
+* `cfg_defaults.width` / `height`: `"default"` means the size of `init_room`.
+* `room_order`: room keys in game order (`room_goto_next` etc.). Defaults to the key order of `rooms`.
+* Asset keys (`sprites`, `fonts`, `objects`, `rooms`...) share one namespace, since `["_as", name]` names any of them. gm2kr uses the GameMaker asset names as keys.
+
+**Sprites**
+* `speed`: frames per second; with `"speed_type": "frame"`, frames per game frame instead.
+* `bbox`: collision box `[left, top, right, bottom]` in inclusive image pixels. Defaults to the whole image.
+* `mask`: `"rect"` (default; collides as the axis-aligned box around the scaled/rotated box), `"rotated"` (the rotated box itself) or `"precise"` (per-pixel; krplayer currently treats it as `"rotated"`).
+* Frames are full, untrimmed images; `origin` is relative to their top-left.
+
+**Fonts**: `size`, `bold`, `italic`, `antialias`, `line_height`, `ranges` and `glyphs` (`"code": [x, y, w, h, shift, offset]` in the atlas) as in the example; `kerning` is optional.
+
+**Objects**
+* `solid` (default `false`), `mask`: sprite key of a collision mask that differs from `sprite`.
+* `scripts`: event hats (see krpj_opcodes.md). An object without an event uses its parent's.
+
+**Rooms**
+* `persistent` (default `false`).
+* `scripts`: only `evt_create` (room creation code), run after every instance's create event and creation code.
+* Layers: `visible` (default `true`) on every layer. Background layers also take `htiled`, `vtiled`, `stretch`; `color` is BGR.
+* Instance entries: `object`, `x`, `y`, plus optional `scale_x`, `scale_y`, `angle`, `colour` (BGR), `alpha`, `image_index`, `image_speed` and `creation` (a script run right after that instance's create event).
+* Instances are created layer by layer, in list order, each running its create event (then creation code) before the next is created.
+
+## Exported projects
+gm2kr exports a project as a zip: `game.krpj` at the root plus its `./` assets at their paths (`sprites/<key>/<frame>.png`, `fonts/<key>.png`). krplayer opens such a zip directly, or receives the same files from gm2kr in memory (see architecture.md).
