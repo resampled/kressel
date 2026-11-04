@@ -3,6 +3,7 @@
 Kratience is a browser-based Deltarune fangame creator: an editor (kreditor), a web player (krplayer), a GameMaker-to-Kratience project converter (gm2kr) and a publish directory. This repo contains all these but the publish directory.
 
 Read relevant docs before editing:
+* /docs/architecture.md -> gm2kr/krplayer structure, rules and decisions
 * /docs/gm2kr.md -> GameMaker games to Kratience project converter
 * /docs/gm_gotchas.md -> GameMaker common gotchas/things to notice
 * /docs/krpj.md -> Kratience project format (.krpj) reference
@@ -17,7 +18,8 @@ When editing, use all 3 projects to construct a reimplementation of the GameMake
 The Django site (accounts, publishing, storage, pages) is separate. The engine must not depend on it.
 
 ## Workflow
-* Monorepo uses pnpm workspaces. Run `pnpm typecheck` after any TS change and `pnpm build` before calling work done. Never mix in npm/yarn lockfiles.
+* Monorepo uses pnpm workspaces. Run `pnpm typecheck` and `pnpm test` after any TS change and `pnpm build` before calling work done. Never mix in npm/yarn lockfiles.
+* After editing docs/krpj_opcodes.md, run `pnpm gen:opcodes` and commit the regenerated krplayer/src/opcodes.gen.ts.
 * Dev servers: `pnpm dev:editor`, `pnpm dev:player`, `pnpm dev:gm2kr`.
 * Keep each change inside one package where possible. If a change crosses packages (e.g. a new opcode), update gm2kr (emit), krplayer (execute) and docs/krpj_opcodes.md in the same change.
 

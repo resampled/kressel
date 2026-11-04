@@ -1,4 +1,4 @@
-import type { Krpj } from './krpj';
+import type { Krpj } from './krpj.ts';
 
 async function loadProject(src: string): Promise<Krpj> {
   const url = new URL(src, location.href);

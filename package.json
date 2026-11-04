@@ -1,15 +1,18 @@
 {
   "name": "kressel",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
-    "test": "echo no tests yet",
+    "typecheck": "pnpm -r typecheck && tsc -p tsconfig.test.json",
+    "test": "node --test \"gm2kr/test/**/*.test.ts\" \"krplayer/test/**/*.test.ts\"",
+    "gen:opcodes": "node scripts/gen-opcodes.ts",
     "dev:editor": "pnpm --filter kreditor dev",
     "dev:player": "pnpm --filter krplayer dev",
     "dev:gm2kr": "pnpm --filter gm2kr dev"
   },
   "devDependencies": {
+    "@types/node": "^26.6.6",
     "esbuild": "^0.28.2",
     "serve": "^14.2.6",
     "typescript": "^7.0.2"
