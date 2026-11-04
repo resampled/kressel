@@ -4,11 +4,16 @@ const $ = (id) => document.getElementById(id);
 let project = newProject();
 
 function render() {
-  $('resources').innerHTML = ['sprites', 'sounds', 'fonts']
-    .map((k) => `<h4>${k}</h4>` + Object.values(project[k] ?? {}).map((r) => `<div>${r.name}</div>`).join(''))
-    .join('');
-  $('inspector').textContent = project.cfg_db_relay?.title ?? '';
+  document.title = `Editing ${project.cfg_db_relay?.title ?? 'Untitled'}`;
 }
+
+// header dropdowns: click a menu to toggle it, click anywhere else to close
+document.addEventListener('click', (e) => {
+  const menu = e.target.closest('.hdm');
+  const opening = menu && e.target.classList.contains('hdmi') && !menu.classList.contains('open');
+  document.querySelectorAll('.hdm.open').forEach((m) => m.classList.remove('open'));
+  if (opening) menu.classList.add('open');
+});
 
 $('btn-new').onclick = () => { project = newProject(); render(); };
 
