@@ -1,0 +1,16 @@
+{
+  "name": "kressel",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "dev:editor": "pnpm --filter kreditor dev",
+    "dev:player": "pnpm --filter krplayer dev",
+    "dev:gm2kr": "pnpm --filter gm2kr dev"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "serve": "^14.2.6",
+    "typescript": "^7.0.2"
+  }
+}

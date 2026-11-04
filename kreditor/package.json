@@ -1,0 +1,8 @@
+{
+  "name": "kreditor",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "serve -l 5170 ."
+  }
+}

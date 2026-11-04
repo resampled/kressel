@@ -1,0 +1,10 @@
+{
+  "name": "gm2kr",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --minify --sourcemap --format=iife --outfile=dist/gm2kr.js && node -e \"require('fs').copyFileSync('public/index.html','dist/index.html')\"",
+    "dev": "esbuild src/index.ts --bundle --sourcemap --format=iife --outfile=public/gm2kr.js --servedir=public --watch",
+    "typecheck": "tsc -p ."
+  }
+}

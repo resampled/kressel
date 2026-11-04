@@ -1,5 +1,5 @@
 # kressel
-Player engine & GameMaker converter for Kratience. In heavy development.
+Core editor, player engine & GameMaker converter for Kratience. In heavy development.
 
 When built, the player contains two files: kressel.js and gm2krpj.js.
 

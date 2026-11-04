@@ -1,0 +1,6 @@
+packages:
+  - kreditor
+  - krplayer
+  - gm2kr
+allowBuilds:
+  esbuild: true

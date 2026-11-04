@@ -1,0 +1,10 @@
+{
+  "krpj_v": "0.1",
+  "cfg_db_relay": { "slug": "example", "title": "Example", "author": "", "revision": 1, "date_created": 0, "date_updated": 0 },
+  "cfg_gm_compat": { "imported_from": null },
+  "cfg_defaults": { "width": "default", "height": "default", "fps": 60, "window_title": "Example" },
+  "cfg_project": { "init_room": null },
+  "sprites": {},
+  "sounds": {},
+  "fonts": {}
+}

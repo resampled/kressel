@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editing {{krpj.title}}</title>
+<style>
+:root {
+    --ctl: orange;
+}
+@font-face { font-family: "determination_sans"; src: url(./src/determination_sans.ttf); }
+body { font-family: determination_sans; font-size: 24px; margin: 0;}
+.hd { display: flex; flex-wrap: nowrap; justify-content: space-between; background: black;}
+.hd-left { display: flex; justify-content: left;}
+.hd-kratience { color: cyan; margin: 0 1em; cursor: pointer; user-select: none;}
+.hdmi { color: white; margin-right: .3em; cursor: pointer; user-select: none;}
+.mlcmh { font-size: 22px; border-bottom: 1px solid black; width: 100%; transform: skewX(-10deg); }
+.mlc-menu { padding: 0 .2em; width: 25%; display: flex; flex-direction: column; align-items:start; background: #d8f0ff; height: 100%; overflow-y: scroll; }
+.ml { width: 60vw; }
+#hdm-run { color: red; }
+.cbevt { background: var(--ctl);}
+#mlcmh-evt { color: var(--ctl); }
+.cb { font-family: Verdana; font-size: 14px; min-height: 1.5em; max-height: 1.5em; padding: .1em .3em; display: inline-flex; user-select: none; cursor:grab;}
+.cbh { border-radius: 1em 1em 0 0;}
+.arg { background: #b8ffbf; padding: 0 .2em; margin: 0 .2em; }
+.cb input {height:inherit}
+</style>
+</head>
+<body>
+    <div class="hd">
+        <div class="hd-left">
+        <span class="hd-kratience">KRATIENCE</span>
+        <div class="hd-menu">
+            <span id="hdm-file" class="hdmi">* File</span>
+            <span id="hdm-proj" class="hdmi">* Project</span>
+            <span id="hdm-run" class="hdmi">* Run</span>
+        </div>
+        </div>
+        <div class="hd-right"></div>
+    </div>
+<main>
+<div class="ml">
+    <div class="ml-code">
+        <div class="mlc-menu">
+            <div class="mlcmh" id="mlcmh-evt">Events</div>
+            <div class="cb cbh cbevt">on create</div>
+            <div class="cb cbh cbevt">on step</div>
+            <div class="cb cbh cbevt">on alarm <div contenteditable class="arg" data-arg="1" data-allow="\d|1[01]">0</div> </div>
+            <div class="mlcmh" id="mlcmh-ctl">Control</div>
+            <div class="mlcmh" id="mlcmh-mov">Motion</div>
+            <div class="mlcmh" id="mlcmh-ins">Instances</div>
+            <div class="mlcmh" id="mlcmh-var">Variables</div>
+            <div class="mlcmh" id="mlcmh-mat">Math</div>
+            <div class="mlcmh" id="mlcmh-drw">Draw</div>
+            <div class="mlcmh" id="mlcmh-aud">Audio</div>
+            <div class="mlcmh" id="mlcmh-fuc">Functions</div>
+            <div class="mlcmh" id="mlcmh-dat">Data & Files</div>
+        </div>
+    </div>
+</div>
+</main>
+    <script src="src/main.js" type="module"></script>
+</body>
+</html>
