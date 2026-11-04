@@ -1,3 +1,6 @@
+# per project
+samples/
+
 # Logs
 logs
 *.log
