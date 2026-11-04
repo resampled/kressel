@@ -9,7 +9,8 @@
     "gen:opcodes": "node scripts/gen-opcodes.ts",
     "dev:editor": "pnpm --filter kreditor dev",
     "dev:player": "pnpm --filter krplayer dev",
-    "dev:gm2kr": "pnpm --filter gm2kr dev"
+    "dev:gm2kr": "pnpm --filter gm2kr dev",
+    "dev:convert": "pnpm --parallel --filter krplayer --filter gm2kr dev"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
