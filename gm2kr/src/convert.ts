@@ -1,4 +1,4 @@
-// data.win -> { game.krpj, sprites/..., fonts/... }. The whole pipeline, with no DOM (runs in Node too).
+// data.win -> { game.json, sprites/..., fonts/... }. The whole pipeline, with no DOM (runs in Node too).
 
 import { readModel } from './model.ts';
 import { emitKrpj, type Converted } from './emit/krpj.ts';

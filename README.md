@@ -1,11 +1,11 @@
 # kressel
 Core editor (kreditor), player engine (krplayer/kressel.js) & GameMaker converter (gm2kr) for Kratience. In heavy development.
 
-kressel.js loads the src of `<meta id="kressel-load-project" src="" />` (should be a game.krpj) on the page it's loaded at.
+kressel.js loads the src of `<meta id="kressel-load-project" src="" />` (a .krpj project, or an unpacked game.json) on the page it's loaded at.
 
-gm2kr.js creates a page that converts supplied GameMaker projects (must include data.win & referenced assets) to a downloadable .zip with a game.krpj
+gm2kr.js creates a page that converts supplied GameMaker projects (must include data.win & referenced assets) to a downloadable .krpj project
 
-By default, kressel loads from .krpj (JSON) project files. These contain everything (room data, custom scripting, settings, etc.) as long as it's not a resource (audio, image, etc.) 
+Kratience projects are .krpj files: zip archives containing game.json plus the project's assets. game.json holds everything (room data, custom scripting, settings, etc.) that isn't a resource (audio, image, etc.); resources sit next to it in the archive or come from shared assets.
 
 The recommended "launch dev build from source" command (from root folder) is `pnpm run dev:convert` to run krplayer and gm2kr cocurrently, and `pnpm run dev:editor` to start the editor.
 

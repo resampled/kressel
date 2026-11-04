@@ -1,4 +1,4 @@
-// Minimal zip reader (stored + deflate entries) for loading exported projects.
+// Minimal zip reader (stored + deflate entries) for loading .krpj project archives.
 // Input is untrusted: offsets are bounds-checked and sizes capped.
 
 const MAX_ENTRY = 256 << 20, MAX_FILES = 65536;

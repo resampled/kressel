@@ -3,8 +3,8 @@ How gm2kr and krplayer are structured, and the rules that keep them maintainable
 
 ## Pipelines
 ```
-gm2kr:    data.win ─► Reader ─► chunk parsers ─► GmModel ─► decompiler ─► emitter ─► zip
-krplayer: .krpj ─► loader/validate ─► compiler ─► VM + runtime ─► platform (render/audio/input)
+gm2kr:    data.win ─► Reader ─► chunk parsers ─► GmModel ─► decompiler ─► emitter ─► .krpj (zip)
+krplayer: .krpj / game.json ─► loader/validate ─► compiler ─► VM + runtime ─► platform (render/audio/input)
 ```
 Each stage takes plain data and returns plain data, so it can be tested and dumped on its own. No stage reaches back into an earlier one: chunk parsers don't see the decompiler, builtins don't see the JSON.
 
@@ -30,7 +30,7 @@ krplayer/src/
   opcodes.ts        opcode registry (+ opcodes.gen.ts, generated)
   config.ts         base URLs, injected by the host page
   platform/         Renderer/Audio/Input/Storage interfaces, headless, web (Canvas2D + keyboard; WebGL/WebAudio todo)
-  loader/           project sources (URL, in-memory files, zip) and the gm2kr handoff
+  loader/           project sources (URL, in-memory files, .krpj archive) and the gm2kr handoff
   compile/          tree → bytecode, name resolution
   vm/               dispatch loop, with-stack (user function calls todo)
   value.ts          all GML coercion/equality/undefined rules (int64 todo)
@@ -53,9 +53,9 @@ krplayer/src/
 * **Unstructurable control flow fails loudly.** krpj has no goto. If the decompiler can't rebuild structured control flow (`if`/loops/`switch`/`with`) for a code entry, conversion fails with the code entry name and bytecode offset. It doesn't emit a fallback opcode or skip the code. GML has no goto, so this should only happen through compiler quirks. Add a hidden compat opcode only if real games need it, and update this note and krpj_opcodes.md when you do.
 * **Supported bytecode versions are 15–17.** Anything else is rejected by `detectFormat`.
 * **Built-in calls are opcodes, resolved at load.** The krplayer compiler maps each opcode name to its id and refuses ones with no implementation in `builtins/`, so a project that would hit an unimplemented builtin fails before it starts, naming the script path.
-* **Getting a converted project into krplayer.** gm2kr's output is a set of files (`game.krpj` + `./` assets). It reaches the player one of three ways, all ending in the same `ProjectSource` (`{ krpj, url(path) }`):
-  1. a URL, for published projects on the CDN;
-  2. a zip the user opens in the player;
+* **Getting a converted project into krplayer.** gm2kr's output is a set of files (`game.json` + `./` assets), which zipped together form a `.krpj`. It reaches the player one of three ways, all ending in the same `ProjectSource` (`{ krpj, url(path) }`):
+  1. a URL (a `game.json` or a `.krpj`), for published projects on the CDN;
+  2. a `.krpj` the user opens in the player;
   3. **in-memory handoff**: gm2kr opens the player with `?from=opener`, the player posts `kr-player-ready` to its opener, and gm2kr replies with the files as transferred ArrayBuffers (`loader/handoff.ts`). The player only accepts that message from its own opener and serves the files from blob URLs. Nothing is uploaded and the Django site isn't involved.
 
 ## Testing

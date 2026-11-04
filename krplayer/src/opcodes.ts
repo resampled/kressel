@@ -1,5 +1,5 @@
 // Opcode registry, shared by gm2kr (emit), krplayer (compile/execute) and tests.
-// Generated from docs/krpj_opcodes.md; numeric ids are internal to a build and never saved in .krpj.
+// Generated from docs/krpj_opcodes.md; numeric ids are internal to a build and never saved in a project.
 
 import { OPCODES } from './opcodes.gen.ts';
 

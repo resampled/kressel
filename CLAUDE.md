@@ -61,7 +61,7 @@ Web:     kr.mindfang.com/ | /play/<slug> | /editor | /editor?pj=<slug>
 Static:  /static/kr/kr_player.js, /static/kr/kr_editor.js
 CDN:     /kr/so/~<alias>/*   shared objects
          /kr/sa/~<alias>/*   shared asset files
-         /kr/pj/<slug>/*     project data (global.json is the main project file)
+         /kr/pj/<slug>/*     project data (game.json is the main project file)
 ```
  
 (Note: the compat matrix refers to shared assets as `/kr/sa/*`. Both notations mean the paths above.)

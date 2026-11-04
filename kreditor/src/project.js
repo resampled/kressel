@@ -1,4 +1,4 @@
-// KRPJ project model helpers (see /docs/krpj.md)
+// game.json project model helpers (see /docs/krpj.md)
 
 export const KRPJ_VERSION = '0.1';
 
@@ -18,7 +18,7 @@ export function newProject(title = 'Untitled') {
 
 export function parseProject(text) {
   const p = JSON.parse(text);
-  if (!p.krpj_v) throw new Error('Not a KRPJ file (missing krpj_v)');
+  if (!p.krpj_v) throw new Error('Not a Kratience game.json (missing krpj_v)');
   return p;
 }
 

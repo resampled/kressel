@@ -1,4 +1,4 @@
-// Store-only (uncompressed) zip writer. PNGs are already compressed and the .krpj is small.
+// Store-only (uncompressed) zip writer. PNGs are already compressed and game.json is small.
 
 import { crc32 } from './crc32.ts';
 import { concat } from './textures.ts';

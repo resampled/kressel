@@ -27,7 +27,7 @@ test('PNG encoder writes a valid header', async () => {
 });
 
 test('zip round-trips through the krplayer reader', async () => {
-  const files = new Map([['game.krpj', new TextEncoder().encode('{"krpj_v":"0.1"}')], ['sprites/a/0.png', new Uint8Array([1, 2, 3])]]);
+  const files = new Map([['game.json', new TextEncoder().encode('{"krpj_v":"0.1"}')], ['sprites/a/0.png', new Uint8Array([1, 2, 3])]]);
   const back = await readZip(zip(files));
   assert.deepEqual([...back.keys()], [...files.keys()]);
   assert.deepEqual([...back.get('sprites/a/0.png')!], [1, 2, 3]);

@@ -1,4 +1,4 @@
-// Loads a .krpj: compiles every script, resolves names to indices and loads textures.
+// Loads a project (game.json): compiles every script, resolves names to indices and loads textures.
 // The result is what the runtime works with; the JSON tree is not touched again.
 
 import type { Hat, Krpj, Layer, Node } from '../krpj.ts';

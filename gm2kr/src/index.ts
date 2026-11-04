@@ -1,5 +1,5 @@
 // gm2kr page: pick a GameMaker game folder, convert its data.win, then download the project
-// as a .zip or hand it straight to krplayer (see krplayer/src/loader/handoff.ts).
+// as a .krpj or hand it straight to krplayer (see krplayer/src/loader/handoff.ts).
 // The player URL comes from <meta name="gm2kr-player-url" content="...">, never hardcoded.
 
 import { convert } from './convert.ts';
@@ -39,7 +39,7 @@ dlBtn.addEventListener('click', () => {
   if (!files) return;
   const a = Object.assign(document.createElement('a'), {
     href: URL.createObjectURL(new Blob([zip(files) as BlobPart], { type: 'application/zip' })),
-    download: `${slug}.zip`,
+    download: `${slug}.krpj`,
   });
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);

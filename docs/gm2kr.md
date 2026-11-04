@@ -1,5 +1,5 @@
 # gm2kr
-gm2kr, when built, creates a page that converts supplied GameMaker projects (must include data.win & referenced assets) to a downloadable zip with a game.krpj in it (& assets), or hands the result straight to krplayer with **Play in krplayer**.
+gm2kr, when built, creates a page that converts supplied GameMaker projects (must include data.win & referenced assets) to a downloadable .krpj (a zip of game.json & assets), or hands the result straight to krplayer with **Play in krplayer**.
 
 The player URL for that button comes from `<meta name="gm2kr-player-url">` in the page (dev: `http://localhost:8000/`).
 

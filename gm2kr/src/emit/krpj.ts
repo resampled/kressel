@@ -1,4 +1,4 @@
-// GmModel -> game.krpj + asset files.
+// GmModel -> game.json + asset files (zipped together, they make a .krpj).
 
 import type { Font, Hat, KrObject, Krpj, Layer, Room, Script, Sprite } from '../../../krplayer/src/krpj.ts';
 import type { GmModel } from '../model.ts';
@@ -140,6 +140,6 @@ export async function emitKrpj(m: GmModel): Promise<Converted> {
     cfg_project: { init_room: roomOrder[0] ?? null },
     sprites, sounds: {}, fonts, functions: {}, objects, rooms, room_order: roomOrder,
   };
-  files.set('game.krpj', new TextEncoder().encode(JSON.stringify(krpj)));
+  files.set('game.json', new TextEncoder().encode(JSON.stringify(krpj)));
   return { krpj, files };
 }

@@ -1,10 +1,10 @@
 // Browser entry (kressel.js). Picks a project source, then runs it on a canvas:
 //   1. ?from=opener                       -> receive a project from the opening window (gm2kr "Play")
-//   2. <meta id="kressel-load-project" src> -> load that .krpj (assets next to it, or the CDN)
-//   3. otherwise                          -> let the user open an exported .zip
+//   2. <meta id="kressel-load-project" src> -> load that game.json (assets next to it, or the CDN) or .krpj
+//   3. otherwise                          -> let the user open a .krpj project
 // Shared assets base: <meta name="kressel-shared-assets" content="/kr/sa/">.
 
-import { fromFiles, fromUrl, fromZip, type ProjectSource } from './loader/source.ts';
+import { fromFiles, fromKrpj, fromUrl, type ProjectSource } from './loader/source.ts';
 import { receiveFromOpener } from './loader/handoff.ts';
 import { createWebPlatform } from './platform/web.ts';
 import { load } from './play.ts';
@@ -34,20 +34,20 @@ function shell() {
 }
 type Shell = ReturnType<typeof shell>;
 
-/** Lets the user pick or drop an exported project .zip. */
-function pickZip(ui: Shell): Promise<ProjectSource> {
+/** Lets the user pick or drop a .krpj project. */
+function pickKrpj(ui: Shell): Promise<ProjectSource> {
   return new Promise((resolve, reject) => {
     ui.say('');
     const box = document.createElement('label');
     box.className = 'kr-msg kr-drop';
-    box.textContent = 'Drop a Kratience project .zip here, or click to choose one';
-    const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.zip', hidden: true });
+    box.textContent = 'Drop a Kratience project (.krpj) here, or click to choose one';
+    const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.krpj', hidden: true });
     box.append(input);
     ui.root.append(box);
     const take = (f: File | undefined) => {
       if (!f) return;
       box.remove();
-      f.arrayBuffer().then((b) => fromZip(new Uint8Array(b))).then(resolve, reject);
+      f.arrayBuffer().then((b) => fromKrpj(new Uint8Array(b))).then(resolve, reject);
     };
     input.addEventListener('change', () => take(input.files?.[0]));
     ui.root.addEventListener('dragover', (e) => e.preventDefault());
@@ -101,7 +101,7 @@ async function boot() {
     } else if (src) {
       source = await fromUrl(src, { sharedAssetBase: shared });
     } else {
-      source = await pickZip(ui);
+      source = await pickKrpj(ui);
     }
     await run(source, ui);
   } catch (e) {
