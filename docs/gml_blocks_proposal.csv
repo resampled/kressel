@@ -129,7 +129,7 @@ ds_list_create / ds_list_destroy,Files & Data,reporter / command,(new list) / de
 ds_list_add / ds_list_find_value / ds_list_set / ds_list_delete / ds_list_size / ds_list_find_index / ds_list_clear / ds_list_sort,Files & Data,command / reporter,add (v) to list (id) / (item (n) of list (id)) / ...,ds_list; any,"[""dat_list_add"",[""_lv"",""lst""],5]",hidden,1.07,One block per function; labels mirror the array blocks.
 ds_map_create / ds_map_destroy / ds_map_exists / ds_map_find_value / ds_map_set / ds_map_add / ds_map_delete / ds_map_size,Files & Data,reporter / command / boolean,(new map) / set (key) of map (id) to (v) / (key (k) of map (id)),ds_map; any,"[""dat_map_get"",[""_lv"",""m""],""hp""]",hidden,1.07,Writes can also use the _ac accessor.
 ds_grid_create / ds_grid_get / ds_grid_set / ds_grid_width / ds_grid_height / ds_grid_clear / ds_grid_destroy,Files & Data,reporter / command,(new grid (w) by (h)) / set cell (x) (y) of grid (id) to (v),ds_grid; num; num,"[""dat_grid_set"",[""_lv"",""g""],0,0,1]",hidden,1.07,
-ds_stack_* / ds_queue_* / ds_priority_*,Files & Data,reporter / command,push (v) onto stack (id) / (pop stack (id)) / ...,ds; any,"[""dat_queue_enqueue"",[""_lv"",""q""],1]",hidden,1.07,
+ds_stack_* / ds_queue_* / ds_priority_*,Files & Data,reporter / command,push (v) onto stack (id) / (pop stack (id)) / ...,ds; any,"[""dat_queue"",""enqueue"",[""_lv"",""q""],1]",hidden,1.07,
 ds_exists,Files & Data,boolean,<(id) is a [list v]?>,num; enum ds_type,"[""dat_exists"",[""_lv"",""lst""],2]",hidden,1.07,
 json_stringify / json_parse,Files & Data,reporter,(JSON text of (value)) / (value from JSON (text)),any / str,"[""dat_json_parse"",""{\""a\"":1}""]",normal,1.05,
 json_encode / json_decode,Files & Data,reporter,(JSON of map (id)) / (map from JSON (text)),ds_map / str,"[""dat_json_decode"",""{}""]",compat,1.07,Legacy ds_map-based API.
@@ -151,7 +151,7 @@ draw_set_alpha,Drawing,command,set draw alpha to (a),num 0-1,"[""drw_set_alpha""
 draw_set_halign / draw_set_valign,Drawing,command,align text [left v] / [top v],enum fa,"[""drw_set_align"",""h"",1]",normal,4.02,
 draw_get_colour / draw_get_alpha / draw_get_font / draw_get_halign / draw_get_valign,Drawing,reporter,(draw [colour v]),-,"[""drw_get"",""alpha""]",hidden,4.02,
 draw_rectangle,Drawing,command,draw rectangle (x1) (y1) to (x2) (y2) <outline>,num x4; bool,"[""drw_rect"",0,0,32,32,false]",normal,4.01,
-draw_rectangle_colour / draw_roundrect / draw_roundrect_ext,Drawing,command,draw [rounded v] rectangle (x1) (y1) to (x2) (y2) <outline>,num x4; bool,"[""drw_rect_variant"",""rounded"",0,0,32,32,false]",hidden,4.01,
+draw_rectangle_colour / draw_roundrect / draw_roundrect_ext,Drawing,command,draw [rounded v] rectangle (x1) (y1) to (x2) (y2) <outline>,num x4; bool,"[""drw_roundrect"",0,0,32,32,false]",hidden,4.01,
 draw_circle / draw_ellipse,Drawing,command,draw circle at (x) (y) radius (r) <outline>,num x3; bool,"[""drw_circle"",16,16,8,false]",normal,4.01,
 draw_line / draw_line_width,Drawing,command,draw line (x1) (y1) to (x2) (y2) width (w),num x5,"[""drw_line"",0,0,100,100,2]",normal,4.01,Width omitted = draw_line.
 draw_triangle,Drawing,command,draw triangle (x1)(y1) (x2)(y2) (x3)(y3) <outline>,num x6; bool,"[""drw_triangle"",0,0,10,0,5,10,false]",normal,4.01,
@@ -163,14 +163,14 @@ make_colour_rgb / make_colour_hsv,Drawing,reporter,(colour [RGB v] (r) (g) (b)),
 merge_colour,Drawing,reporter,(mix (c1) with (c2) by (t)),color; color; num,"[""drw_merge_colour"",255,16711680,0.5]",normal,4.02,
 colour_get_red / colour_get_green / colour_get_blue / colour_get_hue / colour_get_saturation / colour_get_value,Drawing,reporter,([red v] of colour (c)),color,"[""drw_colour_get"",""red"",255]",hidden,4.02,
 gpu_set_blendmode,Drawing,command,set blend mode [add v],enum bm,"[""drw_blendmode"",1]",hidden,4.03,
-gpu_set_blendmode_ext / gpu_set_alphatestenable / gpu_set_colorwriteenable / gpu_set_fog,Drawing,command,(advanced GPU state),enum...,"[""drw_blendmode_ext"",5,6]",compat,4.04,
+gpu_set_blendmode_ext / gpu_set_alphatestenable / gpu_set_colorwriteenable / gpu_set_fog,Drawing,command,(advanced GPU state),enum...,"[""drw_gpu"",""blendmode_ext"",5,6]",compat,4.04,
 surface_create / surface_free / surface_exists,Drawing,reporter / command / boolean,(new canvas (w) by (h)) / free canvas (id) / <canvas (id) exists?>,num; num,"[""drw_surface_create"",320,240]",hidden,4.05,The editor calls surfaces 'canvases'. Check exists every frame (context loss).
 surface_set_target / surface_reset_target,Drawing,c-block,draw onto canvas (id) {...},surface,"[""drw_surface_target"",[""_lv"",""surf""]]",hidden,4.05,Editor shows a drw_surface_target/drw_surface_reset pair as one C-block but saves two opcodes. Unpaired imported calls show as plain commands.
 draw_surface / draw_surface_ext / draw_surface_part,Drawing,command,draw canvas (id) at x: (x) y: (y),surface; num; num,"[""drw_surface"",[""_lv"",""surf""],0,0]",hidden,4.05,
 shader_set / shader_reset,Drawing,c-block,draw with shader [shd v] {...},asset:shader,"[""drw_shader_set"",[""_as"",""shd_wave""]]",hidden,4.08,Same pairing as surfaces (drw_shader_set/drw_shader_reset).
 shader_get_uniform / shader_set_uniform_f,Drawing,reporter / command,set shader uniform (u) to (v) [+],asset:shader; str; num...,"[""drw_shader_uniform_f"",[""_lv"",""u_time""],1]",hidden,4.08,
 draw_getpixel / surface_getpixel,Drawing,reporter,(colour at pixel (x) (y)),num; num,"[""drw_getpixel"",0,0]",compat,4.11,Stubbed.
-part_system_create / part_type_create / part_particles_create / part_type_* / part_system_destroy,Drawing,reporter / command,(new particle system) / burst (n) particles of type (t) at (x) (y),...,"[""drw_part_burst"",[""_lv"",""ps""],0,0,[""_lv"",""pt""],10]",hidden,2.12,Large API; only create/burst/destroy get custom labels.
+part_system_create / part_type_create / part_particles_create / part_type_* / part_system_destroy,Drawing,reporter / command,(new particle system) / burst (n) particles of type (t) at (x) (y),...,"[""drw_part"",""particles_create"",[""_lv"",""ps""],0,0,[""_lv"",""pt""],10]",hidden,2.12,Large API; only create/burst/destroy get custom labels.
 sprite_get_width / sprite_get_height / sprite_get_number / sprite_get_xoffset / sprite_get_yoffset,Looks,reporter,([width v] of sprite [spr v]),asset:sprite,"[""lks_sprite_info"",""number"",[""_as"",""spr_heart""]]",normal,2.01,
 sprite_get_name / sprite_exists,Looks,reporter / boolean,(name of sprite [spr v]),asset:sprite,"[""lks_sprite_name"",[""_lv"",""sprite_index""]]",hidden,2.01,
 asset_get_index,Looks,reporter,(asset named (name)),str,"[""lks_asset_named"",""spr_heart""]",hidden,2.01,Dynamic lookup; gm2kr has to keep original asset names resolvable.
@@ -179,9 +179,9 @@ layer_set_visible / layer_get_visible,Rooms,command / boolean,[show v] layer [la
 layer_depth / layer_get_depth,Rooms,command / reporter,set depth of layer [layer v] to (d),layer; num,"[""rom_layer_depth"",""Effects"",-100]",normal,2.04,
 layer_x / layer_y / layer_hspeed / layer_vspeed / layer_get_x / layer_get_y,Rooms,command / reporter,set layer [layer v] [x v] to (v),layer; num,"[""rom_layer_set"",""hspeed"",""Background"",-1]",normal,2.04,Parallax/scrolling backgrounds.
 layer_create / layer_destroy,Rooms,reporter / command,(new layer at depth (d) named (name)),num; str,"[""rom_layer_create"",-50,""FX""]",hidden,2.04,
-layer_background_get_id / layer_background_sprite / layer_background_blend / layer_background_alpha / layer_background_htiled,Rooms,command / reporter,set background of layer [layer v] [sprite v] to (v),bg id; any,"[""rom_bg_set"",""blend"",[""_lv"",""bg""],255]",hidden,2.02,
-layer_tilemap_get_id / tilemap_get / tilemap_set / tilemap_get_at_pixel,Rooms,reporter / command,(tile at x: (x) y: (y) of tilemap (id)),tilemap; num; num,"[""rom_tile_at_pixel"",[""_lv"",""tm""],0,0]",hidden,2.02,
-layer_sequence_create / layer_sequence_* / animcurve_*,Rooms,reporter / command,(play sequence [seq v] at (x) (y) on layer [layer v]),layer; num; num; asset:sequence,"[""rom_sequence_create"",""FX"",0,0,[""_as"",""seq_intro""]]",hidden,2.11,
+layer_background_get_id / layer_background_sprite / layer_background_blend / layer_background_alpha / layer_background_htiled,Rooms,command / reporter,set background of layer [layer v] [sprite v] to (v),bg id; any,"[""rom_bg"",""blend"",[""_lv"",""bg""],255]",hidden,2.02,
+layer_tilemap_get_id / tilemap_get / tilemap_set / tilemap_get_at_pixel,Rooms,reporter / command,(tile at x: (x) y: (y) of tilemap (id)),tilemap; num; num,"[""rom_tilemap"",""get_at_pixel"",[""_lv"",""tm""],0,0]",hidden,2.02,
+layer_sequence_create / layer_sequence_* / animcurve_*,Rooms,reporter / command,(play sequence [seq v] at (x) (y) on layer [layer v]),layer; num; num; asset:sequence,"[""rom_sequence"",""create"",""FX"",0,0,[""_as"",""seq_intro""]]",hidden,2.11,
 room_goto,Rooms,command,go to room [room v],asset:room,"[""rom_goto"",[""_as"",""room_town""]]",normal,2.04,"The room changes at the end of the event, not immediately (gotcha), so this is not a cap."
 room_goto_next / room_goto_previous / room_restart,Rooms,command,go to [next v] room,-,"[""rom_change"",""next""]",normal,2.04,
 room_next / room_previous / room_exists / room_get_name,Rooms,reporter,(room [after v] [room v]),asset:room,"[""rom_info"",""name"",[""_lv"",""room""]]",hidden,2.04,
@@ -190,7 +190,7 @@ camera_get_view_x / camera_get_view_y / camera_get_view_width / camera_get_view_
 camera_set_view_pos,Camera,command,move camera (cam) to x: (x) y: (y),camera; num; num,"[""cam_set_pos"",[""_ai"",[""_lv"",""view_camera""],0],0,0]",normal,4.06,
 camera_set_view_size,Camera,command,set camera (cam) size (w) by (h),camera; num; num,"[""cam_set_size"",[""_ai"",[""_lv"",""view_camera""],0],640,480]",normal,4.06,
 camera_set_view_target / camera_set_view_border / camera_set_view_speed / camera_set_view_angle,Camera,command,camera (cam) follow [obj v],camera; inst/obj,"[""cam_set_target"",[""_ai"",[""_lv"",""view_camera""],0],[""_as"",""obj_player""]]",hidden,4.06,
-view_get_visible / view_set_visible / view_get_camera / view_set_camera,Camera,command / reporter,[show v] view (n),num; bool,"[""cam_view_set_visible"",0,true]",hidden,4.06,
+view_get_visible / view_set_visible / view_get_camera / view_set_camera,Camera,command / reporter,[show v] view (n),num; bool,"[""cam_view_set"",""visible"",0,true]",hidden,4.06,
 __view_get / __view_set,Camera,reporter / command,(legacy view (n) [view_xview v]),enum; num,"[""cam_legacy_view_get"",0,0]",compat,4.06,GMS1-to-GMS2 compatibility scripts; common in older imported code.
 display_get_gui_width / display_get_gui_height / display_set_gui_size,Camera,reporter / command,(GUI [width v]),num; num,"[""cam_gui_size"",""width""]",normal,4.12,
 window_set_fullscreen / window_get_fullscreen,Camera,command / boolean,set fullscreen <on>,bool,"[""cam_fullscreen_set"",true]",normal,4.12,Needs a user gesture; queued until the next click/key.
@@ -210,13 +210,13 @@ audio_sound_get_track_position / audio_sound_set_track_position,Sound,reporter /
 audio_sound_length,Sound,reporter,(length of sound [snd v]),asset:sound,"[""snd_length"",[""_as"",""snd_music""]]",normal,5.01,
 audio_sound_loop / audio_sound_loop_start / audio_sound_loop_end,Sound,command,set loop of sound [snd v] from (s) to (e),voice; num; num,"[""snd_loop"",""start"",[""_lv"",""music""],2.5]",hidden,5.03,GM 2023+.
 audio_create_stream / audio_destroy_stream,Sound,reporter / command,(stream sound from file (path)),str,"[""snd_stream_create"",""mus/field.ogg""]",hidden,5.04,Path resolved against the project CDN path.
-audio_group_load / audio_group_is_loaded / audio_group_set_gain,Sound,command / boolean,load audio group [grp v],enum group,"[""snd_group_load"",1]",compat,2.15,Loading hint only.
-audio_emitter_create / audio_emitter_position / audio_listener_position,Sound,reporter / command,(new sound emitter) / move emitter (e) to (x) (y) (z),emitter; num x3,"[""snd_emitter_position"",[""_lv"",""em""],0,0,0]",hidden,5.05,
+audio_group_load / audio_group_is_loaded / audio_group_set_gain,Sound,command / boolean,load audio group [grp v],enum group,"[""snd_group"",""load"",1]",compat,2.15,Loading hint only.
+audio_emitter_create / audio_emitter_position / audio_listener_position,Sound,reporter / command,(new sound emitter) / move emitter (e) to (x) (y) (z),emitter; num x3,"[""snd_3d"",""emitter_position"",[""_lv"",""em""],0,0,0]",hidden,5.05,
 alarm_set / alarm_get,Control,command / reporter,set alarm (n) to (steps) / (alarm (n)),num 0-11; num,"[""ctr_alarm_set"",0,30]",normal,2.03,Pairs with evt_alarm. Imports usually write alarm[n] via _ai; the editor renders both the same way.
 game_get_speed / game_set_speed,Control,reporter / command,set game speed to (n) [fps v],num; enum gamespeed,"[""ctr_game_speed_set"",30,0]",normal,3.08,
 get_timer,Control,reporter,(microseconds since start),-,"[""ctr_timer""]",normal,3.08,Scratch 'timer' analogue (no reset).
 call_later / call_cancel,Control,command/reporter,after (n) [frames v] call (function) <repeat>,num; enum time_source_units; fn; bool,"[""ctr_call_later"",30,1,[""_fn"",""scr_blink""],false]",hidden,1.04,GM 2023+.
-time_source_create / time_source_start / time_source_stop / time_source_destroy,Control,reporter / command,(new timer (period) [frames v] call (fn)),...,"[""ctr_time_source_start"",[""_lv"",""ts""]]",compat,1.04,
+time_source_create / time_source_start / time_source_stop / time_source_destroy,Control,reporter / command,(new timer (period) [frames v] call (fn)),...,"[""ctr_time_source"",""start"",[""_lv"",""ts""]]",compat,1.04,
 timeline_index / timeline_running / timeline_position,Control,command,start timeline [tl v],asset:timeline,"[""var_set"",[""_lv"",""timeline_index""],[""_as"",""tl_intro""]]",compat,2.1,"These are built-in variables, not functions; the block is sugar over var_set."
 script_execute,Control,command/reporter,call function (fn) with (args) [+],fn/num; any...,"[""ctr_script_execute"",[""_lv"",""scr""],1]",normal,1.04,For dynamic calls; direct calls to user functions are fnc_g with the name.
 script_exists / script_get_name,Control,boolean / reporter,<function (fn) exists?>,fn,"[""ctr_script_exists"",[""_lv"",""scr""]]",hidden,1.04,
@@ -228,7 +228,7 @@ game_restart,System,cap,restart game,-,"[""sys_game_restart""]",normal,1.11,
 os_get_language / os_get_info,System,reporter,(device [language v]),-,"[""sys_device"",""language""]",hidden,8.05,"os_type/os_browser are built-in variables (_lv), shown in the same dropdown."
 date_current_datetime / date_get_year / date_get_month / date_get_day / date_get_hour / date_get_minute / date_get_second / date_get_weekday,System,reporter,(current [year v]),datetime,"[""sys_date"",""year""]",normal,8.09,Scratch 'current [year]' analogue. Optional 3rd arg = datetime (omitted = now); gm2kr folds date_get_*(date_current_datetime()) into the 2-arg form.
 url_open,System,command,open web page (url),str,"[""sys_url_open"",""https://example.com""]",hidden,8.08,New tab behind a confirmation.
-parameter_count / parameter_string / environment_get_variable,System,reporter,(launch parameter (n)),num,"[""sys_param_count""]",compat,8.05,Empty values in the browser.
+parameter_count / parameter_string / environment_get_variable,System,reporter,(launch parameter (n)),num,"[""sys_param"",""count""]",compat,8.05,Empty values in the browser.
 debug_get_callstack,System,reporter,(call stack),-,"[""sys_callstack""]",hidden,1.12,
 ini_open / ini_close,Files & Data,c-block,with save file (name) {...},str,"[""dat_ini_open"",""dr.ini""]",normal,7.01,"Open/close pairs (dat_ini_open/dat_ini_close) shown as one C-block, like surfaces; unpaired imports show as commands."
 ini_read_string / ini_read_real,Files & Data,reporter,(read [number v] (key) in section (sec) default (d)),str; str; any,"[""dat_ini_read"",""real"",""G1"",""Flag"",0]",normal,7.01,Dropdown switches the function name.
@@ -239,8 +239,8 @@ file_text_open_read / file_text_open_write / file_text_open_append / file_text_c
 file_text_read_string / file_text_read_real / file_text_readln / file_text_eof,Files & Data,reporter / boolean,(read [text v] from file (id)),file,"[""dat_text_read"",""real"",[""_lv"",""f""]]",normal,7.02,
 file_text_write_string / file_text_write_real / file_text_writeln,Files & Data,command,write (value) to file (id),file; any,"[""dat_text_write"",""string"",[""_lv"",""f""],""Kris""]",normal,7.02,
 file_find_first / file_find_next / file_find_close / directory_exists / directory_create,Files & Data,reporter / command,(first file matching (mask)),str; num,"[""dat_file_find_first"",""*.sav"",0]",hidden,7.03,
-file_bin_*,Files & Data,reporter / command,(binary file ops),...,"[""dat_bin_open"",""data.bin"",0]",compat,7.02,
-buffer_create / buffer_read / buffer_write / buffer_seek / buffer_delete / buffer_save / buffer_load,Files & Data,reporter / command,(new buffer (size) [grow v] align (n)),...,"[""dat_buffer_create"",64,1,1]",hidden,7.08,
+file_bin_*,Files & Data,reporter / command,(binary file ops),...,"[""dat_bin"",""open"",""data.bin"",0]",compat,7.02,
+buffer_create / buffer_read / buffer_write / buffer_seek / buffer_delete / buffer_save / buffer_load,Files & Data,reporter / command,(new buffer (size) [grow v] align (n)),...,"[""dat_buffer"",""create"",64,1,1]",hidden,7.08,
 base64_encode / base64_decode / md5_string_utf8 / sha1_string_utf8,Files & Data,reporter,([base64 encode v] (text)),str,"[""dat_encode"",""base64_encode"",""hi""]",hidden,7.08,
 game_save / game_load,Files & Data,command,[save v] whole game to (file),str,"[""dat_game"",""save"",""snap""]",compat,7.07,
 physics_* / phy_*,-,none,(no block),-,-,compat,3.06,Unsupported. Imports fail loudly with the function name and offset.

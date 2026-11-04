@@ -94,17 +94,17 @@ KRPJ is not a one-to-one data.win-to-JSON representation, it is its own format b
           ["var_set", ["_iv", ["_kw", "global"], "score"], 0]
         ]],
         ["evt_step", [
-          ["ctr_if", ["fnc_g", "keyboard_check", 39], [
+          ["ctr_if", ["sen_key_held", 39], [
             ["var_set", ["_lv", "x"], ["opr_add", ["_lv", "x"], ["_lv", "move_speed"]]]
           ]],
-          ["ctr_if", ["fnc_g", "keyboard_check", 37], [
+          ["ctr_if", ["sen_key_held", 37], [
             ["var_set", ["_lv", "x"], ["opr_sub", ["_lv", "x"], ["_lv", "move_speed"]]]
           ]]
         ]],
         ["evt_drawgui", [
-          ["fnc_g", "draw_set_font", ["_as", "fnt_G785KWucVA"]],
-          ["fnc_g", "draw_text", 8, 8,
-            ["opr_add", "Score: ", ["fnc_g", "string", ["_iv", ["_kw", "global"], "score"]]]]
+          ["drw_set_font", ["_as", "fnt_G785KWucVA"]],
+          ["drw_text", 8, 8,
+            ["opr_add", "Score: ", ["opr_string", ["_iv", ["_kw", "global"], "score"]]]]
         ]]
       ]
     },
@@ -117,8 +117,8 @@ KRPJ is not a one-to-one data.win-to-JSON representation, it is its own format b
       "scripts": [
         ["evt_collision", ["_as", "obj_player"], [
           ["fnc_g", "fnc_giAqiCrTp2", 10],
-          ["fnc_g", "audio_play_sound", ["_as", "snd_DkIcBl5DhB"], 1, false],
-          ["fnc_g", "instance_destroy"]
+          ["snd_play", ["_as", "snd_DkIcBl5DhB"], 1, false],
+          ["ins_destroy"]
         ]]
       ]
     }
@@ -149,7 +149,7 @@ KRPJ is not a one-to-one data.win-to-JSON representation, it is its own format b
       ],
       "scripts": [
         ["evt_create", [
-          ["fnc_g", "show_debug_message", "Room started"]
+          ["sys_log", "Room started"]
         ]]
       ]
     }
