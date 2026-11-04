@@ -13,4 +13,4 @@ By default, kressel loads from .krpj (JSON) project files. These contain everyth
 * /docs/gm2kr_compat.md -> GameMaker compatibility reference
 * /docs/gm2kr.md -> GameMaker games to Kratience project converter
 * /docs/krpj.md -> Kratience project format (.krpj) reference
-* /docs/krpj_scripting.md -> Kratience scripting reference
+* /docs/krpj_opcodes.md -> Kratience opcode & vs. GML disassembly reference
