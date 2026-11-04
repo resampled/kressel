@@ -35,11 +35,11 @@ Note that most of these opcodes are (near-)exact representations of how they app
 * `ins_*` - Instances (e.g. create, destroy, exists, events)
 * `mov_*` - Movement (incl. paths and motion planning)
 * `sen_*` - Sensing (collisions and input)
-* `drw_*` - Drawing (incl. colours, surfaces, shaders, particles)
 * `lks_*` - Looks (sprite and asset info)
+* `snd_*` - Sound
+* `drw_*` - Drawing (incl. colours, surfaces, shaders, particles)
 * `rom_*` - Rooms (incl. layers, tilemaps, sequences)
 * `cam_*` - Camera (incl. views, GUI and window)
-* `snd_*` - Sound
 * `dat_*` - Files & Data (ds_*, JSON, ini, text/binary files, buffers)
 * `sys_*` - System (debug, game end/restart, device, dates)
 * `_*` - Declarations 
