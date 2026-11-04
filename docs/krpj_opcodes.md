@@ -29,12 +29,22 @@ Note that most of these opcodes are (near-)exact representations of how they app
 ## Categories
 * `evt_*` - Events (e.g. create, step, drawgui)
 * `ctr_*` - Control (e.g. if, for, wait, doing)
-* `fnc_*` - Functions
-* `opr_*` - Operators (e.g. eq, neq, gt)
-* `var_*` - Variables
-* `mov_*` - Movement
+* `fnc_*` - Functions (`fnc_g` calls user-defined functions/scripts; built-ins have their own opcodes)
+* `opr_*` - Operators (e.g. eq, neq, gt, math, random, strings, type checks)
+* `var_*` - Variables (incl. arrays and structs)
+* `ins_*` - Instances (e.g. create, destroy, exists, events)
+* `mov_*` - Movement (incl. paths and motion planning)
+* `sen_*` - Sensing (collisions and input)
+* `drw_*` - Drawing (incl. colours, surfaces, shaders, particles)
+* `lks_*` - Looks (sprite and asset info)
+* `rom_*` - Rooms (incl. layers, tilemaps, sequences)
+* `cam_*` - Camera (incl. views, GUI and window)
 * `snd_*` - Sound
+* `dat_*` - Files & Data (ds_*, JSON, ini, text/binary files, buffers)
+* `sys_*` - System (debug, game end/restart, device, dates)
 * `_*` - Declarations 
+
+Built-in function opcodes keep GML's argument order (so imports keep GML's evaluation order). Where one block covers several functions via a dropdown, the variant is a leading `ref` argument, e.g. `["opr_mathop","sqrt",16]`.
 (add more where it's reasonable)
 
 # Values
@@ -124,4 +134,17 @@ Not strictly necessary (functions like `array_get`, `ds_map_find_value` or `stru
 > * var arg3 = key/index
 > * var arg4 = (grid only) y index
 > * KRPJ: ["_ac","?",["_lv","my_map"],"hp"]
-> * GML: my_map[? "hp"]
+> * GML: my_map[? "hp"] <!-- this isn't valid json... what? -->
+
+# Events
+Stores the rest of the script as the last argument. These are the 'hat' blocks. Don't have direct GML equivalents due to how the engine works.
+
+* `evt_step` - Executes each step ('on update' in some langs)
+> * KRPJ: ["evt_onstep",[...]]
+
+* `evt_create` - Executes when object is instantiated.
+> * KRPJ: ["evt_onstep",[...]]
+
+* `evt_alarm` - Executes when alarm is triggered.
+> * num arg1 = the reference for the alarm, min 0 max 11.
+> * KRPJ: ["evt_alarm",10,[...]]

@@ -1,0 +1,249 @@
+GML function,Palette,Block shape,Block label,Inputs,KRPJ,Visibility,Compat ID,Notes
+instance_create_layer,Instances,command/reporter,create instance of [obj v] at x: (x) y: (y) on layer [layer v],num x; num y; str layer; asset:object obj,"[""ins_create_layer"",0,0,""Instances"",[""_as"",""obj_bullet""]]",normal,3.01,Returns the new id; editor lets it snap as a statement or a reporter.
+instance_create_depth,Instances,command/reporter,create instance of [obj v] at x: (x) y: (y) depth (d),num x; num y; num depth; asset:object obj,"[""ins_create_depth"",0,0,-10,[""_as"",""obj_bullet""]]",normal,3.01,
+instance_destroy,Instances,command,destroy [self v],inst? target; bool? run_destroy_event,"[""ins_destroy""]",normal,3.01,Optional args behind an expand arrow. Not a cap: code after it still runs in GML (gotcha).
+instance_exists,Instances,boolean,<[obj v] exists?>,asset:object/inst obj,"[""ins_exists"",[""_as"",""obj_player""]]",normal,3.01,
+instance_number,Instances,reporter,(number of [obj v]),asset:object obj,"[""ins_number"",[""_as"",""obj_enemy""]]",normal,3.01,
+instance_find,Instances,reporter,(item (n) of [obj v] instances),asset:object obj; num n,"[""ins_find"",[""_as"",""obj_enemy""],0]",normal,3.01,
+instance_nearest,Instances,reporter,(nearest [obj v] to x: (x) y: (y)),num x; num y; asset:object obj,"[""ins_nearest"",[""_lv"",""x""],[""_lv"",""y""],[""_as"",""obj_enemy""]]",normal,3.01,
+instance_furthest,Instances,reporter,(furthest [obj v] from x: (x) y: (y)),num x; num y; asset:object obj,"[""ins_furthest"",0,0,[""_as"",""obj_enemy""]]",normal,3.01,
+instance_copy,Instances,command/reporter,duplicate myself <run create event>,bool performevent,"[""ins_copy"",true]",hidden,3.01,
+instance_change,Instances,command,change into [obj v] <run events>,asset:object obj; bool perf,"[""ins_change"",[""_as"",""obj_dead""],false]",compat,3.01,Deprecated in GMS2 but present in older code.
+instance_deactivate_all / instance_activate_all,Instances,command,[deactivate v] all instances <except myself>,bool notme,"[""ins_set_active_all"",""deactivate"",true]",hidden,3.01,One block; the dropdown switches the function name.
+instance_deactivate_object / instance_activate_object,Instances,command,[deactivate v] [obj v],asset:object/inst obj,"[""ins_set_active_object"",""activate"",[""_as"",""obj_enemy""]]",hidden,3.01,Same dropdown trick.
+event_inherited,Instances,command,run parent event,-,"[""ins_event_inherited""]",normal,2.03,Greyed out when the object has no parent.
+event_user,Instances,command,trigger user event (n),num 0-15,"[""ins_event_user"",0]",normal,2.03,Pairs with an evt_user hat.
+event_perform,Instances,command,run event [type v] [number v],enum ev_type; num,"[""ins_event_perform"",3,0]",compat,2.03,
+object_get_name,Instances,reporter,(name of object [obj v]),asset:object,"[""ins_object_name"",[""_lv"",""object_index""]]",hidden,3.01,
+object_is_ancestor,Instances,boolean,<[obj v] is child of [obj v]?>,asset:object; asset:object,"[""ins_is_ancestor"",[""_lv"",""object_index""],[""_as"",""obj_enemy_parent""]]",normal,3.01,
+motion_set,Motion,command,set motion direction (dir) speed (spd),num dir; num speed,"[""mov_motion_set"",90,4]",normal,3.02,
+motion_add,Motion,command,add motion direction (dir) speed (spd),num dir; num speed,"[""mov_motion_add"",270,0.5]",normal,3.02,
+move_towards_point,Motion,command,move toward x: (x) y: (y) at speed (spd),num x; num y; num speed,"[""mov_towards_point"",[""_iv"",[""_as"",""obj_player""],""x""],[""_iv"",[""_as"",""obj_player""],""y""],2]",normal,3.02,Sets speed/direction; does not move instantly.
+move_snap,Motion,command,snap to grid (w) by (h),num hsnap; num vsnap,"[""mov_snap"",16,16]",normal,3.02,
+move_wrap,Motion,command,wrap around room <horizontal> <vertical> margin (m),bool hor; bool vert; num margin,"[""mov_wrap"",true,false,0]",normal,3.02,
+move_bounce_solid / move_bounce_all,Motion,command,bounce off [solid v] objects <precise>,bool advanced,"[""mov_bounce"",""all"",false]",hidden,3.02,
+move_contact_solid / move_contact_all,Motion,command,move in direction (dir) until touching [solid v] up to (max) px,num dir; num maxdist,"[""mov_contact"",""solid"",270,-1]",hidden,3.02,
+move_outside_solid / move_outside_all,Motion,command,move out of [solid v] in direction (dir) up to (max) px,num dir; num maxdist,"[""mov_outside"",""all"",90,32]",hidden,3.02,
+place_snapped,Motion,boolean,<aligned to grid (w) by (h)?>,num; num,"[""mov_is_snapped"",16,16]",hidden,3.02,
+mp_linear_step,Motion,command/reporter,step toward x: (x) y: (y) speed (spd) <stop at all>,num x; num y; num speed; bool checkall,"[""mov_mp_linear_step"",100,100,2,false]",hidden,3.05,
+mp_potential_step,Motion,command/reporter,pathfind step toward x: (x) y: (y) speed (spd) <avoid all>,num x; num y; num speed; bool checkall,"[""mov_mp_potential_step"",100,100,2,false]",hidden,3.05,
+path_start,Motion,command,follow path [path v] speed (spd) at end [stop v] <absolute>,asset:path; num; enum path_action; bool,"[""mov_path_start"",[""_as"",""pth_walk""],2,0,true]",normal,2.09,
+path_end,Motion,command,stop following path,-,"[""mov_path_end""]",normal,2.09,
+place_meeting,Sensing,boolean,<touching [obj v] at x: (x) y: (y)?>,num x; num y; asset:object/inst obj,"[""sen_place_meeting"",[""_lv"",""x""],[""opr_add"",[""_lv"",""y""],1],[""_as"",""obj_wall""]]",normal,3.03,Core platformer collision; x/y inputs pre-filled with x and y reporters.
+place_free,Sensing,boolean,<free of solids at x: (x) y: (y)?>,num x; num y,"[""sen_place_free"",[""_lv"",""x""],[""_lv"",""y""]]",normal,3.03,
+place_empty,Sensing,boolean,<empty of [all v] at x: (x) y: (y)?>,num x; num y; asset:object? obj,"[""sen_place_empty"",0,0,[""_as"",""obj_wall""]]",normal,3.03,
+position_meeting,Sensing,boolean,<point x: (x) y: (y) touching [obj v]?>,num x; num y; asset:object/inst obj,"[""sen_position_meeting"",[""_lv"",""mouse_x""],[""_lv"",""mouse_y""],[""_kw"",""self""]]",normal,3.03,
+position_empty,Sensing,boolean,<point x: (x) y: (y) empty?>,num x; num y,"[""sen_position_empty"",0,0]",hidden,3.03,
+instance_place,Sensing,reporter,([obj v] I'd touch at x: (x) y: (y)),num x; num y; asset:object obj,"[""sen_instance_place"",[""_lv"",""x""],[""_lv"",""y""],[""_as"",""obj_enemy""]]",normal,3.03,Returns noone (-4) when nothing found.
+instance_position,Sensing,reporter,([obj v] at point x: (x) y: (y)),num x; num y; asset:object obj,"[""sen_instance_position"",0,0,[""_as"",""obj_enemy""]]",normal,3.03,
+instance_place_list / instance_position_list,Sensing,reporter,(count [obj v] touching at x: (x) y: (y) into list (list) <ordered>),num; num; asset:object; ds_list; bool,"[""sen_instance_list"",""place"",0,0,[""_as"",""obj_enemy""],[""_lv"",""hits""],false]",hidden,3.03,
+collision_point,Sensing,reporter,([obj v] at point (x) (y) <precise> <ignore me>),num x2; asset:object; bool prec; bool notme,"[""sen_collision_point"",0,0,[""_as"",""obj_enemy""],false,true]",normal,3.03,
+collision_rectangle,Sensing,reporter,([obj v] in rectangle (x1) (y1) to (x2) (y2) <precise> <ignore me>),num x4; asset:object; bool; bool,"[""sen_collision_rect"",0,0,32,32,[""_as"",""obj_enemy""],false,true]",normal,3.03,
+collision_circle,Sensing,reporter,([obj v] in circle (x) (y) radius (r) <precise> <ignore me>),num x3; asset:object; bool; bool,"[""sen_collision_circle"",0,0,16,[""_as"",""obj_enemy""],false,true]",normal,3.03,
+collision_line,Sensing,reporter,([obj v] on line (x1) (y1) to (x2) (y2) <precise> <ignore me>),num x4; asset:object; bool; bool,"[""sen_collision_line"",0,0,100,0,[""_as"",""obj_wall""],false,true]",normal,3.03,
+collision_ellipse,Sensing,reporter,([obj v] in ellipse (x1) (y1) to (x2) (y2) <precise> <ignore me>),num x4; asset:object; bool; bool,"[""sen_collision_ellipse"",0,0,32,16,[""_as"",""obj_enemy""],false,true]",hidden,3.03,
+distance_to_object,Sensing,reporter,(distance to [obj v]),asset:object/inst,"[""sen_distance_to_object"",[""_as"",""obj_player""]]",normal,3.03,"Bounding-box distance, not origin distance."
+distance_to_point,Sensing,reporter,(distance to x: (x) y: (y)),num x; num y,"[""sen_distance_to_point"",0,0]",normal,3.03,
+keyboard_check,Sensing,boolean,<key [right arrow v] held?>,enum vk/ord key,"[""sen_key_held"",39]",normal,6.01,Dropdown lists vk_* and A-Z/0-9; letters emit ord() inlined (A = 65). Slot also accepts a reporter.
+keyboard_check_pressed,Sensing,boolean,<key [z v] pressed?>,enum vk/ord key,"[""sen_key_pressed"",90]",normal,6.01,
+keyboard_check_released,Sensing,boolean,<key [z v] released?>,enum vk/ord key,"[""sen_key_released"",90]",normal,6.01,
+keyboard_check_direct,Sensing,boolean,<key [shift v] down (hardware)?>,enum vk key,"[""sen_key_direct"",16]",compat,6.01,Same as keyboard_check in a browser.
+keyboard_clear,Sensing,command,reset key [z v],enum vk key,"[""sen_key_clear"",90]",hidden,6.01,
+io_clear,Sensing,command,reset all input,-,"[""sen_io_clear""]",hidden,6.01,
+mouse_check_button,Sensing,boolean,<mouse [left v] held?>,enum mb,"[""sen_mouse_held"",1]",normal,6.03,
+mouse_check_button_pressed,Sensing,boolean,<mouse [left v] clicked?>,enum mb,"[""sen_mouse_pressed"",1]",normal,6.03,
+mouse_check_button_released,Sensing,boolean,<mouse [left v] released?>,enum mb,"[""sen_mouse_released"",1]",normal,6.03,
+mouse_wheel_up / mouse_wheel_down,Sensing,boolean,<mouse wheel [up v]?>,-,"[""sen_mouse_wheel"",""up""]",normal,6.03,Dropdown switches the function name.
+device_mouse_x_to_gui / device_mouse_y_to_gui,Sensing,reporter,(mouse [x v] on GUI),num device,"[""sen_mouse_gui"",""x"",0]",normal,6.05,
+gamepad_is_connected,Sensing,boolean,<gamepad (n) connected?>,num slot,"[""sen_gamepad_connected"",0]",normal,6.04,
+gamepad_button_check / gamepad_button_check_pressed / gamepad_button_check_released,Sensing,boolean,<gamepad (n) button [A v] [held v]?>,num slot; enum gp,"[""sen_gamepad_button"",""pressed"",0,32769]",normal,6.04,Second dropdown picks the held/pressed/released variant.
+gamepad_axis_value,Sensing,reporter,(gamepad (n) [left stick x v]),num slot; enum gp axis,"[""sen_gamepad_axis"",0,32785]",normal,6.04,
+get_string / get_integer,Sensing,reporter,(ask (prompt) default (value)),str; any,"[""sen_ask"",""string"",""Name?"",""""]",compat,6.06,Scratch 'ask and wait' analogue. In-canvas modal; deprecated in GM.
+clipboard_get_text / clipboard_set_text,Sensing,reporter / command,(clipboard) / set clipboard to (text),str,"[""sen_clipboard_set"",""hi""]",hidden,6.07,Stubbed.
+point_direction,Operators,reporter,(direction from (x1) (y1) to (x2) (y2)),num x4,"[""opr_point_direction"",[""_lv"",""x""],[""_lv"",""y""],0,0]",normal,1.08,"Degrees; 0 = right, counter-clockwise."
+point_distance,Operators,reporter,(distance from (x1) (y1) to (x2) (y2)),num x4,"[""opr_point_distance"",0,0,3,4]",normal,1.08,
+lengthdir_x / lengthdir_y,Operators,reporter,([x v] of length (len) direction (dir)),num len; num dir,"[""opr_lengthdir"",""x"",10,45]",normal,1.08,Dropdown switches the function name.
+angle_difference,Operators,reporter,(angle from (a) to (b)),num; num,"[""opr_angle_difference"",350,10]",normal,1.08,
+point_in_rectangle,Operators,boolean,<point (px) (py) in rectangle (x1) (y1) (x2) (y2)?>,num x6,"[""opr_point_in_rect"",5,5,0,0,10,10]",normal,1.08,
+point_in_circle,Operators,boolean,<point (px) (py) in circle (cx) (cy) radius (r)?>,num x5,"[""opr_point_in_circle"",5,5,0,0,10]",normal,1.08,
+rectangle_in_rectangle,Operators,reporter,(overlap of rect (x1)(y1)(x2)(y2) and (x3)(y3)(x4)(y4)),num x8,"[""opr_rect_in_rect"",0,0,10,10,5,5,15,15]",hidden,1.08,Returns 0/1/2.
+abs / sign / round / floor / ceil / frac / sqrt / sqr / exp / ln / log2 / log10,Operators,reporter,([abs v] of (n)),num,"[""opr_mathop"",""sqrt"",16]",normal,1.08,One Scratch-style 'mathop' block; dropdown picks the function name. GML round() is banker's rounding.
+sin / cos / tan / arcsin / arccos / arctan,Operators,reporter,([sin v] of (radians)),num,"[""opr_trig"",""sin"",3.14159265358979]",normal,1.08,"Same dropdown block, radians group."
+dsin / dcos / dtan / darcsin / darccos / darctan,Operators,reporter,([sin v] of (degrees) deg),num,"[""opr_dtrig"",""sin"",90]",normal,1.08,Degree group; shown first since GM directions are degrees.
+arctan2 / darctan2,Operators,reporter,(atan2 y: (y) x: (x) [deg v]),num; num,"[""opr_atan2"",""deg"",1,1]",normal,1.08,
+degtorad / radtodeg,Operators,reporter,(convert (n) [deg to rad v]),num,"[""opr_convert_angle"",""deg_to_rad"",180]",normal,1.08,
+power / logn,Operators,reporter,((base) [to the power of v] (n)),num; num,"[""opr_power"",""power"",2,8]",normal,1.08,
+min / max / mean / median,Operators,reporter,([max v] of (a) (b) [+]),num...,"[""opr_aggregate"",""max"",1,5,3]",normal,1.08,Variadic: +/- buttons add or remove inputs (TurboWarp-style).
+clamp,Operators,reporter,(clamp (n) between (lo) and (hi)),num x3,"[""opr_clamp"",[""_lv"",""hp""],0,100]",normal,1.08,
+lerp,Operators,reporter,(blend (a) to (b) by (t)),num x3,"[""opr_lerp"",0,10,0.5]",normal,1.08,
+random,Operators,reporter,(random decimal up to (n)),num,"[""opr_random"",1]",normal,1.08,
+random_range,Operators,reporter,(pick decimal from (a) to (b)),num; num,"[""opr_random_range"",-1,1]",normal,1.08,
+irandom,Operators,reporter,(random integer 0 to (n)),num,"[""opr_irandom"",9]",normal,1.08,
+irandom_range,Operators,reporter,(pick random (a) to (b)),num; num,"[""opr_irandom_range"",1,10]",normal,1.08,Direct analogue of Scratch 'pick random'.
+choose,Operators,reporter,(choose from (a) (b) [+]),any...,"[""opr_choose"",""left"",""right""]",normal,1.08,Variadic.
+randomize / randomise,Operators,command,shuffle random seed,-,"[""opr_randomize""]",normal,1.08,
+random_set_seed / random_get_seed,Operators,command / reporter,set random seed to (n) / (random seed),num,"[""opr_seed_set"",42]",hidden,1.08,Not bit-identical to GM's RNG (compat 1.08).
+string,Operators,reporter,(text of (value)),any,"[""opr_string"",[""_lv"",""score""]]",normal,1.08,Needed before joining numbers to text: GML + does not coerce.
+real,Operators,reporter,(number from (text)),str,"[""opr_real"",""12.5""]",normal,1.08,Throws on non-numeric text in GMS2.
+string_length,Operators,reporter,(length of (text)),str,"[""opr_str_length"",""apple""]",normal,1.08,
+string_char_at,Operators,reporter,(letter (n) of (text)),str; num,"[""opr_str_char_at"",""apple"",1]",normal,1.08,"1-based, like Scratch."
+string_copy,Operators,reporter,(letters from (n) count (len) of (text)),str; num; num,"[""opr_str_copy"",""apple"",2,3]",normal,1.08,
+string_pos,Operators,reporter,(position of (sub) in (text)),str; str,"[""opr_str_pos"",""p"",""apple""]",normal,1.08,GML arg order is needle first. 0 when not found.
+string_count,Operators,reporter,(count of (sub) in (text)),str; str,"[""opr_str_count"",""p"",""apple""]",normal,1.08,
+string_insert,Operators,reporter,(insert (sub) into (text) at (n)),str; str; num,"[""opr_str_insert"",""!"",""hi"",3]",normal,1.08,
+string_delete,Operators,reporter,(delete (count) letters of (text) from (n)),str; num; num,"[""opr_str_delete"",""apple"",1,1]",normal,1.08,
+string_replace / string_replace_all,Operators,reporter,(replace [first v] (sub) in (text) with (new)),str; str; str,"[""opr_str_replace"",""all"",""a-b-c"",""-"",""+""]",normal,1.08,
+string_upper / string_lower,Operators,reporter,((text) in [UPPERCASE v]),str,"[""opr_str_case"",""upper"",""hi""]",normal,1.08,
+string_repeat,Operators,reporter,(repeat (text) (n) times),str; num,"[""opr_str_repeat"",""*"",3]",normal,1.08,
+string_digits / string_letters / string_lettersdigits,Operators,reporter,(only [digits v] of (text)),str,"[""opr_str_filter"",""digits"",""a1b2""]",hidden,1.08,
+string_trim / string_trim_start / string_trim_end,Operators,reporter,(trim [both ends v] of (text)),str,"[""opr_str_trim"",""both"",""  hi ""]",normal,1.08,GM 2023+.
+string_starts_with / string_ends_with,Operators,boolean,<(text) [starts with v] (sub)?>,str; str,"[""opr_str_affix"",""start"",""apple"",""ap""]",normal,1.08,GM 2023+.
+string_split / string_join,Operators,reporter,(split (text) by (sep)) / (join (values) with (sep)),str; str,"[""opr_str_split"",""a,b"","",""]",normal,1.08,GM 2023+.
+string_format,Operators,reporter,(format (n) total (digits) decimals (dec)),num; num; num,"[""opr_str_format"",3.14159,1,2]",hidden,1.08,"Pads with spaces, not zeros (gotcha)."
+chr / ord,Operators,reporter,(character [from code v] (value)),num/str,"[""opr_charcode"",""ord"",""A""]",normal,1.08,
+string_hash_to_newline,Operators,reporter,(convert # to newlines in (text)),str,"[""opr_str_hash_newline"",""a#b""]",compat,1.08,For GMS1-era text.
+is_real / is_string / is_array / is_struct / is_undefined / is_bool / is_method / is_numeric / is_int64 / is_ptr,Operators,boolean,<(value) is [number v]?>,any,"[""opr_is_type"",""undefined"",[""_lv"",""target""]]",normal,1.05,Dropdown picks the function.
+typeof,Operators,reporter,(type of (value)),any,"[""opr_typeof"",[""_lv"",""v""]]",hidden,1.05,
+bool / int64,Operators,reporter,(convert (value) to [bool v]),any,"[""opr_convert"",""bool"",1]",hidden,1.08,
+array_length,Variables,reporter,(length of array (arr)),array,"[""var_arr_length"",[""_lv"",""items""]]",normal,1.06,
+array_create,Variables,reporter,(new array of (n) items set to (value)),num; any,"[""var_arr_create"",10,0]",normal,1.06,
+array_push,Variables,command,add (value) [+] to array (arr),array; any...,"[""var_arr_push"",[""_lv"",""items""],""potion""]",normal,1.06,Scratch 'add (thing) to [list]'. GML takes the array first.
+array_pop / array_shift,Variables,command/reporter,remove [last v] item of array (arr),array,"[""var_arr_take"",""last"",[""_lv"",""items""]]",normal,1.06,
+array_insert,Variables,command,insert (value) at (index) of array (arr),array; num; any,"[""var_arr_insert"",[""_lv"",""items""],0,""key""]",normal,1.06,"0-based, unlike Scratch lists; the label hint says so."
+array_delete,Variables,command,delete (count) items at (index) of array (arr),array; num; num,"[""var_arr_delete"",[""_lv"",""items""],0,1]",normal,1.06,
+array_contains,Variables,boolean,<array (arr) contains (value)?>,array; any,"[""var_arr_contains"",[""_lv"",""items""],""key""]",normal,1.06,
+array_get_index,Variables,reporter,(index of (value) in array (arr)),array; any,"[""var_arr_index_of"",[""_lv"",""items""],""key""]",normal,1.06,-1 when absent.
+array_resize,Variables,command,resize array (arr) to (n),array; num,"[""var_arr_resize"",[""_lv"",""items""],0]",normal,1.06,Size 0 = Scratch 'delete all of list'.
+array_sort,Variables,command,sort array (arr) [ascending v],array; bool/fn,"[""var_arr_sort"",[""_lv"",""items""],true]",normal,1.06,
+array_reverse / array_concat / array_copy,Variables,reporter / command,(reversed array (arr)) / (join arrays (a) (b) [+]),array...,"[""var_arr_concat"",[""_lv"",""a""],[""_lv"",""b""]]",hidden,1.06,
+array_foreach / array_map / array_filter / array_find_index / array_any / array_all,Variables,command/reporter,[for each v] item of (arr) call (function),array; fn,"[""var_arr_iterate"",""foreach"",[""_lv"",""items""],[""_fn"",""scr_print""]]",hidden,1.06,Takes a function reference; visual scripts get a ctr_ 'for each item' C-block instead.
+struct_get / variable_struct_get,Variables,reporter,(key (name) of struct (s)),struct; str,"[""var_struct_get"",[""_lv"",""data""],""hp""]",normal,1.05,For dynamic key names; static access is _iv.
+struct_set / variable_struct_set,Variables,command,set key (name) of struct (s) to (value),struct; str; any,"[""var_struct_set"",[""_lv"",""data""],""hp"",10]",normal,1.05,
+struct_exists / variable_struct_exists,Variables,boolean,<struct (s) has key (name)?>,struct; str,"[""var_struct_exists"",[""_lv"",""data""],""hp""]",normal,1.05,
+struct_remove / variable_struct_remove,Variables,command,remove key (name) from struct (s),struct; str,"[""var_struct_remove"",[""_lv"",""data""],""hp""]",normal,1.05,
+struct_get_names / variable_struct_get_names,Variables,reporter,(keys of struct (s)),struct,"[""var_struct_keys"",[""_lv"",""data""]]",normal,1.05,
+variable_instance_get / variable_instance_set / variable_instance_exists,Variables,reporter / command / boolean,(variable (name) of [inst v]),inst; str; any,"[""var_inst_get"",[""_kw"",""other""],""hp""]",hidden,1.05,Scratch '(x position of [Sprite])' sensing analogue.
+variable_global_get / variable_global_set / variable_global_exists,Variables,reporter / command / boolean,(global variable (name)),str; any,"[""var_global_exists"",""flags""]",hidden,1.05,
+method / method_get_self,Variables,reporter,(function (fn) bound to (inst)),inst/struct; fn,"[""var_method"",[""_kw"",""self""],[""_fn"",""scr_on_hit""]]",hidden,1.05,
+ds_list_create / ds_list_destroy,Files & Data,reporter / command,(new list) / delete list (id),-,"[""dat_list_create""]",hidden,1.07,Collapsed 'Data structures' palette; visual scripts should prefer arrays/structs. Editor warns on create without destroy.
+ds_list_add / ds_list_find_value / ds_list_set / ds_list_delete / ds_list_size / ds_list_find_index / ds_list_clear / ds_list_sort,Files & Data,command / reporter,add (v) to list (id) / (item (n) of list (id)) / ...,ds_list; any,"[""dat_list_add"",[""_lv"",""lst""],5]",hidden,1.07,One block per function; labels mirror the array blocks.
+ds_map_create / ds_map_destroy / ds_map_exists / ds_map_find_value / ds_map_set / ds_map_add / ds_map_delete / ds_map_size,Files & Data,reporter / command / boolean,(new map) / set (key) of map (id) to (v) / (key (k) of map (id)),ds_map; any,"[""dat_map_get"",[""_lv"",""m""],""hp""]",hidden,1.07,Writes can also use the _ac accessor.
+ds_grid_create / ds_grid_get / ds_grid_set / ds_grid_width / ds_grid_height / ds_grid_clear / ds_grid_destroy,Files & Data,reporter / command,(new grid (w) by (h)) / set cell (x) (y) of grid (id) to (v),ds_grid; num; num,"[""dat_grid_set"",[""_lv"",""g""],0,0,1]",hidden,1.07,
+ds_stack_* / ds_queue_* / ds_priority_*,Files & Data,reporter / command,push (v) onto stack (id) / (pop stack (id)) / ...,ds; any,"[""dat_queue_enqueue"",[""_lv"",""q""],1]",hidden,1.07,
+ds_exists,Files & Data,boolean,<(id) is a [list v]?>,num; enum ds_type,"[""dat_exists"",[""_lv"",""lst""],2]",hidden,1.07,
+json_stringify / json_parse,Files & Data,reporter,(JSON text of (value)) / (value from JSON (text)),any / str,"[""dat_json_parse"",""{\""a\"":1}""]",normal,1.05,
+json_encode / json_decode,Files & Data,reporter,(JSON of map (id)) / (map from JSON (text)),ds_map / str,"[""dat_json_decode"",""{}""]",compat,1.07,Legacy ds_map-based API.
+draw_self,Drawing,command,draw myself,-,"[""drw_self""]",normal,4.01,Only does anything in draw events; greyed out elsewhere.
+draw_sprite,Drawing,command,draw sprite [spr v] frame (n) at x: (x) y: (y),asset:sprite; num; num; num,"[""drw_sprite"",[""_as"",""spr_heart""],0,[""_lv"",""x""],[""_lv"",""y""]]",normal,4.01,
+draw_sprite_ext,Drawing,command,draw sprite [spr v] frame (n) at x: (x) y: (y) scale (xs) (ys) angle (a) colour (c) alpha (al),asset:sprite; num x6; color; num,"[""drw_sprite_ext"",[""_as"",""spr_heart""],0,0,0,2,2,0,16777215,1]",normal,4.01,Colour input is a Scratch-style picker that emits a BGR int.
+draw_sprite_stretched,Drawing,command,draw sprite [spr v] frame (n) at x: (x) y: (y) size (w) (h),asset:sprite; num x5,"[""drw_sprite_stretched"",[""_as"",""spr_box""],0,0,0,64,32]",normal,4.01,
+draw_sprite_part,Drawing,command,draw part (l) (t) (w) (h) of sprite [spr v] frame (n) at x: (x) y: (y),asset:sprite; num x7,"[""drw_sprite_part"",[""_as"",""spr_sheet""],0,0,0,16,16,0,0]",normal,4.01,
+draw_sprite_tiled,Drawing,command,tile sprite [spr v] frame (n) from x: (x) y: (y),asset:sprite; num x3,"[""drw_sprite_tiled"",[""_as"",""spr_bg""],0,0,0]",normal,4.01,
+draw_sprite_general / draw_sprite_part_ext / draw_sprite_stretched_ext / draw_sprite_pos,Drawing,command,(extended sprite drawing),asset:sprite; num...,"[""drw_sprite_part_ext"",[""_as"",""spr_sheet""],0,0,0,16,16,0,0,1,1,16777215,1]",hidden,4.01,Many-argument variants; inputs labelled inline.
+draw_text,Drawing,command,write (text) at x: (x) y: (y),num; num; any,"[""drw_text"",8,8,""Hello""]",normal,4.01,
+draw_text_ext,Drawing,command,write (text) at x: (x) y: (y) line spacing (sep) wrap at (w),num x2; any; num; num,"[""drw_text_ext"",8,8,""Long text"",-1,200]",normal,4.01,
+draw_text_transformed,Drawing,command,write (text) at x: (x) y: (y) scale (xs) (ys) angle (a),num x2; any; num x3,"[""drw_text_transformed"",8,8,""Hi"",2,2,0]",normal,4.01,
+draw_text_colour / draw_text_ext_colour / draw_text_ext_transformed / draw_text_transformed_colour,Drawing,command,write (text) at x: (x) y: (y) gradient (c1) (c2) (c3) (c4) alpha (a),num x2; any; color x4; num,"[""drw_text_colour"",8,8,""Hi"",255,255,65280,65280,1]",hidden,4.01,
+string_width / string_height,Drawing,reporter,([width v] of text (text) in current font),str,"[""drw_text_size"",""width"",""Hello""]",normal,4.01,Depends on the current draw_set_font.
+draw_set_font,Drawing,command,set font to [fnt v],asset:font,"[""drw_set_font"",[""_as"",""fnt_main""]]",normal,4.02,
+draw_set_colour / draw_set_color,Drawing,command,set draw colour to (colour),color,"[""drw_set_colour"",16777215]",normal,4.02,US spelling maps to the same block.
+draw_set_alpha,Drawing,command,set draw alpha to (a),num 0-1,"[""drw_set_alpha"",0.5]",normal,4.02,Scratch 'ghost effect' analogue (inverted scale).
+draw_set_halign / draw_set_valign,Drawing,command,align text [left v] / [top v],enum fa,"[""drw_set_align"",""h"",1]",normal,4.02,
+draw_get_colour / draw_get_alpha / draw_get_font / draw_get_halign / draw_get_valign,Drawing,reporter,(draw [colour v]),-,"[""drw_get"",""alpha""]",hidden,4.02,
+draw_rectangle,Drawing,command,draw rectangle (x1) (y1) to (x2) (y2) <outline>,num x4; bool,"[""drw_rect"",0,0,32,32,false]",normal,4.01,
+draw_rectangle_colour / draw_roundrect / draw_roundrect_ext,Drawing,command,draw [rounded v] rectangle (x1) (y1) to (x2) (y2) <outline>,num x4; bool,"[""drw_rect_variant"",""rounded"",0,0,32,32,false]",hidden,4.01,
+draw_circle / draw_ellipse,Drawing,command,draw circle at (x) (y) radius (r) <outline>,num x3; bool,"[""drw_circle"",16,16,8,false]",normal,4.01,
+draw_line / draw_line_width,Drawing,command,draw line (x1) (y1) to (x2) (y2) width (w),num x5,"[""drw_line"",0,0,100,100,2]",normal,4.01,Width omitted = draw_line.
+draw_triangle,Drawing,command,draw triangle (x1)(y1) (x2)(y2) (x3)(y3) <outline>,num x6; bool,"[""drw_triangle"",0,0,10,0,5,10,false]",normal,4.01,
+draw_point,Drawing,command,draw point at (x) (y),num; num,"[""drw_point"",5,5]",normal,4.01,
+draw_arrow,Drawing,command,draw arrow (x1) (y1) to (x2) (y2) head size (s),num x5,"[""drw_arrow"",0,0,50,0,8]",hidden,4.01,
+draw_healthbar,Drawing,command,draw health bar (x1) (y1) to (x2) (y2) at (amount)% ...,num x5; color x3; enum; bool; bool,"[""drw_healthbar"",0,0,100,10,75,0,255,65280,0,true,true]",normal,4.01,
+draw_clear / draw_clear_alpha,Drawing,command,clear screen to (colour) alpha (a),color; num,"[""drw_clear"",0,0]",normal,4.01,
+make_colour_rgb / make_colour_hsv,Drawing,reporter,(colour [RGB v] (r) (g) (b)),num x3,"[""drw_make_colour"",""rgb"",255,128,0]",normal,4.02,
+merge_colour,Drawing,reporter,(mix (c1) with (c2) by (t)),color; color; num,"[""drw_merge_colour"",255,16711680,0.5]",normal,4.02,
+colour_get_red / colour_get_green / colour_get_blue / colour_get_hue / colour_get_saturation / colour_get_value,Drawing,reporter,([red v] of colour (c)),color,"[""drw_colour_get"",""red"",255]",hidden,4.02,
+gpu_set_blendmode,Drawing,command,set blend mode [add v],enum bm,"[""drw_blendmode"",1]",hidden,4.03,
+gpu_set_blendmode_ext / gpu_set_alphatestenable / gpu_set_colorwriteenable / gpu_set_fog,Drawing,command,(advanced GPU state),enum...,"[""drw_blendmode_ext"",5,6]",compat,4.04,
+surface_create / surface_free / surface_exists,Drawing,reporter / command / boolean,(new canvas (w) by (h)) / free canvas (id) / <canvas (id) exists?>,num; num,"[""drw_surface_create"",320,240]",hidden,4.05,The editor calls surfaces 'canvases'. Check exists every frame (context loss).
+surface_set_target / surface_reset_target,Drawing,c-block,draw onto canvas (id) {...},surface,"[""drw_surface_target"",[""_lv"",""surf""]]",hidden,4.05,Editor shows a drw_surface_target/drw_surface_reset pair as one C-block but saves two opcodes. Unpaired imported calls show as plain commands.
+draw_surface / draw_surface_ext / draw_surface_part,Drawing,command,draw canvas (id) at x: (x) y: (y),surface; num; num,"[""drw_surface"",[""_lv"",""surf""],0,0]",hidden,4.05,
+shader_set / shader_reset,Drawing,c-block,draw with shader [shd v] {...},asset:shader,"[""drw_shader_set"",[""_as"",""shd_wave""]]",hidden,4.08,Same pairing as surfaces (drw_shader_set/drw_shader_reset).
+shader_get_uniform / shader_set_uniform_f,Drawing,reporter / command,set shader uniform (u) to (v) [+],asset:shader; str; num...,"[""drw_shader_uniform_f"",[""_lv"",""u_time""],1]",hidden,4.08,
+draw_getpixel / surface_getpixel,Drawing,reporter,(colour at pixel (x) (y)),num; num,"[""drw_getpixel"",0,0]",compat,4.11,Stubbed.
+part_system_create / part_type_create / part_particles_create / part_type_* / part_system_destroy,Drawing,reporter / command,(new particle system) / burst (n) particles of type (t) at (x) (y),...,"[""drw_part_burst"",[""_lv"",""ps""],0,0,[""_lv"",""pt""],10]",hidden,2.12,Large API; only create/burst/destroy get custom labels.
+sprite_get_width / sprite_get_height / sprite_get_number / sprite_get_xoffset / sprite_get_yoffset,Looks,reporter,([width v] of sprite [spr v]),asset:sprite,"[""lks_sprite_info"",""number"",[""_as"",""spr_heart""]]",normal,2.01,
+sprite_get_name / sprite_exists,Looks,reporter / boolean,(name of sprite [spr v]),asset:sprite,"[""lks_sprite_name"",[""_lv"",""sprite_index""]]",hidden,2.01,
+asset_get_index,Looks,reporter,(asset named (name)),str,"[""lks_asset_named"",""spr_heart""]",hidden,2.01,Dynamic lookup; gm2kr has to keep original asset names resolvable.
+layer_get_id / layer_exists,Rooms,reporter / boolean,(layer named (name)),str,"[""rom_layer_id"",""Background""]",normal,2.04,
+layer_set_visible / layer_get_visible,Rooms,command / boolean,[show v] layer [layer v],layer; bool,"[""rom_layer_set_visible"",""Background"",false]",normal,2.04,
+layer_depth / layer_get_depth,Rooms,command / reporter,set depth of layer [layer v] to (d),layer; num,"[""rom_layer_depth"",""Effects"",-100]",normal,2.04,
+layer_x / layer_y / layer_hspeed / layer_vspeed / layer_get_x / layer_get_y,Rooms,command / reporter,set layer [layer v] [x v] to (v),layer; num,"[""rom_layer_set"",""hspeed"",""Background"",-1]",normal,2.04,Parallax/scrolling backgrounds.
+layer_create / layer_destroy,Rooms,reporter / command,(new layer at depth (d) named (name)),num; str,"[""rom_layer_create"",-50,""FX""]",hidden,2.04,
+layer_background_get_id / layer_background_sprite / layer_background_blend / layer_background_alpha / layer_background_htiled,Rooms,command / reporter,set background of layer [layer v] [sprite v] to (v),bg id; any,"[""rom_bg_set"",""blend"",[""_lv"",""bg""],255]",hidden,2.02,
+layer_tilemap_get_id / tilemap_get / tilemap_set / tilemap_get_at_pixel,Rooms,reporter / command,(tile at x: (x) y: (y) of tilemap (id)),tilemap; num; num,"[""rom_tile_at_pixel"",[""_lv"",""tm""],0,0]",hidden,2.02,
+layer_sequence_create / layer_sequence_* / animcurve_*,Rooms,reporter / command,(play sequence [seq v] at (x) (y) on layer [layer v]),layer; num; num; asset:sequence,"[""rom_sequence_create"",""FX"",0,0,[""_as"",""seq_intro""]]",hidden,2.11,
+room_goto,Rooms,command,go to room [room v],asset:room,"[""rom_goto"",[""_as"",""room_town""]]",normal,2.04,"The room changes at the end of the event, not immediately (gotcha), so this is not a cap."
+room_goto_next / room_goto_previous / room_restart,Rooms,command,go to [next v] room,-,"[""rom_change"",""next""]",normal,2.04,
+room_next / room_previous / room_exists / room_get_name,Rooms,reporter,(room [after v] [room v]),asset:room,"[""rom_info"",""name"",[""_lv"",""room""]]",hidden,2.04,
+room_set_persistent / room_set_width / room_set_height,Rooms,command,set room [room v] [persistent v] to (v),asset:room; any,"[""rom_set"",""persistent"",[""_as"",""room_town""],true]",hidden,3.07,
+camera_get_view_x / camera_get_view_y / camera_get_view_width / camera_get_view_height,Camera,reporter,(camera (cam) [x v]),camera,"[""cam_get"",""x"",[""_ai"",[""_lv"",""view_camera""],0]]",normal,4.06,Camera input defaults to view_camera[0].
+camera_set_view_pos,Camera,command,move camera (cam) to x: (x) y: (y),camera; num; num,"[""cam_set_pos"",[""_ai"",[""_lv"",""view_camera""],0],0,0]",normal,4.06,
+camera_set_view_size,Camera,command,set camera (cam) size (w) by (h),camera; num; num,"[""cam_set_size"",[""_ai"",[""_lv"",""view_camera""],0],640,480]",normal,4.06,
+camera_set_view_target / camera_set_view_border / camera_set_view_speed / camera_set_view_angle,Camera,command,camera (cam) follow [obj v],camera; inst/obj,"[""cam_set_target"",[""_ai"",[""_lv"",""view_camera""],0],[""_as"",""obj_player""]]",hidden,4.06,
+view_get_visible / view_set_visible / view_get_camera / view_set_camera,Camera,command / reporter,[show v] view (n),num; bool,"[""cam_view_set_visible"",0,true]",hidden,4.06,
+__view_get / __view_set,Camera,reporter / command,(legacy view (n) [view_xview v]),enum; num,"[""cam_legacy_view_get"",0,0]",compat,4.06,GMS1-to-GMS2 compatibility scripts; common in older imported code.
+display_get_gui_width / display_get_gui_height / display_set_gui_size,Camera,reporter / command,(GUI [width v]),num; num,"[""cam_gui_size"",""width""]",normal,4.12,
+window_set_fullscreen / window_get_fullscreen,Camera,command / boolean,set fullscreen <on>,bool,"[""cam_fullscreen_set"",true]",normal,4.12,Needs a user gesture; queued until the next click/key.
+window_set_caption / window_get_width / window_get_height / window_set_size / display_get_width / display_get_height,Camera,command / reporter,(window [width v]),num...,"[""cam_window"",""width""]",hidden,4.12,Size maps to the canvas.
+window_set_cursor / window_mouse_get_x / window_mouse_get_y,Camera,command / reporter,set cursor to [none v],enum cr,"[""cam_cursor_set"",-1]",hidden,4.13,
+audio_play_sound,Sound,command/reporter,play sound [snd v] priority (p) <loop>,asset:sound; num; bool,"[""snd_play"",[""_as"",""snd_hit""],1,false]",normal,5.01,Returns a voice id. GM 2.3+ extra args (gain/offset/pitch) behind an expand arrow.
+audio_play_sound_at / audio_play_sound_on,Sound,command/reporter,play sound [snd v] on emitter (e) <loop>,asset:sound; num...,"[""snd_play_on"",[""_lv"",""em""],[""_as"",""snd_hit""],false,1]",hidden,5.05,
+audio_stop_sound,Sound,command,stop sound [snd v],asset:sound / voice,"[""snd_stop"",[""_as"",""snd_music""]]",normal,5.01,Takes an asset or a voice id reporter.
+audio_stop_all,Sound,command,stop all sounds,-,"[""snd_stop_all""]",normal,5.01,
+audio_pause_sound / audio_resume_sound / audio_pause_all / audio_resume_all,Sound,command,[pause v] sound [snd v],asset:sound / voice,"[""snd_pause"",""pause"",[""_lv"",""music""]]",normal,5.01,
+audio_is_playing / audio_is_paused,Sound,boolean,<sound [snd v] [playing v]?>,asset:sound / voice,"[""snd_is"",""playing"",[""_as"",""snd_music""]]",normal,5.01,
+audio_sound_gain,Sound,command,fade sound [snd v] volume to (v) over (ms) ms,asset/voice; num; num,"[""snd_gain"",[""_lv"",""music""],0,1000]",normal,5.02,Scratch 'set volume to' analogue; 0 ms = instant.
+audio_sound_pitch,Sound,command,set pitch of sound [snd v] to (p),asset/voice; num,"[""snd_pitch"",[""_lv"",""music""],1.2]",normal,5.02,
+audio_sound_get_gain / audio_sound_get_pitch,Sound,reporter,([volume v] of sound [snd v]),asset/voice,"[""snd_get"",""gain"",[""_lv"",""music""]]",normal,5.02,
+audio_master_gain,Sound,command,set master volume to (v),num,"[""snd_master_gain"",0.5]",normal,5.02,
+audio_sound_get_track_position / audio_sound_set_track_position,Sound,reporter / command,(position of sound [snd v]) / seek sound [snd v] to (s) seconds,voice; num,"[""snd_seek"",[""_lv"",""music""],0]",normal,5.01,
+audio_sound_length,Sound,reporter,(length of sound [snd v]),asset:sound,"[""snd_length"",[""_as"",""snd_music""]]",normal,5.01,
+audio_sound_loop / audio_sound_loop_start / audio_sound_loop_end,Sound,command,set loop of sound [snd v] from (s) to (e),voice; num; num,"[""snd_loop"",""start"",[""_lv"",""music""],2.5]",hidden,5.03,GM 2023+.
+audio_create_stream / audio_destroy_stream,Sound,reporter / command,(stream sound from file (path)),str,"[""snd_stream_create"",""mus/field.ogg""]",hidden,5.04,Path resolved against the project CDN path.
+audio_group_load / audio_group_is_loaded / audio_group_set_gain,Sound,command / boolean,load audio group [grp v],enum group,"[""snd_group_load"",1]",compat,2.15,Loading hint only.
+audio_emitter_create / audio_emitter_position / audio_listener_position,Sound,reporter / command,(new sound emitter) / move emitter (e) to (x) (y) (z),emitter; num x3,"[""snd_emitter_position"",[""_lv"",""em""],0,0,0]",hidden,5.05,
+alarm_set / alarm_get,Control,command / reporter,set alarm (n) to (steps) / (alarm (n)),num 0-11; num,"[""ctr_alarm_set"",0,30]",normal,2.03,Pairs with evt_alarm. Imports usually write alarm[n] via _ai; the editor renders both the same way.
+game_get_speed / game_set_speed,Control,reporter / command,set game speed to (n) [fps v],num; enum gamespeed,"[""ctr_game_speed_set"",30,0]",normal,3.08,
+get_timer,Control,reporter,(microseconds since start),-,"[""ctr_timer""]",normal,3.08,Scratch 'timer' analogue (no reset).
+call_later / call_cancel,Control,command/reporter,after (n) [frames v] call (function) <repeat>,num; enum time_source_units; fn; bool,"[""ctr_call_later"",30,1,[""_fn"",""scr_blink""],false]",hidden,1.04,GM 2023+.
+time_source_create / time_source_start / time_source_stop / time_source_destroy,Control,reporter / command,(new timer (period) [frames v] call (fn)),...,"[""ctr_time_source_start"",[""_lv"",""ts""]]",compat,1.04,
+timeline_index / timeline_running / timeline_position,Control,command,start timeline [tl v],asset:timeline,"[""var_set"",[""_lv"",""timeline_index""],[""_as"",""tl_intro""]]",compat,2.1,"These are built-in variables, not functions; the block is sugar over var_set."
+script_execute,Control,command/reporter,call function (fn) with (args) [+],fn/num; any...,"[""ctr_script_execute"",[""_lv"",""scr""],1]",normal,1.04,For dynamic calls; direct calls to user functions are fnc_g with the name.
+script_exists / script_get_name,Control,boolean / reporter,<function (fn) exists?>,fn,"[""ctr_script_exists"",[""_lv"",""scr""]]",hidden,1.04,
+show_debug_message,System,command,log (message),any,"[""sys_log"",""Room started""]",normal,1.12,Goes to the dev console.
+show_message / show_question,System,command / boolean,alert (text) / <ask yes or no (text)?>,str,"[""sys_alert"",""Saved!""]",compat,6.06,In-canvas modal; pauses the game like GM does.
+show_error,System,cap,crash with error (text) <abort>,str; bool,"[""sys_error"",""bad state"",true]",hidden,1.12,
+game_end,System,cap,end game,-,"[""sys_game_end""]",normal,1.11,Returns to the player menu.
+game_restart,System,cap,restart game,-,"[""sys_game_restart""]",normal,1.11,
+os_get_language / os_get_info,System,reporter,(device [language v]),-,"[""sys_device"",""language""]",hidden,8.05,"os_type/os_browser are built-in variables (_lv), shown in the same dropdown."
+date_current_datetime / date_get_year / date_get_month / date_get_day / date_get_hour / date_get_minute / date_get_second / date_get_weekday,System,reporter,(current [year v]),datetime,"[""sys_date"",""year""]",normal,8.09,Scratch 'current [year]' analogue. Optional 3rd arg = datetime (omitted = now); gm2kr folds date_get_*(date_current_datetime()) into the 2-arg form.
+url_open,System,command,open web page (url),str,"[""sys_url_open"",""https://example.com""]",hidden,8.08,New tab behind a confirmation.
+parameter_count / parameter_string / environment_get_variable,System,reporter,(launch parameter (n)),num,"[""sys_param_count""]",compat,8.05,Empty values in the browser.
+debug_get_callstack,System,reporter,(call stack),-,"[""sys_callstack""]",hidden,1.12,
+ini_open / ini_close,Files & Data,c-block,with save file (name) {...},str,"[""dat_ini_open"",""dr.ini""]",normal,7.01,"Open/close pairs (dat_ini_open/dat_ini_close) shown as one C-block, like surfaces; unpaired imports show as commands."
+ini_read_string / ini_read_real,Files & Data,reporter,(read [number v] (key) in section (sec) default (d)),str; str; any,"[""dat_ini_read"",""real"",""G1"",""Flag"",0]",normal,7.01,Dropdown switches the function name.
+ini_write_string / ini_write_real,Files & Data,command,save (value) as (key) in section (sec),str; str; any,"[""dat_ini_write"",""real"",""G1"",""Flag"",1]",normal,7.01,Variant picked from the value's type; dropdown to override.
+ini_section_exists / ini_key_exists / ini_key_delete / ini_section_delete,Files & Data,boolean / command,<save has key (key) in section (sec)?>,str; str,"[""dat_ini_key_exists"",""G1"",""Flag""]",normal,7.01,
+file_exists / file_delete / file_copy / file_rename,Files & Data,boolean / command,<file (name) exists?>,str,"[""dat_file_exists"",""filech1_0""]",normal,7.03,Virtual file system.
+file_text_open_read / file_text_open_write / file_text_open_append / file_text_close,Files & Data,reporter / command,(open file (name) for [reading v]) / close file (id),str,"[""dat_text_open"",""read"",""filech1_0""]",normal,7.02,Common save-file API in fangames.
+file_text_read_string / file_text_read_real / file_text_readln / file_text_eof,Files & Data,reporter / boolean,(read [text v] from file (id)),file,"[""dat_text_read"",""real"",[""_lv"",""f""]]",normal,7.02,
+file_text_write_string / file_text_write_real / file_text_writeln,Files & Data,command,write (value) to file (id),file; any,"[""dat_text_write"",""string"",[""_lv"",""f""],""Kris""]",normal,7.02,
+file_find_first / file_find_next / file_find_close / directory_exists / directory_create,Files & Data,reporter / command,(first file matching (mask)),str; num,"[""dat_file_find_first"",""*.sav"",0]",hidden,7.03,
+file_bin_*,Files & Data,reporter / command,(binary file ops),...,"[""dat_bin_open"",""data.bin"",0]",compat,7.02,
+buffer_create / buffer_read / buffer_write / buffer_seek / buffer_delete / buffer_save / buffer_load,Files & Data,reporter / command,(new buffer (size) [grow v] align (n)),...,"[""dat_buffer_create"",64,1,1]",hidden,7.08,
+base64_encode / base64_decode / md5_string_utf8 / sha1_string_utf8,Files & Data,reporter,([base64 encode v] (text)),str,"[""dat_encode"",""base64_encode"",""hi""]",hidden,7.08,
+game_save / game_load,Files & Data,command,[save v] whole game to (file),str,"[""dat_game"",""save"",""snap""]",compat,7.07,
+physics_* / phy_*,-,none,(no block),-,-,compat,3.06,Unsupported. Imports fail loudly with the function name and offset.
+execute_string / execute_file,-,none,(no block),-,-,compat,1.1,Unsupported (security).
+http_get / http_post_string / http_request / network_*,-,none,(no block),-,-,compat,8.01,Unsupported by decision.
+external_call / external_define / shell_execute,-,none,(no block),-,-,compat,8.06,Unsupported.
