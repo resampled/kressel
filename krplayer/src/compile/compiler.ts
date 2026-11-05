@@ -12,8 +12,14 @@ export class CompileError extends Error {}
 export interface CompileEnv {
   /** Index of an asset (within its kind) by name. */
   asset(name: string): number | undefined;
-  /** Slot for a user variable name (instance or global), allocated on first use. */
+  /** Slot for a user variable name (instance, struct or global), allocated on first use. */
   userVar(name: string): number;
+  /** Index of a user function by key. */
+  func(name: string): number | undefined;
+  /** The value of a function reference (`_fn`): its script index, or a method. */
+  fnValue(name: string): unknown;
+  /** A fresh range of n copy-on-write owner tokens (for a block's locals). */
+  owners(n: number): number;
 }
 
 const BIN: Record<string, number> = {
@@ -24,15 +30,27 @@ const BIN: Record<string, number> = {
 const UN: Record<string, number> = { opr_neg: UnOp.neg, opr_not: UnOp.not, opr_bnot: UnOp.bnot };
 const CHANGE: Record<string, number> = { '+': BinOp.add, '-': BinOp.sub, '*': BinOp.mul, '/': BinOp.div, '%': BinOp.mod, '&': BinOp.band, '|': BinOp.bor, '^': BinOp.bxor, '<<': BinOp.shl, '>>': BinOp.shr };
 const KW: Record<string, number> = { all: -3, noone: -4, global: -5 };
+const CONSTS: Record<string, unknown> = { infinity: Infinity, NaN: NaN, ptr_null: 0, ptr_invalid: -1 };
+/** argumentN / argument_count / argument. */
+const ARG_N = /^argument(\d|1[0-5])$/;
 
-/** A resolved variable target: scope + id, plus the instance/index expressions to evaluate. */
-interface Ref { scope: number; id: number; inst: Node | undefined; index: Node | undefined; ro: boolean }
+/**
+ * Copy-on-write owner tokens: an array written through a variable that doesn't own it is copied first
+ * (GM's setowner, which is per variable rather than per instance; see gm_gotchas.md).
+ */
+const OWN_INST = 1 << 24, OWN_GLOBAL = 2 << 24, OWN_ARG = 3 << 24, OWN_LOCAL = 4 << 24;
+
+/**
+ * A resolved variable target: scope + id, plus the instance/index expressions to evaluate.
+ * `rows` are the leading indices of a multi-dimensional access (a[i][j]: rows [i], index j).
+ */
+interface Ref { scope: number; id: number; inst: Node | undefined; index: Node | undefined; rows: Node[]; ro: boolean; own: number }
 interface Ctx { kind: 'loop' | 'with' | 'switch'; breaks: number[]; conts: number[] }
 
 const isOp = (n: Node): n is [string, ...Node[]] => Array.isArray(n) && typeof n[0] === 'string';
 
-export function compileScript(body: Script, name: string, env: CompileEnv): Block {
-  return new Compiler(name, env).run(body);
+export function compileScript(body: Script, name: string, env: CompileEnv, params: string[] = []): Block {
+  return new Compiler(name, env).run(body, params);
 }
 
 class Compiler {
@@ -41,6 +59,7 @@ class Compiler {
   private constIdx = new Map<unknown, number>();
   private locals = new Map<string, number>();
   private nLocals = 0;
+  private localOwn = 0;
   private ctx: Ctx[] = [];
   private stmtPc: number[] = [];
   private stmtPath: string[] = [];
@@ -49,8 +68,12 @@ class Compiler {
 
   constructor(name: string, env: CompileEnv) { this.name = name; this.env = env; }
 
-  run(body: Script): Block {
+  run(body: Script, params: string[]): Block {
+    // Named parameters are locals initialised from the arguments.
+    for (const p of params) if (!this.locals.has(p)) this.locals.set(p, this.nLocals++);
     this.hoistLocals(body);
+    this.localOwn = this.env.owners(Math.max(1, this.nLocals));
+    params.forEach((p, k) => { this.emit(Op.GET, S.ARG, k); this.emit(Op.SET, S.LOCAL, this.locals.get(p)!, this.localOwn + this.locals.get(p)!); });
     this.script(body, '');
     this.emit(Op.EXIT);
     return { code: Int32Array.from(this.code), consts: this.consts, nLocals: this.nLocals, name: this.name, stmtPc: this.stmtPc, stmtPath: this.stmtPath };
@@ -75,7 +98,7 @@ class Compiler {
   }
   private konst(v: unknown): void {
     let k = this.constIdx.get(v);
-    if (k === undefined) { k = this.consts.length; this.consts.push(v); this.constIdx.set(v, k); }
+    if (k === undefined || Number.isNaN(v)) { k = this.consts.length; this.consts.push(v); this.constIdx.set(v, k); }
     this.emit(Op.CONST, k);
   }
 
@@ -86,63 +109,88 @@ class Compiler {
 
   // ---------------------------------------------------------------- variables
 
+  private simple(scope: number, id: number, ro: boolean, own: number, inst?: Node): Ref {
+    return { scope, id, inst, index: undefined, rows: [], ro, own };
+  }
+
   private ref(n: Node, path: string): Ref {
     if (!isOp(n)) this.fail(path, 'expected a variable');
     const [head, a, b] = n;
     if (head === '_ai') {
       const base = this.ref(a, path);
-      if (base.index !== undefined) this.fail(path, 'multi-dimensional arrays not supported yet');
-      return { ...base, index: b };
+      if (base.index === undefined) return { ...base, index: b };
+      return { ...base, rows: [...base.rows, base.index], index: b };
     }
     if (head === '_lv') {
       if (typeof a !== 'string') this.fail(path, '_lv needs a name');
       const local = this.locals.get(a);
-      if (local !== undefined) return { scope: S.LOCAL, id: local, inst: undefined, index: undefined, ro: false };
+      if (local !== undefined) return this.simple(S.LOCAL, local, false, this.localOwn + local);
+      const arg = ARG_N.exec(a);
+      if (arg) return this.simple(S.ARG, Number(arg[1]), false, OWN_ARG + Number(arg[1]));
+      if (a === 'argument') return this.simple(S.ARG, -1, false, OWN_ARG + 16);
+      if (a === 'argument_count') return this.simple(S.ARG, -2, true, 0);
       const iv = IV_NAMES.get(a);
-      if (iv !== undefined) return { scope: S.BSELF, id: iv, inst: undefined, index: undefined, ro: IV_READONLY.has(iv) };
+      if (iv !== undefined) return this.simple(S.BSELF, iv, IV_READONLY.has(iv), 0);
       const gv = GV_NAMES.get(a);
-      if (gv !== undefined) return { scope: S.BGLOBAL, id: gv, inst: undefined, index: undefined, ro: GV_READONLY.has(gv) };
-      return { scope: S.SELF, id: this.env.userVar(a), inst: undefined, index: undefined, ro: false };
+      if (gv !== undefined) return this.simple(S.BGLOBAL, gv, GV_READONLY.has(gv), 0);
+      const v = this.env.userVar(a);
+      return this.simple(S.SELF, v, false, OWN_INST + v);
     }
     if (head === '_iv') {
       if (typeof b !== 'string') this.fail(path, '_iv needs a name');
       const kw = isOp(a) && a[0] === '_kw' ? a[1] : null;
-      if (kw === 'global') return { scope: S.GLOBAL, id: this.env.userVar(b), inst: undefined, index: undefined, ro: false };
+      if (kw === 'global') { const v = this.env.userVar(b); return this.simple(S.GLOBAL, v, false, OWN_GLOBAL + v); }
       const iv = IV_NAMES.get(b);
-      if (kw === 'self') {
-        return iv !== undefined ? { scope: S.BSELF, id: iv, inst: undefined, index: undefined, ro: IV_READONLY.has(iv) }
-          : { scope: S.SELF, id: this.env.userVar(b), inst: undefined, index: undefined, ro: false };
-      }
-      return iv !== undefined ? { scope: S.BFIELD, id: iv, inst: a, index: undefined, ro: IV_READONLY.has(iv) }
-        : { scope: S.FIELD, id: this.env.userVar(b), inst: a, index: undefined, ro: false };
+      if (kw === 'self') return iv !== undefined ? this.simple(S.BSELF, iv, IV_READONLY.has(iv), 0) : this.ref(['_lv', b], path);
+      if (iv !== undefined) return this.simple(S.BFIELD, iv, IV_READONLY.has(iv), 0, a);
+      const v = this.env.userVar(b);
+      return this.simple(S.FIELD, v, false, OWN_INST + v, a);
     }
     this.fail(path, `${head} is not assignable`);
   }
-  /** Pushes the instance/index operands of a ref; returns how many. */
+
+  /** Pushes the instance and first index of a ref; returns how many. */
   private operands(r: Ref, path: string): number {
     let k = 0;
     if (r.inst !== undefined) { this.expr(r.inst, path); k++; }
-    if (r.index !== undefined) { this.expr(r.index, path); k++; }
+    const first = r.rows.length ? r.rows[0] : r.index;
+    if (first !== undefined) { this.expr(first, path); k++; }
     return k;
   }
-  private get(r: Ref): void { this.emit(r.index !== undefined ? Op.GETI : Op.GET, r.scope, r.id); }
-  private set(r: Ref, path: string): void {
+  /** Reads a ref (operands already pushed). */
+  private get(r: Ref, path: string): void {
+    if (r.index === undefined) { this.emit(Op.GET, r.scope, r.id); return; }
+    this.emit(Op.GETI, r.scope, r.id);
+    if (!r.rows.length) return;
+    for (const ix of [...r.rows.slice(1), r.index]) { this.expr(ix, path); this.emit(Op.AGET); }
+  }
+  /** Pushes the innermost row of a multi-dimensional ref, ready for its final index. */
+  private row(r: Ref, path: string): void {
+    this.operands(r, path);
+    this.emit(Op.AROWV, r.scope, r.id, r.own);
+    for (const ix of r.rows.slice(1)) { this.expr(ix, path); this.emit(Op.AROW, r.own); }
+  }
+  private assignTo(r: Ref, path: string): void {
     if (r.ro) this.fail(path, 'variable is read-only');
-    this.emit(r.index !== undefined ? Op.SETI : Op.SET, r.scope, r.id);
+    if (r.rows.length) { this.row(r, path); this.expr(r.index, path); this.emit(Op.ASET, r.own); return; }
+    this.operands(r, path);
+    this.emit(r.index !== undefined ? Op.SETI : Op.SET, r.scope, r.id, r.own);
   }
 
   /** target op= value (target evaluated once). With `result`, leaves the new (or, postfix, old) value. */
   private change(op: number, target: Node, value: Node | null, path: string, result: 'none' | 'new' | 'old' = 'none'): void {
     const r = this.ref(target, path);
-    const k = this.operands(r, path);
-    if (k) this.emit(Op.DUP, k);
-    this.get(r);
+    if (r.ro) this.fail(path, 'variable is read-only');
+    const k = r.rows.length ? 2 : this.operands(r, path);
+    if (r.rows.length) { this.row(r, path); this.expr(r.index, path); this.emit(Op.DUP, 2, Op.AGET); }
+    else { if (k) this.emit(Op.DUP, k); this.get({ ...r, rows: [] }, path); }
     if (result === 'old') this.emit(Op.DUP, 1, Op.SINK, k + 1);
     if (value === null) this.konst(1); else this.expr(value, path);
     this.emit(Op.BIN, op);
     if (result === 'new') this.emit(Op.DUP, 1, Op.SINK, k + 1);
     if (k) this.emit(Op.SINK, k);
-    this.set(r, path);
+    if (r.rows.length) this.emit(Op.ASET, r.own);
+    else this.emit(r.index !== undefined ? Op.SETI : Op.SET, r.scope, r.id, r.own);
   }
 
   // ---------------------------------------------------------------- statements
@@ -154,10 +202,7 @@ class Compiler {
     switch (head) {
       case 'var_set': {
         this.expr(b, path); // GM evaluates the value before the target
-        const r = this.ref(a, path);
-        this.operands(r, path);
-        this.set(r, path);
-        return;
+        return this.assignTo(this.ref(a, path), path);
       }
       case 'var_change': {
         const op = typeof a === 'string' ? CHANGE[a] : undefined;
@@ -167,8 +212,10 @@ class Compiler {
       case 'var_inc': case 'var_dec': return this.change(head === 'var_inc' ? BinOp.add : BinOp.sub, a, null, path);
       case 'var_local': {
         if (typeof a !== 'string') this.fail(path, 'var_local needs a name');
-        if (n.length > 2) this.expr(b, path); else this.konst(undefined);
-        this.emit(Op.SET, S.LOCAL, this.locals.get(a)!);
+        if (n.length <= 2) return; // a declaration only: GM leaves the slot unset
+        this.expr(b, path);
+        const l = this.locals.get(a)!;
+        this.emit(Op.SET, S.LOCAL, l, this.localOwn + l);
         return;
       }
       case 'ctr_if': {
@@ -212,11 +259,11 @@ class Compiler {
       case 'ctr_repeat': {
         const t = this.temp();
         this.expr(a, path);
-        this.emit(Op.SET, S.LOCAL, t);
+        this.emit(Op.SET, S.LOCAL, t, 0);
         const top = this.code.length;
         this.emit(Op.GET, S.LOCAL, t); this.konst(0); this.emit(Op.BIN, BinOp.gt);
         const jf = this.jump(Op.JF);
-        this.emit(Op.GET, S.LOCAL, t); this.konst(1); this.emit(Op.BIN, BinOp.sub, Op.SET, S.LOCAL, t);
+        this.emit(Op.GET, S.LOCAL, t); this.konst(1); this.emit(Op.BIN, BinOp.sub, Op.SET, S.LOCAL, t, 0);
         const ctx = this.loop('loop', () => this.script(b, `${path}/body`));
         this.emit(Op.JMP, top);
         this.patch(ctx.conts, top); this.patch([jf, ...ctx.breaks]);
@@ -265,7 +312,7 @@ class Compiler {
     if (!Array.isArray(body)) this.fail(path, 'ctr_switch needs a body');
     const t = this.temp();
     this.expr(value, path);
-    this.emit(Op.SET, S.LOCAL, t);
+    this.emit(Op.SET, S.LOCAL, t, 0);
     const caseJumps = new Map<number, number>();
     let defaultAt = -1;
     body.forEach((st, i) => {
@@ -291,6 +338,12 @@ class Compiler {
 
   // ---------------------------------------------------------------- expressions
 
+  /** Arguments right to left, like GM; returns how many. */
+  private args(n: Node[], from: number, path: string): number {
+    for (let i = n.length - 1; i >= from; i--) this.expr(n[i], `${path}/${i}`);
+    return n.length - from;
+  }
+
   private expr(n: Node | undefined, path: string): void {
     if (n === undefined) this.fail(path, 'missing argument');
     if (n === null) return this.konst(undefined);
@@ -300,9 +353,10 @@ class Compiler {
     if (typeof head !== 'string') this.fail(path, 'opcode array must start with a name');
     switch (head) {
       case '_lv': case '_iv': case '_ai': {
+        if (head === '_lv' && a === 'undefined') return this.konst(undefined);
         const r = this.ref(n, path);
         this.operands(r, path);
-        return this.get(r);
+        return this.get(r, path);
       }
       case '_kw':
         if (a === 'self') { this.emit(Op.SELFID); return; }
@@ -314,10 +368,24 @@ class Compiler {
         if (i === undefined) this.fail(path, `unknown asset ${JSON.stringify(a)}`);
         return this.konst(i);
       }
+      case '_fn': {
+        if (typeof a !== 'string' || this.env.func(a) === undefined) this.fail(path, `unknown function ${JSON.stringify(a)}`);
+        return this.konst(this.env.fnValue(a));
+      }
       case '_cn':
-        if (a === 'infinity') return this.konst(Infinity);
-        if (a === 'NaN') return this.konst(NaN);
-        this.fail(path, `constant ${JSON.stringify(a)} not supported yet`);
+        if (typeof a === 'string' && a in CONSTS) return this.konst(CONSTS[a]);
+        this.fail(path, `constant ${JSON.stringify(a)} not supported`);
+      case '_i6': {
+        // int64 is not modelled yet: the literal becomes a real (exact up to 2^53).
+        const v = typeof a === 'string' ? Number(a) : NaN;
+        if (Number.isNaN(v)) this.fail(path, '_i6 needs an integer string');
+        return this.konst(v);
+      }
+      case '_ar': {
+        const k = this.args(n, 1, path);
+        this.emit(Op.ARRAY, k);
+        return;
+      }
       case 'opr_and': case 'opr_or': {
         this.expr(a, path);
         const j = this.jump(head === 'opr_and' ? Op.JF : Op.JT);
@@ -339,6 +407,45 @@ class Compiler {
       }
       case 'var_inc': case 'var_dec':
         return this.change(head === 'var_inc' ? BinOp.add : BinOp.sub, a, null, path, b === true ? 'old' : 'new');
+      case 'fnc_g': {
+        const f = typeof a === 'string' ? this.env.func(a) : undefined;
+        if (f === undefined) this.fail(path, `unknown function ${JSON.stringify(a)}`);
+        this.emit(Op.CALLF, f, this.args(n, 2, path));
+        return;
+      }
+      case 'fnc_m': {
+        const k = this.args(n, 2, path);
+        const iv = isOp(a) && a[0] === '_iv' ? a : null, on = iv ? iv[1] : null;
+        if (iv && !(isOp(on!) && on[0] === '_kw' && (on[1] === 'self' || on[1] === 'global'))) {
+          // inst.method(...): inst is the call's self (unless the method is bound)
+          const name = iv[2];
+          if (typeof name !== 'string' || IV_NAMES.has(name)) this.fail(path, 'fnc_m needs a user variable');
+          this.expr(on, path);
+          this.emit(Op.DUP, 1);
+          this.emit(Op.GET, S.FIELD, this.env.userVar(name));
+        } else {
+          this.emit(Op.SELFID);
+          this.expr(a, path);
+        }
+        this.emit(Op.CALLV, k);
+        return;
+      }
+      case 'ctr_script_execute': {
+        const k = this.args(n, 2, path);
+        this.emit(Op.SELFID);
+        this.expr(a, path);
+        this.emit(Op.CALLV, k);
+        return;
+      }
+      case 'fnc_new': {
+        const k = this.args(n, 2, path);
+        if (typeof a === 'string') {
+          const f = this.env.func(a);
+          if (f === undefined) this.fail(path, `unknown constructor ${JSON.stringify(a)}`);
+          this.emit(Op.NEW, f, k);
+        } else { this.expr(a, path); this.emit(Op.NEWV, k); }
+        return;
+      }
     }
     if (head in BIN) { this.expr(a, path); this.expr(b, path); this.emit(Op.BIN, BIN[head]); return; }
     if (head in UN) { this.expr(a, path); this.emit(Op.UN, UN[head]); return; }
@@ -348,7 +455,6 @@ class Compiler {
     let id: number;
     try { id = opcodeId(head, `${this.name}${path}`); } catch (e) { throw new CompileError((e as Error).message); }
     if (!IMPL[id]) this.fail(path, `opcode ${head} is not implemented in krplayer yet`);
-    for (let i = n.length - 1; i >= 1; i--) this.expr(n[i], `${path}/${i}`); // right to left, like GM
-    this.emit(Op.CALL, id, n.length - 1);
+    this.emit(Op.CALL, id, this.args(n, 1, path));
   }
 }

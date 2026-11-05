@@ -3,9 +3,9 @@
 export const Op = {
   CONST: 1,      // k              -> consts[k]
   GET: 2,        // scope id       (FIELD scopes pop the instance first)
-  SET: 3,        // scope id       stack: value [inst]
+  SET: 3,        // scope id own   stack: value [inst]
   GETI: 4,       // scope id       stack: [inst] index -> value
-  SETI: 5,       // scope id       stack: value [inst] index
+  SETI: 5,       // scope id own   stack: value [inst] index
   BIN: 6,        // k              a b -> a op b
   UN: 7,         // k              a -> op a
   JMP: 8,        // addr
@@ -23,17 +23,27 @@ export const Op = {
   BOOL: 20,      //                a -> truthy(a) as a bool
   SELFID: 21,
   OTHERID: 22,
+  CALLF: 23,     // fn argc        user function call (self/other unchanged)
+  CALLV: 24,     // argc           stack: args self func -> result (methods, script ids)
+  NEW: 25,       // fn argc        constructor call -> struct
+  NEWV: 26,      // argc           stack: args ctor -> struct
+  AROWV: 27,     // scope id own   stack: [inst] index -> row  (var[index] as an array to write into)
+  AROW: 28,      // own            stack: row index -> row[index] as an array to write into
+  AGET: 29,      //                stack: arr index -> arr[index]
+  ASET: 30,      // own            stack: value row index -> (row[index] = value)
+  ARRAY: 31,     // n              n items (first element deepest) -> array
 } as const;
 
 /** Variable scopes for GET/SET/GETI/SETI. */
 export const S = {
   LOCAL: 0,
   SELF: 1,    // user variable on self
-  FIELD: 2,   // user variable on an instance/object popped from the stack
+  FIELD: 2,   // user variable on an instance/object/struct popped from the stack
   GLOBAL: 3,  // user global
   BSELF: 4,   // built-in instance variable on self
   BFIELD: 5,  // built-in instance variable on a popped instance/object
   BGLOBAL: 6, // built-in global (room, room_width...)
+  ARG: 7,     // argumentN (id = N); argument[i] with GETI/SETI (id = -1)
 } as const;
 
 export const BinOp = {
@@ -52,4 +62,9 @@ export interface Block {
   /** Statement start pcs and their paths inside the script, for error messages. */
   stmtPc: number[];
   stmtPath: string[];
+  /** Object events: the object that defined it and the event key (see evKey), for event_inherited. */
+  owner?: number; ev?: number;
 }
+
+/** Event keys: simple events by EV slot; alarms, user, async, collision and key events offset. */
+export const EK = { alarm: 100, user: 200, async: 300, collision: 1000, key: 100000 } as const;

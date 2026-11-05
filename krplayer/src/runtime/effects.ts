@@ -69,7 +69,11 @@ export class Effects {
     for (let i = 0; i < this.n; i++) {
       if ((this.above[i] === 1) !== above) continue;
       const o = i * F;
-      r.circle(p[o], p[o + 1], Math.max(0.5, p[o + 4]), this.colour[i], p[o + 6] / p[o + 7], false);
+      const x = p[o], y = p[o + 1], rad = Math.max(0.5, p[o + 4]), c = this.colour[i], a = p[o + 6] / p[o + 7];
+      for (let k = 0; k < 12; k++) {
+        const a0 = (k / 12) * Math.PI * 2, a1 = ((k + 1) / 12) * Math.PI * 2;
+        r.triangle(x, y, x + Math.cos(a0) * rad, y + Math.sin(a0) * rad, x + Math.cos(a1) * rad, y + Math.sin(a1) * rad, c, c, c, a);
+      }
     }
   }
 

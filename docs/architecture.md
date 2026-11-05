@@ -17,26 +17,35 @@ gm2kr/src/
   datawin.ts        FORM/chunk listing
   format.ts         version detection, once → GmFormat flags
   io/bzip2.ts       bzip2 decoder for "2zoq" textures (bounded output)
-  chunks/           one parser per chunk (gen8, strg, tpag, txtr, sprt, font, objt, room, code)
+  chunks/           one parser per chunk (gen8, strg, tpag, txtr, sprt, font, objt, room, code); audio.ts (SOND, AGRP,
+                    AUDO, audiogroupN.dat), misc.ts (SCPT, GLOB, BGND)
   model.ts          GmModel: GameMaker-side types, not krpj
-  decompile/        disasm.ts → structure.ts (stack sim + pattern structuring → krpj);
-                    builtins.ts (GML name → opcode, derived from the opcode table)
-  emit/             krpj.ts, textures.ts (QOI → RGBA → PNG), zip.ts; audio (todo)
-  convert.ts        data.win → { krpj, files }, no DOM
+  decompile/        disasm.ts → structure.ts (stack sim + pattern structuring → krpj); program.ts (all entries,
+                    child functions); builtins.ts (GML name → opcode, derived from the opcode table)
+  emit/             krpj.ts, textures.ts (QOI → RGBA → PNG), zip.ts
+  convert.ts        data.win + game folder → { krpj, files }, no DOM
   index.ts          UI only
 
 krplayer/src/
   krpj.ts           shared format types (imported by gm2kr/kreditor)
   opcodes.ts        opcode registry (+ opcodes.gen.ts, generated)
   config.ts         base URLs, injected by the host page
-  platform/         Renderer/Audio/Input/Storage interfaces, headless, web (Canvas2D + keyboard; WebGL/WebAudio todo)
+  platform/         Renderer/Audio/Input/Storage interfaces; headless (+ soft.ts, a software renderer for
+                    screenshots in tests); web (WebGL2 batch renderer, WebAudio, keyboard, localStorage)
   loader/           project sources (URL, in-memory files, .krpj archive) and the gm2kr handoff
   compile/          tree → bytecode, name resolution
-  vm/               dispatch loop, with-stack (user function calls todo)
-  value.ts          all GML coercion/equality/undefined rules (int64 todo)
-  runtime/          assets (load + compile), instances, game (rooms, event order, drawing), collision, effects
-  builtins/         one file per opcode category (ins.ts, drw.ts, ...); registry.ts maps opcode id → implementation
-  play.ts           source + platform → running Game (browser and headless)
+  vm/               dispatch loop, call frames, with-stack, copy-on-write arrays
+  value.ts          all GML coercion/equality/undefined rules, structs and methods
+  runtime/          assets (load + compile), instance, game (rooms, event order, drawing), layers (room layers,
+                    cameras, views), draw (sprite/text/primitive helpers), sound (voices), data (ds_*, JSON, ini,
+                    files, buffers), collision, effects
+  builtins/         one file per opcode category (ins, sen, opr, var, drw, lks, rom, cam, dat); registry.ts maps
+                    opcode id → implementation, family() for family opcodes
+  play.ts           source + platform → Game (browser and headless)
+
+scripts/
+  gen-opcodes.ts    docs/krpj_opcodes.md → krplayer/src/opcodes.gen.ts
+  convert.ts        gm2kr from the command line (folder → .krpj)
 ```
 
 ## Rules
@@ -44,7 +53,7 @@ krplayer/src/
 * **Version checks go through flags.** Chunk parsers test `fmt.gms23` etc., never raw version numbers. GEN8's version is unreliable for GMS2 (often 2.0.0.0), so `format.ts` infers newer versions from chunk presence and layout probes. Each flag has a comment saying how it's detected.
 * **Opcodes have one source: `docs/krpj_opcodes.md`.** `pnpm gen:opcodes` parses it into `krplayer/src/opcodes.gen.ts` (commit both). A test fails if the generated file is stale. gm2kr and krplayer both import `opcodes.ts`. Numeric ids are internal and never written to a .krpj, so reordering the doc is safe.
 * **GML semantics live in two places.** `value.ts` holds the value rules and `runtime/instances.ts` holds instance order. Builtins call into them and never re-implement coercion.
-* **The runtime only sees `Platform`.** No DOM, WebGL, WebAudio or fetch outside `platform/`. Keep platform arguments flat (no per-call objects) for the hot loop.
+* **The runtime only sees `Platform`.** No DOM, WebGL, WebAudio or fetch outside `platform/` (included files come through `Platform.fetchBytes`). Keep platform arguments flat (no per-call objects) for the hot loop.
 * **Errors name the place.** Format errors carry the file offset. Unknown opcodes and functions carry the object/event/offset. Nothing silently no-ops.
 * **Browser code has no Node types.** Package tsconfigs exclude `@types/node`; only tests and `scripts/` (`tsconfig.test.json`) get it.
 * **Imports use `.ts` extensions and erasable syntax only** (no enums, namespaces or constructor parameter properties). Node runs the tests directly, with no build step.
@@ -52,6 +61,8 @@ krplayer/src/
 ## Decisions
 * **Unstructurable control flow fails loudly.** krpj has no goto. If the decompiler can't rebuild structured control flow (`if`/loops/`switch`/`with`) for a code entry, conversion fails with the code entry name and bytecode offset. It doesn't emit a fallback opcode or skip the code. GML has no goto, so this should only happen through compiler quirks. Add a hidden compat opcode only if real games need it, and update this note and krpj_opcodes.md when you do.
 * **Supported bytecode versions are 15–17.** Anything else is rejected by `detectFormat`.
+* **Family opcodes dispatch on their first argument** (the GML name minus the family prefix); a member krplayer doesn't implement fails when called, naming the GML function. Console SDK families (`sys_psn`, `sys_switch`) have no members at all: games only reach them on consoles.
+* **Copy-on-write owners are per variable.** GM's `setowner` constants aren't stored in the project; krplayer's compiler gives each variable (scope + name, or a block's local slot) an owner token, and an array written through a variable that doesn't own it is copied first.
 * **Built-in calls are opcodes, resolved at load.** The krplayer compiler maps each opcode name to its id and refuses ones with no implementation in `builtins/`, so a project that would hit an unimplemented builtin fails before it starts, naming the script path.
 * **Getting a converted project into krplayer.** gm2kr's output is a set of files (`game.json` + `./` assets), which zipped together form a `.krpj`. It reaches the player one of three ways, all ending in the same `ProjectSource` (`{ krpj, url(path) }`):
   1. a URL (a `game.json` or a `.krpj`), for published projects on the CDN;
@@ -67,7 +78,7 @@ krplayer/src/
 
 ## Build order
 Get a thin end-to-end slice working first, then widen one opcode category at a time, updating the compat matrix "Build progress" as you go:
-Steps 1–3 are done for the asteroids sample (plus collisions, alarms, fonts and room restart).
+Steps 1–3 are done for the asteroids sample (plus collisions, alarms, fonts and room restart). Deltarune Chapter 1 converts completely and runs through its intro (contact sequence, vessel creation and naming) in krplayer.
 
 1. **Chunks:** GEN8, STRG, CODE, VARI, FUNC, OBJT, ROOM, SPRT, TPAG, TXTR
 2. **Runtime:** create/step/draw events, `draw_sprite`, keyboard input

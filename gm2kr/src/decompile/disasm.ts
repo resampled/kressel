@@ -11,7 +11,7 @@ export const Op = {
   conv: 0x07, mul: 0x08, div: 0x09, rem: 0x0a, mod: 0x0b, add: 0x0c, sub: 0x0d, and: 0x0e, or: 0x0f, xor: 0x10,
   neg: 0x11, not: 0x12, shl: 0x13, shr: 0x14, cmp: 0x15, pop: 0x45, pushi: 0x84, dup: 0x86, ret: 0x9c, exit: 0x9d,
   popz: 0x9e, b: 0xb6, bt: 0xb7, bf: 0xb8, pushenv: 0xba, popenv: 0xbb, push: 0xc0, pushloc: 0xc1, pushglb: 0xc2,
-  pushbltn: 0xc3, call: 0xd9, callv: 0xda, brk: 0xff,
+  pushbltn: 0xc3, call: 0xd9, callv: 0x99, brk: 0xff,
 } as const;
 const OP_NAMES = new Map<number, string>(Object.entries(Op).map(([k, v]) => [v, k]));
 
@@ -66,7 +66,7 @@ export function disassemble(buf: ArrayBuffer, code: GmCode, refs: GmRefs, string
         switch (t1) {
           case T.Double: ins.value = r.f64(); break;
           case T.Float: ins.value = r.f32(); break;
-          case T.Int32: ins.value = r.i32(); break;
+          case T.Int32: ins.value = r.i32(); ins.fn = refs.funcs.get(at) ?? null; break; // function refs are push.i with a FUNC occurrence
           case T.Int64: ins.value = r.u64(); break;
           case T.Bool: ins.value = r.u32() !== 0; break;
           case T.Var: varRef(); break;

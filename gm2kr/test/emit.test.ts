@@ -52,3 +52,29 @@ test('asteroids sample converts and plays headlessly', { skip: !existsSync(ASTER
   assert.ok(g.instances.some((i) => i.obj.name === 'obj_game'));
   assert.ok(p.stats.draws > 1000);
 });
+
+const CH1 = new URL('../../samples/chapter1_windows/', import.meta.url);
+test('Deltarune Chapter 1 converts and runs its intro headlessly', { skip: !existsSync(new URL('data.win', CH1)) && 'samples/chapter1_windows not present', timeout: 120_000 }, async () => {
+  const { readdirSync, statSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { join, relative } = await import('node:path');
+  const { convert } = await import('../src/convert.ts');
+  const { createHeadless } = await import('../../krplayer/src/platform/headless.ts');
+  const { load } = await import('../../krplayer/src/play.ts');
+  const dir = fileURLToPath(CH1), extra = new Map<string, () => Promise<Uint8Array>>();
+  const walk = (d: string) => { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) walk(p); else extra.set(relative(dir, p).replace(/\\/g, '/'), async () => readFileSync(p)); } };
+  walk(dir);
+  const b = readFileSync(join(dir, 'data.win'));
+  const { krpj, files } = await convert(b.buffer.slice(b.byteOffset, b.byteOffset + b.length), extra);
+  // Only the music the game names is packed (mus/ holds every chapter's).
+  const mus = Object.keys(krpj.included_files ?? {}).filter((p) => p.startsWith('mus/'));
+  assert.ok(mus.length > 20 && mus.length < 100, `${mus.length} music files`);
+  const size = (url: string): [number, number] => { const d = files.get(url.slice(2))!, v = new DataView(d.buffer, d.byteOffset); return [v.getUint32(16), v.getUint32(20)]; };
+  const p = createHeadless(size, undefined, async (u) => files.get(u.slice(2))!);
+  const g = await load({ krpj, url: (x) => x }, p);
+  for (let f = 0; f < 900; f++) { p.tick(33); g.frame(); }
+  assert.equal(g.room.name, 'PLACE_CONTACT');
+  // The contact sequence advances its EVENT state as its text plays (0, 1, 2, 4, 5.1...).
+  const dc = g.instances.find((i) => i.obj.name === 'DEVICE_CONTACT')!;
+  assert.ok((dc.vars.get(g.a.varNames.indexOf('EVENT')) as number) >= 5, 'the intro sequence advanced');
+});

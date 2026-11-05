@@ -423,6 +423,7 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `ins_event_perform` (compat) | num type, num number | `event_perform` | |
 | `ins_object_name` (hidden) | obj obj | `object_get_name` | |
 | `ins_is_ancestor` | obj child, obj parent | `object_is_ancestor` | |
+| `ins_object_sprite` (hidden) | obj obj | `object_get_sprite` | |
 
 ## Movement
 | Opcode | Arguments | GML | Notes |
@@ -471,8 +472,11 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `sen_mouse_wheel` | ref `up`/`down` | `mouse_wheel_up` / `mouse_wheel_down` | |
 | `sen_mouse_gui` | ref `x`/`y`, num device | `device_mouse_x_to_gui` / `device_mouse_y_to_gui` | |
 | `sen_gamepad_connected` | num slot | `gamepad_is_connected` | |
-| `sen_gamepad_button` | ref `held`/`pressed`/`released`, num slot, num button | `gamepad_button_check` / `_pressed` / `_released` | |
+| `sen_gamepad_button` | ref `held`/`pressed`/`released`, num slot, num button | `gamepad_button_check` / `gamepad_button_check_pressed` / `gamepad_button_check_released` | |
 | `sen_gamepad_axis` | num slot, num axis | `gamepad_axis_value` | |
+| `sen_gamepad_info` (hidden) | ref `description`/`guid`, num slot | `gamepad_get_description` / `gamepad_get_guid` | |
+| `sen_gamepad_count` (hidden) | - | `gamepad_get_device_count` | |
+| `sen_gamepad_test_mapping` (compat) | num slot, str mapping | `gamepad_test_mapping` | No-op in the browser. |
 | `sen_ask` (compat) | ref `string`/`integer`, str prompt, any default | `get_string` / `get_integer` | In-canvas modal; deprecated in GM. |
 | `sen_clipboard` (hidden) | - | `clipboard_get_text` | Stubbed. |
 | `sen_clipboard_set` (hidden) | str text | `clipboard_set_text` | Stubbed. |
@@ -509,6 +513,7 @@ Math, randomness, strings and type checks. GML's `+` doesn't turn numbers into t
 | `opr_string` | any value | `string` | |
 | `opr_real` | str text | `real` | Throws on non-numeric text (GMS2). |
 | `opr_str_length` | str text | `string_length` | |
+| `opr_str_byte_length` (hidden) | str text | `string_byte_length` | UTF-8 bytes. |
 | `opr_str_char_at` | str text, num n | `string_char_at` | 1-based. |
 | `opr_str_copy` | str text, num start, num count | `string_copy` | |
 | `opr_str_pos` | str sub, str text | `string_pos` | Needle first; 0 when not found. |
@@ -536,7 +541,7 @@ Arrays are 0-based (unlike Scratch lists), and block labels say so. Array functi
 
 | Opcode | Arguments | GML | Notes |
 |---|---|---|---|
-| `var_arr_length` | arr a | `array_length` | |
+| `var_arr_length` | arr a | `array_length` / `array_length_1d` | |
 | `var_arr_create` | num n, any? value | `array_create` | |
 | `var_arr_push` | arr a, any... | `array_push` | Scratch 'add (thing) to [list]'. |
 | `var_arr_take` | ref `last`/`first`, arr a | `array_pop` / `array_shift` | Returns the removed item. |
@@ -567,10 +572,13 @@ Arrays are 0-based (unlike Scratch lists), and block labels say so. Array functi
 ## Looks
 | Opcode | Arguments | GML | Notes |
 |---|---|---|---|
-| `lks_sprite_info` | ref `width`/`height`/`number`/`xoffset`/`yoffset`, spr s | `sprite_get_width` etc. | |
+| `lks_sprite_info` | ref `width`/`height`/`number`/`xoffset`/`yoffset`, spr s | `sprite_get_width` / `sprite_get_height` / `sprite_get_number` / `sprite_get_xoffset` / `sprite_get_yoffset` | |
 | `lks_sprite_name` (hidden) | spr s | `sprite_get_name` | |
 | `lks_sprite_exists` (hidden) | spr s | `sprite_exists` | |
 | `lks_asset_named` (hidden) | str name | `asset_get_index` | Looks an asset up by name at runtime, so gm2kr has to keep the original asset names findable. |
+| `lks_sprite_from_surface` (hidden) | as GML | `sprite_create_from_surface` | |
+| `lks_sprite_delete` (hidden) | spr s | `sprite_delete` | |
+| `lks_font_from_sprite` (hidden) | spr s, str map, bool prop, num sep | `font_add_sprite_ext` | |
 
 ## Sound
 Sound inputs take an `_as` sound or a voice id reporter (the value `snd_play` returns).
@@ -589,6 +597,7 @@ Sound inputs take an `_as` sound or a voice id reporter (the value `snd_play` re
 | `snd_pitch` | snd s, num pitch | `audio_sound_pitch` | |
 | `snd_get` | ref `gain`/`pitch`, snd s | `audio_sound_get_gain` / `audio_sound_get_pitch` | |
 | `snd_master_gain` | num volume | `audio_master_gain` | |
+| `snd_set_master_gain` (hidden) | num listener, num gain | `audio_set_master_gain` | |
 | `snd_position` | snd voice | `audio_sound_get_track_position` | Seconds. |
 | `snd_seek` | snd voice, num seconds | `audio_sound_set_track_position` | |
 | `snd_length` | snd s | `audio_sound_length` | |
@@ -609,6 +618,8 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_sprite_stretched` | spr s, num frame, num x, num y, num w, num h | `draw_sprite_stretched` | |
 | `drw_sprite_part` | spr s, num frame, num left, num top, num w, num h, num x, num y | `draw_sprite_part` | |
 | `drw_sprite_tiled` | spr s, num frame, num x, num y | `draw_sprite_tiled` | |
+| `drw_sprite_tiled_ext` (hidden) | as GML | `draw_sprite_tiled_ext` | |
+| `drw_path` (hidden) | path p, num x, num y, bool absolute | `draw_path` | |
 | `drw_sprite_part_ext` (hidden) | as GML | `draw_sprite_part_ext` | |
 | `drw_sprite_stretched_ext` (hidden) | as GML | `draw_sprite_stretched_ext` | |
 | `drw_sprite_general` (hidden) | as GML | `draw_sprite_general` | |
@@ -625,7 +636,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_set_colour` | col c | `draw_set_colour` / `draw_set_color` | |
 | `drw_set_alpha` | num alpha (0-1) | `draw_set_alpha` | Like Scratch's 'ghost effect', with the scale inverted. |
 | `drw_set_align` | ref `h`/`v`, num align | `draw_set_halign` / `draw_set_valign` | `fa_left`/`fa_top` = 0, centre/middle = 1, right/bottom = 2. |
-| `drw_get` (hidden) | ref `colour`/`alpha`/`font`/`halign`/`valign` | `draw_get_*` | |
+| `drw_get` (hidden) | ref `colour`/`alpha`/`font`/`halign`/`valign` | `draw_get_colour` / `draw_get_alpha` / `draw_get_font` / `draw_get_halign` / `draw_get_valign` | |
 | `drw_rect` | num x1, num y1, num x2, num y2, bool outline | `draw_rectangle` | |
 | `drw_rect_colour` (hidden) | num x1, num y1, num x2, num y2, col c1, col c2, col c3, col c4, bool outline | `draw_rectangle_colour` | |
 | `drw_roundrect` (hidden) | num x1, num y1, num x2, num y2, bool outline | `draw_roundrect` | |
@@ -635,6 +646,14 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_line` | num x1, num y1, num x2, num y2, num? width | `draw_line` / `draw_line_width` | Leaving out width = `draw_line`. |
 | `drw_triangle` | num x1, num y1, num x2, num y2, num x3, num y3, bool outline | `draw_triangle` | |
 | `drw_point` | num x, num y | `draw_point` | |
+| `drw_circle_colour` (hidden) | num x, num y, num r, col c1, col c2, bool outline | `draw_circle_colour` | c1 at the centre, c2 at the edge. |
+| `drw_ellipse_colour` (hidden) | num x1, num y1, num x2, num y2, col c1, col c2, bool outline | `draw_ellipse_colour` | |
+| `drw_line_colour` (hidden) | num x1, num y1, num x2, num y2, col c1, col c2 | `draw_line_colour` | |
+| `drw_line_width_colour` (hidden) | num x1, num y1, num x2, num y2, num w, col c1, col c2 | `draw_line_width_colour` | |
+| `drw_point_colour` (hidden) | num x, num y, col c | `draw_point_colour` | |
+| `drw_roundrect_colour` (hidden) | num x1, num y1, num x2, num y2, col c1, col c2, bool outline | `draw_roundrect_colour` | |
+| `drw_roundrect_colour_ext` (hidden) | as GML | `draw_roundrect_colour_ext` | |
+| `drw_triangle_colour` (hidden) | num x1, num y1, num x2, num y2, num x3, num y3, col c1, col c2, col c3, bool outline | `draw_triangle_colour` | |
 | `drw_arrow` (hidden) | num x1, num y1, num x2, num y2, num size | `draw_arrow` | |
 | `drw_healthbar` | num x1, num y1, num x2, num y2, num amount, col back, col min, col max, num direction, bool showback, bool showborder | `draw_healthbar` | |
 | `drw_clear` | col c, num? alpha | `draw_clear` / `draw_clear_alpha` | Leaving out alpha = `draw_clear`. |
@@ -651,6 +670,8 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_surface` (hidden) | num surf, num x, num y | `draw_surface` | |
 | `drw_surface_ext` (hidden) | as GML | `draw_surface_ext` | |
 | `drw_surface_part` (hidden) | as GML | `draw_surface_part` | |
+| `drw_surface_size` (hidden) | ref `width`/`height`, num surf | `surface_get_width` / `surface_get_height` | |
+| `drw_app_surface` (compat) | ref `enable`/`draw_enable`, bool on | `application_surface_enable` / `application_surface_draw_enable` | |
 | `drw_shader_set` (hidden) | shd s | `shader_set` | Pairs with `drw_shader_reset` like surfaces. |
 | `drw_shader_reset` (hidden) | - | `shader_reset` | |
 | `drw_shader_uniform` (hidden) | shd s, str name | `shader_get_uniform` | |
@@ -659,6 +680,9 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_surface_getpixel` (compat) | num surf, num x, num y | `surface_getpixel` | Stubbed. |
 | `drw_effect` | ref `above`/`below`, num kind, num x, num y, num size, col colour | `effect_create_above` / `effect_create_below` | Built-in one-shot effects. kind: `ef_explosion` = 0, `ef_ring` 1, `ef_ellipse` 2, `ef_firework` 3, `ef_smoke` 4, `ef_smokeup` 5, `ef_star` 6, `ef_spark` 7, `ef_flare` 8, `ef_cloud` 9, `ef_rain` 10, `ef_snow` 11; size 0-2 (small/medium/large). Drawn by krplayer as an approximation, not GM's exact particles. |
 | `drw_part` (hidden, family) | ref fn, ... | `part_*` | ref drops `part_` (`["drw_part","particles_create",ps,x,y,pt,10]`). Only `system_create`, `particles_create` and `system_destroy` get custom labels. |
+| `drw_texture` (compat, family) | ref fn, ... | `texture_*` | Texture paging hints (`prefetch`, `is_ready`...); ref drops `texture_`. |
+| `drw_texturegroup` (compat, family) | ref fn, ... | `texturegroup_*` | ref drops `texturegroup_`. |
+| `drw_vertex` (hidden, family) | ref fn, ... | `vertex_*` | Vertex formats and buffers; ref drops `vertex_`. |
 
 ## Rooms
 | Opcode | Arguments | GML | Notes |
@@ -674,10 +698,17 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `rom_layer_depth` | layer l, num depth | `layer_depth` | |
 | `rom_layer_get_depth` | layer l | `layer_get_depth` | |
 | `rom_layer_set` | ref `x`/`y`/`hspeed`/`vspeed`, layer l, num value | `layer_x` / `layer_y` / `layer_hspeed` / `layer_vspeed` | For parallax/scrolling backgrounds. |
-| `rom_layer_get` | ref `x`/`y`/`hspeed`/`vspeed`, layer l | `layer_get_x` etc. | |
+| `rom_layer_get` | ref `x`/`y`/`hspeed`/`vspeed`, layer l | `layer_get_x` / `layer_get_y` / `layer_get_hspeed` / `layer_get_vspeed` | |
 | `rom_layer_create` (hidden) | num depth, str? name | `layer_create` | |
 | `rom_layer_destroy` (hidden) | layer l | `layer_destroy` | |
+| `rom_layer_name` (hidden) | layer l | `layer_get_name` | |
+| `rom_layer_all` (hidden) | - | `layer_get_all` | Array of layer ids. |
+| `rom_layer_elements` (hidden) | layer l | `layer_get_all_elements` | Array of element ids. |
+| `rom_element_type` (hidden) | num element | `layer_get_element_type` | |
+| `rom_layer_force_depth` (compat) | bool force, num depth | `layer_force_draw_depth` | |
 | `rom_bg` (hidden, family) | ref fn, ... | `layer_background_*` | ref drops `layer_background_` (`["rom_bg","blend",bg,255]`). |
+| `rom_tile` (hidden, family) | ref fn, ... | `layer_tile_*` | GMS1-style tiles in asset layers; ref drops `layer_tile_`. |
+| `rom_sprite` (hidden, family) | ref fn, ... | `layer_sprite_*` | Sprites in asset layers; ref drops `layer_sprite_`. |
 | `rom_tilemap` (hidden, family) | ref fn, ... | `tilemap_*`, `layer_tilemap_get_id` | ref drops `tilemap_`; `layer_tilemap_get_id` is `layer_get_id`. |
 | `rom_sequence` (hidden, family) | ref fn, ... | `layer_sequence_*` | ref drops `layer_sequence_`. |
 | `rom_animcurve` (hidden, family) | ref fn, ... | `animcurve_*` | ref drops `animcurve_`. |
@@ -687,15 +718,16 @@ Camera inputs default to `["_ai",["_lv","view_camera"],0]`.
 
 | Opcode | Arguments | GML | Notes |
 |---|---|---|---|
-| `cam_get` | ref `x`/`y`/`width`/`height`, num cam | `camera_get_view_*` | |
+| `cam_get` | ref `x`/`y`/`width`/`height`/`angle`/`border_x`/`border_y`/`speed_x`/`speed_y`/`target`, num cam | `camera_get_view_x` / `camera_get_view_y` / `camera_get_view_width` / `camera_get_view_height` / `camera_get_view_angle` / `camera_get_view_border_x` / `camera_get_view_border_y` / `camera_get_view_speed_x` / `camera_get_view_speed_y` / `camera_get_view_target` | |
 | `cam_set_pos` | num cam, num x, num y | `camera_set_view_pos` | |
 | `cam_set_size` | num cam, num w, num h | `camera_set_view_size` | |
 | `cam_set_target` (hidden) | num cam, inst target | `camera_set_view_target` | |
 | `cam_set_border` (hidden) | num cam, num hborder, num vborder | `camera_set_view_border` | |
 | `cam_set_speed` (hidden) | num cam, num hspeed, num vspeed | `camera_set_view_speed` | |
 | `cam_set_angle` (hidden) | num cam, num angle | `camera_set_view_angle` | |
-| `cam_view_get` (hidden) | ref `visible`/`camera`, num view | `view_get_visible` / `view_get_camera` | |
-| `cam_view_set` (hidden) | ref `visible`/`camera`, num view, any value | `view_set_visible` / `view_set_camera` | |
+| `cam_create` (hidden) | - | `camera_create` | |
+| `cam_view_get` (hidden) | ref `visible`/`camera`/`xport`/`yport`/`wport`/`hport`/`surface_id`, num view | `view_get_visible` / `view_get_camera` / `view_get_xport` / `view_get_yport` / `view_get_wport` / `view_get_hport` / `view_get_surface_id` | |
+| `cam_view_set` (hidden) | ref `visible`/`camera`/`xport`/`yport`/`wport`/`hport`/`surface_id`, num view, any value | `view_set_visible` / `view_set_camera` / `view_set_xport` / `view_set_yport` / `view_set_wport` / `view_set_hport` / `view_set_surface_id` | |
 | `cam_legacy_view_get` (compat) | num what, num view | `__view_get` | GMS1-to-GMS2 compatibility scripts, common in older imports. |
 | `cam_legacy_view_set` (compat) | num what, num view, any value | `__view_set` | |
 | `cam_gui_size` | ref `width`/`height` | `display_get_gui_width` / `display_get_gui_height` | |
@@ -708,6 +740,8 @@ Camera inputs default to `["_ai",["_lv","view_camera"],0]`.
 | `cam_window_caption` (hidden) | str caption | `window_set_caption` | |
 | `cam_cursor_set` (hidden) | num cursor | `window_set_cursor` | |
 | `cam_window_mouse` (hidden) | ref `x`/`y` | `window_mouse_get_x` / `window_mouse_get_y` | |
+| `cam_window_center` (hidden) | - | `window_center` | No-op: the window is the canvas. |
+| `cam_window_borderless` (compat) | bool on | `window_enable_borderless_fullscreen` | No-op. |
 
 ## Control (functions)
 Alarms, timing and dynamic calls. Timelines have no opcode: `timeline_index`/`timeline_running`/`timeline_position` are built-in variables set with `var_set` (the 'start timeline' block is sugar for that).
@@ -745,10 +779,15 @@ Arrays and structs (Variables) are better for visual scripts; `ds_*` mainly exis
 | `dat_map_destroy` (hidden) | ds m | `ds_map_destroy` | |
 | `dat_map_exists` (hidden) | ds m, any key | `ds_map_exists` | |
 | `dat_map_get` (hidden) | ds m, any key | `ds_map_find_value` | Reads/writes can also use `_ac` with `?`. |
-| `dat_map_set` (hidden) | ds m, any key, any value | `ds_map_set` | |
+| `dat_map_set` (hidden) | ds m, any key, any value | `ds_map_set` / `ds_map_set_post` | |
 | `dat_map_add` (hidden) | ds m, any key, any value | `ds_map_add` | Does nothing if the key exists. |
 | `dat_map_delete` (hidden) | ds m, any key | `ds_map_delete` | |
 | `dat_map_size` (hidden) | ds m | `ds_map_size` | |
+| `dat_map_first` (hidden) | ds m | `ds_map_find_first` | |
+| `dat_map_next` (hidden) | ds m, any key | `ds_map_find_next` | |
+| `dat_map_keys` (hidden) | ds m | `ds_map_keys_to_array` | |
+| `dat_list_write` (hidden) | ds l | `ds_list_write` | Serialises to a string. |
+| `dat_list_read` (hidden) | ds l, str data | `ds_list_read` | |
 | `dat_grid_create` (hidden) | num w, num h | `ds_grid_create` | |
 | `dat_grid_get` (hidden) | ds g, num x, num y | `ds_grid_get` | |
 | `dat_grid_set` (hidden) | ds g, num x, num y, any value | `ds_grid_set` | |
@@ -765,6 +804,7 @@ Arrays and structs (Variables) are better for visual scripts; `ds_*` mainly exis
 | `dat_json_decode` (compat) | str text | `json_decode` | Same. |
 | `dat_ini_open` | str name | `ini_open` | Shown together with `dat_ini_close` as one 'with save file' C-block, but saved as two opcodes. Calls that aren't paired show as plain commands. |
 | `dat_ini_close` | - | `ini_close` | |
+| `dat_ini_open_string` (hidden) | str text | `ini_open_from_string` | |
 | `dat_ini_read` | ref `string`/`real`, str section, str key, any default | `ini_read_string` / `ini_read_real` | |
 | `dat_ini_write` | ref `string`/`real`, str section, str key, any value | `ini_write_string` / `ini_write_real` | The editor picks the variant from the value's type; a dropdown overrides it. |
 | `dat_ini_section_exists` | str section | `ini_section_exists` | |
@@ -775,7 +815,7 @@ Arrays and structs (Variables) are better for visual scripts; `ds_*` mainly exis
 | `dat_file_delete` | str name | `file_delete` | |
 | `dat_file_copy` (hidden) | str from, str to | `file_copy` | |
 | `dat_file_rename` (hidden) | str from, str to | `file_rename` | |
-| `dat_text_open` | ref `read`/`write`/`append`, str name | `file_text_open_read` / `_write` / `_append` | Returns a file id. Fangames often save this way. |
+| `dat_text_open` | ref `read`/`write`/`append`, str name | `file_text_open_read` / `file_text_open_write` / `file_text_open_append` | Returns a file id. Fangames often save this way. |
 | `dat_text_close` | num f | `file_text_close` | |
 | `dat_text_read` | ref `string`/`real`, num f | `file_text_read_string` / `file_text_read_real` | |
 | `dat_text_readln` | num f | `file_text_readln` | |
@@ -805,8 +845,12 @@ Arrays and structs (Variables) are better for visual scripts; `ds_*` mainly exis
 | `sys_now` | - | `date_current_datetime` | |
 | `sys_date` | ref `year`/`month`/`day`/`hour`/`minute`/`second`/`weekday`, num? datetime | `date_get_*` | Scratch 'current [year]'. Leaving out datetime = now; gm2kr folds `date_get_*(date_current_datetime())` into that form. |
 | `sys_url_open` (hidden) | str url | `url_open` | Opens a new tab after a confirmation. |
-| `sys_param` (compat, family) | ref `count`/`string`/`env`, ... | `parameter_count` / `parameter_string` / `environment_get_variable` | Empty values in the browser. |
+| `sys_param` (compat) | ref `count`/`string`/`env`, ... | `parameter_count` / `parameter_string` / `environment_get_variable` | Empty values in the browser. |
 | `sys_callstack` (hidden) | - | `debug_get_callstack` | |
+| `sys_os_paused` (hidden) | - | `os_is_paused` | Whether the tab is hidden. |
+| `sys_game_change` (compat) | str dir, str params | `game_change` | Switching to another game ends this one. |
+| `sys_psn` (compat, family) | ref fn, ... | `psn_*` | Console SDK. Calling one is an error. |
+| `sys_switch` (compat, family) | ref fn, ... | `switch_*` | Console SDK. Calling one is an error. |
 
 ## Unsupported
 These have no opcode. Importing them fails loudly with the function name and offset.

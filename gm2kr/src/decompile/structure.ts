@@ -1,19 +1,38 @@
 // Bytecode -> krpj script tree. Simulates the VM stack to rebuild expressions, and recovers
 // structured control flow from the patterns GameMaker's compiler emits. Anything that doesn't
 // match a known pattern fails loudly with the code entry name and address (see architecture.md).
+//
+// Patterns (GM 2.3+ compiler, bytecode 17):
+//   if:        c; bf E; then; E:                    if/else: c; bf F; then; b E; F: else; E:
+//   a && b:    a; bf F; b; b E; F: push 0; E:       a || b:  a; bt F; b; b E; F: push 1; E:
+//   while:     T: c; bf E; body; b T; E:            for: init; T: c; bf E; body; C: step; b T; E:
+//   do/until:  T: body; c; bf T                     repeat: n; dup; push 0; cmp le; bt E; T: body; dec; bt T; E: popz
+//   switch:    v; (dup; case; cmp eq; bt Lk)*; b D; bodies...; E: popz
+//   with:      inst; pushenv P; body; P: popenv body
+//   function:  b E; <child entry>; E: push.i fn; ...; call method
 
 import { Ext, Op, T, VarKind, type Instr } from './disasm.ts';
-import { BUILTINS } from './builtins.ts';
+import { lookupBuiltin } from './builtins.ts';
 
 export type Kr = unknown;
 
 /** Asset names by index, for turning ids/refs into ["_as", name]. */
 export interface AssetNames { objects: string[]; sprites: string[]; sounds: string[]; rooms: string[]; fonts: string[] }
 
-export class DecompileError extends Error {}
+export class DecompileError extends Error {
+  /** For an unstructured branch: where it jumps (lets loops retry with a for/continue target). */
+  readonly target: number;
+  constructor(msg: string, target = -1) { super(msg); this.target = target; }
+}
 
-interface Item { e: Kr; size: number; marker?: boolean }
-interface Loop { brk: number; cont: number }
+interface Item { e: Kr; size: number; marker?: boolean; dup?: boolean }
+interface Ctx { kind: 'loop' | 'with' | 'switch'; brk: number; cont: number; sw?: Switch }
+/**
+ * A switch body being parsed: labels (instruction index -> case values, undefined = default), and its
+ * end (the popz of the switch value), found either from a break (a `b` to a popz.v past the last label)
+ * or as the first top-level popz with nothing to pop past the last label.
+ */
+interface Switch { labels: Map<number, Kr[]>; minEnd: number; end: number }
 
 const SIZE: Record<number, number> = { [T.Double]: 8, [T.Float]: 4, [T.Int32]: 4, [T.Int64]: 8, [T.Bool]: 4, [T.Var]: 16, [T.String]: 16, [T.Int16]: 4 };
 const BINOP: Record<number, string> = {
@@ -24,7 +43,11 @@ const CMP = ['', 'opr_lt', 'opr_lte', 'opr_eq', 'opr_neq', 'opr_gte', 'opr_gt'];
 const CHANGE: Record<string, string> = { opr_add: '+', opr_sub: '-', opr_mul: '*', opr_div: '/', opr_mod: '%', opr_band: '&', opr_bor: '|', opr_bxor: '^', opr_shl: '<<', opr_shr: '>>' };
 /** pushref asset types (value >>> 24). Font = 6 observed in GM 2024 (see gm_gotchas.md). */
 const REF_KIND: Record<number, keyof AssetNames> = { 0: 'objects', 1: 'sprites', 2: 'sounds', 3: 'rooms', 6: 'fonts' };
-const PSEUDO: Record<string, Kr> = { '@@Other@@': ['_kw', 'other'], '@@This@@': ['_kw', 'self'], '@@Global@@': ['_kw', 'global'] };
+const PSEUDO: Record<string, Kr> = { '@@Other@@': ['_kw', 'other'], '@@This@@': ['_kw', 'self'], '@@Global@@': ['_kw', 'global'], '@@NullObject@@': null };
+const SCRIPT = 'gml_Script_';
+
+const isOp = (n: Kr, name?: string): n is [string, ...Kr[]] => Array.isArray(n) && typeof n[0] === 'string' && (name === undefined || n[0] === name);
+const pushesInt = (i: Instr | undefined, v: number) => !!i && (i.op === Op.pushi || (i.op === Op.push && (i.t1 === T.Int16 || i.t1 === T.Int32))) && i.value === v;
 
 export class Decompiler {
   private readonly ins: Instr[];
@@ -32,25 +55,36 @@ export class Decompiler {
   private readonly end: number;
   private readonly name: string;
   private readonly assets: AssetNames;
+  /** Start addresses of child functions defined inside this block (skipped, decompiled separately). */
+  private readonly children: Set<number>;
+  /** Branch target address -> indices of the backward branches to it (ascending). */
+  private readonly backs = new Map<number, number[]>();
   readonly locals = new Set<string>();
 
-  constructor(name: string, ins: Instr[], endAddr: number, assets: AssetNames) {
-    this.name = name; this.ins = ins; this.end = endAddr; this.assets = assets;
-    ins.forEach((x, i) => this.at.set(x.at, i));
+  constructor(name: string, ins: Instr[], endAddr: number, assets: AssetNames, children: Set<number> = new Set()) {
+    this.name = name; this.ins = ins; this.end = endAddr; this.assets = assets; this.children = children;
+    ins.forEach((x, i) => {
+      this.at.set(x.at, i);
+      if ((x.op === Op.b || x.op === Op.bt || x.op === Op.bf) && x.target <= x.at) (this.backs.get(x.target) ?? this.backs.set(x.target, []).get(x.target)!).push(i);
+    });
     this.at.set(endAddr, ins.length);
   }
 
-  /** The whole entry as a statement list, with `var` declarations for its locals first. */
-  run(): Kr[] {
+  /** Decompiles instructions [from, to) (a whole entry by default), with `var` declarations first. */
+  run(from = 0, to = this.ins.length): Kr[] {
     const stack: Item[] = [];
-    const body = this.block(0, this.ins.length, stack, null);
-    if (stack.length) this.fail(this.ins.length - 1, `${stack.length} values left on the stack`);
+    const last = this.ins[to - 1];
+    const body = this.block(from, last && last.op === Op.exit ? to - 1 : to, stack, []);
+    if (stack.length) this.fail(to - 1, `${stack.length} values left on the stack`);
     return [...[...this.locals].map((n) => ['var_local', n]), ...body];
   }
 
-  private fail(i: number, msg: string): never {
+  /** Index of an address (for child entry ranges). */
+  index(addr: number): number { return this.idx(addr, 0); }
+
+  private fail(i: number, msg: string, target = -1): never {
     const a = i < this.ins.length ? this.ins[i].at : this.end;
-    throw new DecompileError(`${this.name} @0x${a.toString(16)}: ${msg}`);
+    throw new DecompileError(`${this.name} @0x${a.toString(16)}: ${msg}`, target);
   }
   private idx(addr: number, from: number): number {
     const i = this.at.get(addr);
@@ -66,13 +100,14 @@ export class Decompiler {
   }
 
   /** Instance from an instance-type number (instruction operand or pushed constant). */
-  private instOf(n: number, i: number): Kr | null {
+  private instOf(n: number, i: number, stack: Item[]): Kr | null {
     switch (n) {
       case -1: case -6: case -7: case -15: case -16: return null; // unqualified: _lv
       case -2: return ['_kw', 'other'];
       case -3: return ['_kw', 'all'];
       case -4: return ['_kw', 'noone'];
       case -5: return ['_kw', 'global'];
+      case -9: return this.popInst(stack, i);
     }
     if (n >= 0) return ['_as', this.asset('objects', n, i)];
     this.fail(i, `unknown instance type ${n}`);
@@ -86,7 +121,7 @@ export class Decompiler {
   private popInst(stack: Item[], i: number): Kr | null {
     const v = this.pop(stack, i);
     if (v.marker) return this.pop(stack, i).e;
-    if (typeof v.e === 'number') return this.instOf(v.e, i);
+    if (typeof v.e === 'number') return this.instOf(v.e, i, stack);
     return v.e;
   }
   private varRef(inst: Kr | null, ins: Instr): Kr {
@@ -94,12 +129,13 @@ export class Decompiler {
     if (ins.i16 === -7) this.locals.add(name);
     return inst === null ? ['_lv', name] : ['_iv', inst, name];
   }
-  /** Target of a push/pop. For pops, `valueFirst` (pop.i.v) means the value sits above the target. */
+  /** Target of a push/pop. */
   private target(stack: Item[], ins: Instr, i: number): Kr {
     switch (ins.vkind) {
-      case VarKind.normal: return this.varRef(this.instOf(ins.i16, i), ins);
+      case VarKind.normal: return this.varRef(this.instOf(ins.i16, i, stack), ins);
       case VarKind.stacktop: return this.varRef(this.popInst(stack, i), ins);
-      case VarKind.array: {
+      case VarKind.array: case VarKind.pushaf: case VarKind.popaf: {
+        // [inst, index] -> var[index]; pushaf/popaf push the row for a following [j] access.
         const index = this.pop(stack, i).e;
         return ['_ai', this.varRef(this.popInst(stack, i), ins), index];
       }
@@ -107,42 +143,61 @@ export class Decompiler {
     this.fail(i, `variable access kind 0x${ins.vkind.toString(16)} not supported yet`);
   }
 
+  /** dup n: copies the top (n+1) units. Swap form: moves the top n units below the next m units. */
   private dup(stack: Item[], ins: Instr, i: number): void {
-    if (ins.b1 !== 0) this.fail(i, 'dup swap form not supported yet');
-    let bytes = ((ins.i16 & 0xff) + 1) * SIZE[ins.t1], k = stack.length;
-    while (bytes > 0 && k > 0) bytes -= stack[--k].size;
-    if (bytes !== 0) this.fail(i, 'dup size does not match the stack');
+    const unit = SIZE[ins.t1], n = ins.i16 & 0xff;
+    const take = (bytes: number): number => {
+      let k = stack.length;
+      while (bytes > 0 && k > 0) bytes -= stack[--k].size;
+      if (bytes !== 0) this.fail(i, 'dup size does not match the stack');
+      return k;
+    };
+    if (ins.b1 & 0x80) {
+      const m = (ins.b1 & 0x7f) >> 3, k = take(n * unit), top = stack.splice(k);
+      const j = take(m * unit);
+      stack.splice(j, 0, ...top);
+      return;
+    }
+    const k = take((n + 1) * unit);
+    // Both copies are marked: whichever one a popz discards, it isn't a statement of its own.
+    for (let j = k; j < stack.length; j++) stack[j] = { ...stack[j], dup: true };
     stack.push(...stack.slice(k));
   }
 
   /** Decompiles [from, to) as an expression: no statements, exactly one value. */
-  private expr(from: number, to: number, loop: Loop | null): Item {
+  private expr(from: number, to: number, ctx: Ctx[]): Item {
     const s: Item[] = [];
-    const stmts = this.block(from, to, s, loop);
+    const stmts = this.block(from, to, s, ctx);
     if (stmts.length || s.length !== 1) this.fail(from, 'expected a single expression');
     return s[0];
   }
 
-  private block(from: number, to: number, stack: Item[], loop: Loop | null): Kr[] {
+  /** The last branch in (i, to) jumping back to i, or -1. */
+  private backBranch(i: number, to: number): number {
+    const list = this.backs.get(this.ins[i].at);
+    if (list) for (let k = list.length - 1; k >= 0; k--) if (list[k] < to && list[k] > i) return list[k];
+    return -1;
+  }
+
+  private block(from: number, to: number, stack: Item[], ctx: Ctx[], sw?: Switch): Kr[] {
     const out: Kr[] = [];
     for (let i = from; i < to;) {
-      // Loop headers: a later branch in this range jumps back here.
-      let back = -1;
-      for (let j = to - 1; j > i; j--) {
-        const b = this.ins[j];
-        if ((b.op === Op.b || b.op === Op.bt || b.op === Op.bf) && b.target === this.ins[i].at) { back = j; break; }
-      }
-      if (back >= 0 && !stack.length) { i = this.loop(i, back, out); continue; }
-
+      if (sw && i === sw.end) break;
+      if (sw?.labels.has(i)) for (const v of sw.labels.get(i)!) out.push(v === undefined ? ['ctr_default'] : ['ctr_case', v]);
       const ins = this.ins[i];
+      if (!stack.length) {
+        const back = this.backBranch(i, to);
+        if (back >= 0) { i = this.loop(i, back, out, ctx); continue; }
+      }
       switch (ins.op) {
         case Op.push: case Op.pushloc: case Op.pushglb: case Op.pushbltn: case Op.pushi:
           if (ins.t1 === T.Var) stack.push({ e: this.target(stack, ins, i), size: 16 });
+          else if (ins.fn) stack.push({ e: ['_fn', fnName(ins.fn)], size: SIZE[ins.t1] });
           else stack.push({ e: this.constant(ins.value), size: SIZE[ins.t1], marker: ins.value === -9 && ins.op === Op.pushi });
           break;
         case Op.conv: {
           const v = this.pop(stack, i);
-          const e = ins.t1 === T.Bool && typeof v.e === 'number' ? v.e !== 0 : v.e;
+          const e = (ins.t1 === T.Bool || ins.t2 === T.Bool) && typeof v.e === 'number' ? v.e > 0.5 : v.e;
           stack.push({ e, size: SIZE[ins.t2] });
           break;
         }
@@ -160,18 +215,34 @@ export class Decompiler {
         }
         case Op.neg: { const a = this.pop(stack, i); stack.push({ e: ['opr_neg', a.e], size: a.size }); break; }
         case Op.not: { const a = this.pop(stack, i); stack.push({ e: [ins.t1 === T.Bool ? 'opr_not' : 'opr_bnot', a.e], size: a.size }); break; }
-        case Op.dup: this.dup(stack, ins, i); break;
+        case Op.dup: {
+          if (stack.length && (ins.i16 & 0xff) === 0 && !(ins.b1 & 0x80)) {
+            const r = ins.t1 === T.Var ? this.switchStmt(i, to, stack, out, ctx) : this.repeat(i, to, stack, out, ctx);
+            if (r >= 0) { i = r; continue; }
+          }
+          this.dup(stack, ins, i);
+          break;
+        }
         case Op.pop: {
           if (ins.t1 === T.Int16) this.fail(i, 'pop swap form not supported yet');
-          const valueFirst = ins.t1 === T.Int32 && ins.vkind !== VarKind.normal;
+          const valueFirst = ins.t1 === T.Int32 && (ins.vkind !== VarKind.normal || ins.i16 === -9);
           const value = valueFirst ? this.pop(stack, i) : null;
           const tgt = this.target(stack, ins, i);
-          out.push(this.assign(tgt, (value ?? this.pop(stack, i)).e));
+          const v = (value ?? this.pop(stack, i)).e;
+          // `{...}` literals cache their constructor in a static (___struct___N); that's an implementation detail.
+          if (ins.i16 === -16 && ins.v!.name.startsWith('___struct___')) break;
+          out.push(this.assign(tgt, v));
           break;
         }
         case Op.popz: {
+          if (!stack.length) {
+            const next = i + 1 < to ? this.ins[i + 1].op : -1;
+            if (sw && sw.end < 0 && i >= sw.minEnd && next !== Op.exit && next !== Op.ret) { sw.end = i; return out; }
+            // A switch value popped before leaving the switch early (exit / continue): bookkeeping only.
+            if (ctx.some((c) => c.kind === 'switch')) break;
+          }
           const v = this.pop(stack, i);
-          if (Array.isArray(v.e) && typeof v.e[0] === 'string' && !v.e[0].startsWith('_')) out.push(v.e);
+          if (!v.dup && isOp(v.e) && !v.e[0].startsWith('_')) out.push(v.e);
           break;
         }
         case Op.call: {
@@ -180,21 +251,32 @@ export class Decompiler {
           stack.push({ e: this.call(ins.fn!, args, i), size: 16 });
           break;
         }
-        case Op.brk: stack.push(this.ext(ins, i)); break;
+        case Op.callv: {
+          const f = this.pop(stack, i).e, self = this.pop(stack, i).e, args: Kr[] = [];
+          for (let k = 0; k < ins.i16; k++) args.push(this.pop(stack, i).e);
+          const bound = isOp(f, '_iv') ? f[1] === self || (typeof self === 'number' && isOp(f[1], '_as') && f[1][1] === this.assets.objects[self])
+            : isOp(self, '_kw') && self[1] === 'self';
+          if (!bound) this.fail(i, 'method call on an instance other than the one holding the method');
+          stack.push({ e: ['fnc_m', f, ...args], size: 16 });
+          break;
+        }
+        case Op.brk: this.ext(ins, i, stack, out); break;
         case Op.ret: out.push(['ctr_return', this.pop(stack, i).e]); break;
-        case Op.exit: if (i !== this.ins.length - 1) out.push(['ctr_exit']); break;
+        case Op.exit: out.push(['ctr_exit']); break;
         case Op.bf: case Op.bt: {
           if (ins.target <= ins.at) this.fail(i, 'unexpected backward branch');
-          i = this.cond(i, to, stack, out, loop);
+          i = this.cond(i, to, stack, out, ctx);
           continue;
         }
         case Op.b: {
-          if (loop && ins.target === loop.brk) out.push(['ctr_break']);
-          else if (loop && ins.target === loop.cont) out.push(['ctr_continue']);
-          else this.fail(i, `unstructured branch to 0x${ins.target.toString(16)}`);
+          if (ins.target > ins.at && this.children.has(this.addr(i + 1))) { i = this.idx(ins.target, i); continue; }
+          if (ins.target === this.addr(i + 1)) break; // empty else {}
+          const c = this.jumpKind(ins.target, ctx);
+          if (!c) this.fail(i, `unstructured branch to 0x${ins.target.toString(16)}`, ins.target);
+          out.push([c]);
           break;
         }
-        case Op.pushenv: { i = this.with(i, stack, out); continue; }
+        case Op.pushenv: { i = this.with(i, stack, out, ctx); continue; }
         default: this.fail(i, `instruction 0x${ins.op.toString(16)} not supported here`);
       }
       i++;
@@ -202,31 +284,56 @@ export class Decompiler {
     return out;
   }
 
+  /** A `b` to this target is a break or continue of the innermost matching context. */
+  private jumpKind(target: number, ctx: Ctx[]): 'ctr_break' | 'ctr_continue' | null {
+    const inner = ctx.at(-1);
+    if (inner && (target === inner.brk || this.switchEnd(inner, target))) return 'ctr_break';
+    for (let k = ctx.length - 1; k >= 0; k--) if (ctx[k].kind !== 'switch') return target === ctx[k].cont ? 'ctr_continue' : null;
+    return null;
+  }
+  private isJumpOut(target: number, ctx: Ctx[]): boolean { return ctx.some((c) => c.brk === target || c.cont === target || this.switchEnd(c, target)); }
+
+  /** Whether target is (and, once seen, fixes) the end of a switch whose end isn't known yet. */
+  private switchEnd(c: Ctx, target: number): boolean {
+    if (c.kind !== 'switch' || !c.sw || c.sw.end >= 0) return false;
+    const k = this.at.get(target);
+    if (k === undefined || k < c.sw.minEnd || this.ins[k]?.op !== Op.popz || this.ins[k].t1 !== T.Var) return false;
+    c.sw.end = k; c.brk = target;
+    return true;
+  }
+
   /** bf/bt forward: short-circuit && / ||, ternary, or if / if-else. Returns the next index. */
-  private cond(i: number, to: number, stack: Item[], out: Kr[], loop: Loop | null): number {
+  private cond(i: number, to: number, stack: Item[], out: Kr[], ctx: Ctx[]): number {
     const ins = this.ins[i], c = this.pop(stack, i).e;
     const t = this.idx(ins.target, i);
     if (t > to) this.fail(i, 'branch leaves its block');
     const jump = t - 1 > i ? this.ins[t - 1] : null;
-    const isElse = jump && jump.op === Op.b && jump.target > jump.at && this.addr(t) !== jump.target
-      && !(loop && (jump.target === loop.brk || jump.target === loop.cont));
+    const isElse = !!jump && jump.op === Op.b && jump.target > jump.at && this.addr(t) !== jump.target && !this.isJumpOut(jump.target, ctx)
+      && !this.children.has(jump.at + 4);
 
     // a && b:  a; bf F; b; b E; F: push 0; E:      a || b:  a; bt F; b; b E; F: push 1; E:
-    const f = this.ins[t];
-    if (jump?.op === Op.b && jump.target === this.addr(t + 1) && f && f.op === Op.pushi && f.value === (ins.op === Op.bf ? 0 : 1)) {
-      const rhs = this.expr(i + 1, t - 1, loop);
-      stack.push({ e: [ins.op === Op.bf ? 'opr_and' : 'opr_or', c, rhs.e], size: 4 });
+    // Longer chains share F: a && b && c is a; bf F; b; bf F; c; b E; F: push 0; E:
+    if (jump?.op === Op.b && jump.target === this.addr(t + 1) && pushesInt(this.ins[t], ins.op === Op.bf ? 0 : 1)) {
+      const op = ins.op === Op.bf ? 'opr_and' : 'opr_or';
+      let e = c, from = i + 1;
+      for (let k = i + 1; k < t - 1; k++) {
+        if (this.ins[k].op === ins.op && this.ins[k].target === ins.target) { e = [op, e, this.expr(from, k, ctx).e]; from = k + 1; }
+      }
+      stack.push({ e: [op, e, this.expr(from, t - 1, ctx).e], size: 4 });
       return t + 1;
     }
     const test = ins.op === Op.bf ? c : ['opr_not', c];
     if (!isElse) {
-      out.push(['ctr_if', test, this.block(i + 1, t, stack, loop)]);
+      const s: Item[] = [];
+      const body = this.block(i + 1, t, s, ctx);
+      if (s.length) this.fail(i, 'conditional leaves values on the stack');
+      out.push(['ctr_if', test, body]);
       return t;
     }
     const e = this.idx(jump!.target, t - 1);
-    if (e > to) this.fail(t - 1, 'else branch leaves its block');
+    if (e > to) this.fail(t - 1, 'else branch leaves its block', jump!.target);
     const thenS: Item[] = [], elseS: Item[] = [];
-    const thenB = this.block(i + 1, t - 1, thenS, loop), elseB = this.block(t, e, elseS, loop);
+    const thenB = this.block(i + 1, t - 1, thenS, ctx), elseB = this.block(t, e, elseS, ctx);
     if (thenS.length || elseS.length) { // c ? a : b
       if (thenB.length || elseB.length || thenS.length !== 1 || elseS.length !== 1) this.fail(i, 'unrecognised conditional expression');
       stack.push({ e: ['opr_cond', test, thenS[0].e, elseS[0].e], size: 16 });
@@ -236,35 +343,138 @@ export class Decompiler {
     return e;
   }
 
-  /** while (b back to top) or do/until (conditional branch back). Returns the next index. */
-  private loop(top: number, back: number, out: Kr[]): number {
-    const b = this.ins[back], after = this.addr(back + 1);
+  /**
+   * while / for (b back to the top) or do/until (conditional branch back). Returns the next index.
+   * A `continue` in a for (or do/until) jumps forward to the step (or condition); the first attempt
+   * assumes a while, and an unstructured branch into the loop's tail makes it retry with that target.
+   */
+  private loop(top: number, back: number, out: Kr[], ctx: Ctx[]): number {
+    const b = this.ins[back], after = this.addr(back + 1), topAddr = this.ins[top].at;
+    const retry = (attempt: (cont: number) => Kr): Kr => {
+      let cont = this.stepStart(top, back);
+      const tried = new Set<number>();
+      for (;;) {
+        try { return attempt(cont); } catch (e) {
+          if (!(e instanceof DecompileError)) throw e;
+          tried.add(cont);
+          const t = e.target;
+          if (t > topAddr && t <= b.at && !tried.has(t)) cont = t;
+          else if (!tried.has(-1)) cont = -1;
+          else throw e;
+        }
+      }
+    };
     if (b.op === Op.b) {
       let k = top;
       while (k < back && !(this.ins[k].op === Op.bf && this.ins[k].target === after)) k++;
-      if (k === back) { // while (true)
-        out.push(['ctr_while', true, this.block(top, back, [], { brk: after, cont: this.ins[top].at })]);
-      } else {
-        const cond = this.expr(top, k, null);
-        out.push(['ctr_while', cond.e, this.block(k + 1, back, [], { brk: after, cont: this.ins[top].at })]);
-      }
+      const cond = k === back ? true : this.expr(top, k, ctx).e;
+      const bodyFrom = k === back ? top : k + 1;
+      out.push(retry((cont) => {
+        if (cont < 0) return ['ctr_while', cond, this.block(bodyFrom, back, [], [...ctx, { kind: 'loop', brk: after, cont: topAddr }])];
+        const c = this.idx(cont, back), inner = [...ctx, { kind: 'loop' as const, brk: after, cont }];
+        return ['ctr_for', [], cond, this.block(c, back, [], inner), this.block(bodyFrom, c, [], inner)];
+      }));
     } else {
-      const s: Item[] = [];
-      // continue inside do/until would jump to the condition, whose start isn't known here.
-      const body = this.block(top, back, s, { brk: after, cont: -2 });
-      if (s.length !== 1) this.fail(back, 'do/until condition not found');
-      out.push(['ctr_do_until', body, b.op === Op.bf ? s[0].e : ['opr_not', s[0].e]]);
+      out.push(retry((cont) => {
+        const condFrom = cont < 0 ? -1 : this.idx(cont, back), inner = [...ctx, { kind: 'loop' as const, brk: after, cont: cont < 0 ? -2 : cont }];
+        let body: Kr[], c: Kr;
+        if (condFrom < 0) {
+          const s: Item[] = [];
+          body = this.block(top, back, s, inner);
+          if (s.length !== 1) this.fail(back, 'do/until condition not found');
+          c = s[0].e;
+        } else {
+          body = this.block(top, condFrom, [], inner);
+          c = this.expr(condFrom, back, ctx).e;
+        }
+        return ['ctr_do_until', body, b.op === Op.bf ? c : ['opr_not', c]];
+      }));
     }
     return back + 1;
   }
 
-  /** push inst; pushenv E; body; popenv body; E: */
-  private with(i: number, stack: Item[], out: Kr[]): number {
+  /**
+   * The likely `continue` target of a for (its step) or do/until (its condition): a forward `b` from the
+   * body lands there, and nothing from there to the back branch branches or is branched into. -1 if none.
+   */
+  private stepStart(top: number, back: number): number {
+    const targets = new Set<number>();
+    for (let k = top; k < back; k++) {
+      const b = this.ins[k];
+      if (b.op === Op.b && b.target > b.at && b.target < this.ins[back].at && b.target > this.ins[top].at) targets.add(b.target);
+    }
+    let best = -1;
+    for (const t of targets) {
+      const from = this.idx(t, back);
+      let ok = true;
+      for (let k = from; k < back && ok; k++) {
+        const op = this.ins[k].op;
+        if (op === Op.b || op === Op.bt || op === Op.bf || op === Op.pushenv || op === Op.popenv) ok = false;
+      }
+      for (let k = top; k < back && ok; k++) {
+        const b = this.ins[k];
+        if ((b.op === Op.b || b.op === Op.bt || b.op === Op.bf) && b.target > t && b.target < this.ins[back].at) ok = false;
+      }
+      if (ok && (best < 0 || t < best)) best = t;
+    }
+    return best;
+  }
+
+  /** count; dup.i 0; push 0; cmp le; bt E; T: body; push 1; sub; dup.i 0; conv; bt T; E: popz.i */
+  private repeat(i: number, to: number, stack: Item[], out: Kr[], ctx: Ctx[]): number {
+    const [p0, cmp, bt] = [this.ins[i + 1], this.ins[i + 2], this.ins[i + 3]];
+    if (!pushesInt(p0, 0) || cmp?.op !== Op.cmp || cmp.b1 !== 2 || bt?.op !== Op.bt) return -1;
+    const e = this.idx(bt.target, i + 3), back = e - 1;
+    if (e > to || this.ins[e].op !== Op.popz || this.ins[back].op !== Op.bt || this.ins[back].target !== this.addr(i + 4)) return -1;
+    const dec = back - 4;
+    if (!pushesInt(this.ins[dec], 1) || this.ins[dec + 1].op !== Op.sub) this.fail(i, 'unrecognised repeat loop');
+    const n = this.pop(stack, i).e;
+    out.push(['ctr_repeat', n, this.block(i + 4, dec, [], [...ctx, { kind: 'loop', brk: this.addr(e), cont: this.addr(dec) }])]);
+    return e + 1;
+  }
+
+  /** v; (dup.v 0; case; cmp eq; bt Lk)*; b D; bodies; E: popz.v. Returns the next index, or -1 if not a switch. */
+  private switchStmt(i: number, to: number, stack: Item[], out: Kr[], ctx: Ctx[]): number {
+    const cases: [Kr, number][] = [];
+    let j = i;
+    while (this.ins[j]?.op === Op.dup && this.ins[j].t1 === T.Var && (this.ins[j].i16 & 0xff) === 0 && !this.ins[j].b1) {
+      let k = j + 1;
+      while (k < to && !(this.ins[k].op === Op.cmp && this.ins[k].b1 === 3 && this.ins[k + 1]?.op === Op.bt)) {
+        if (this.ins[k].op === Op.bt || this.ins[k].op === Op.bf || this.ins[k].op === Op.b || this.ins[k].op === Op.pop) return cases.length ? this.fail(k, 'unrecognised switch case') : -1;
+        k++;
+      }
+      if (k >= to) return cases.length ? this.fail(j, 'unrecognised switch case') : -1;
+      let v: Item;
+      try { v = this.expr(j + 1, k, ctx); } catch (e) { if (cases.length) throw e; return -1; }
+      cases.push([v.e, this.idx(this.ins[k + 1].target, k + 1)]);
+      j = k + 2;
+    }
+    if (!cases.length || this.ins[j]?.op !== Op.b) return cases.length ? this.fail(j, 'switch without a final jump') : -1;
+    const value = this.pop(stack, i).e;
+    const d = this.idx(this.ins[j].target, j), bodyFrom = j + 1;
+    const labels = new Map<number, Kr[]>();
+    for (const [v, t] of cases) (labels.get(t) ?? labels.set(t, []).get(t)!).push(v);
+    // No default: the final jump goes straight to the end.
+    const noDefault = this.ins[d]?.op === Op.popz && this.ins[d].t1 === T.Var;
+    if (!noDefault) (labels.get(d) ?? labels.set(d, []).get(d)!).push(undefined);
+    const sw: Switch = { labels, minEnd: Math.max(d, ...cases.map(([, t]) => t)), end: noDefault ? d : -1 };
+    const c: Ctx = { kind: 'switch', brk: noDefault ? this.addr(d) : -1, cont: -1, sw };
+    const s: Item[] = [];
+    const body = this.block(bodyFrom, to, s, [...ctx, c], sw);
+    if (sw.end < 0) this.fail(i, 'switch end not found');
+    if (s.length) this.fail(sw.end, 'switch body leaves values on the stack');
+    for (const v of labels.get(sw.end) ?? []) body.push(v === undefined ? ['ctr_default'] : ['ctr_case', v]);
+    out.push(['ctr_switch', value, body]);
+    return sw.end + 1;
+  }
+
+  /** inst; pushenv P; body; P: popenv body */
+  private with(i: number, stack: Item[], out: Kr[], ctx: Ctx[]): number {
     const ins = this.ins[i], inst = this.popInst(stack, i);
-    const e = this.idx(ins.target, i), pe = this.ins[e - 1];
-    if (!pe || pe.op !== Op.popenv || pe.target !== this.addr(i + 1)) this.fail(i, 'with without matching popenv');
-    out.push(['ctr_with', inst ?? ['_kw', 'self'], this.block(i + 1, e - 1, [], { brk: this.addr(e), cont: pe.at })]);
-    return e;
+    const e = this.idx(ins.target, i), pe = this.ins[e];
+    if (!pe || pe.op !== Op.popenv || (pe.target !== this.addr(i + 1) && pe.target !== pe.at)) this.fail(i, 'with without matching popenv');
+    out.push(['ctr_with', inst ?? ['_kw', 'self'], this.block(i + 1, e, [], [...ctx, { kind: 'with', brk: this.addr(e + 1), cont: pe.at }])]);
+    return e + 1;
   }
 
   private assign(tgt: Kr, value: Kr): Kr {
@@ -276,29 +486,62 @@ export class Decompiler {
   }
 
   private constant(v: Instr['value']): Kr {
-    if (typeof v === 'bigint') return ['_i6', String(v)];
+    if (typeof v === 'bigint') {
+      const n = BigInt.asIntN(64, v);
+      return ['_i6', String(n)];
+    }
     if (typeof v === 'number' && !Number.isFinite(v)) return ['_cn', Number.isNaN(v) ? 'NaN' : 'infinity'];
     return v;
   }
 
-  private ext(ins: Instr, i: number): Item {
-    if (ins.i16 === Ext.pushref) {
-      if (ins.fn) return { e: ['_fn', ins.fn], size: 16 };
-      if (typeof ins.value !== 'number') this.fail(i, 'pushref without operand');
-      const kind = REF_KIND[ins.value >>> 24];
-      if (!kind) this.fail(i, `pushref of unsupported asset type ${ins.value >>> 24}`);
-      return { e: ['_as', this.asset(kind, ins.value & 0xffffff, i)], size: 16 };
+  private ext(ins: Instr, i: number, stack: Item[], out: Kr[]): void {
+    switch (ins.i16) {
+      case Ext.pushref: {
+        if (ins.fn) { stack.push({ e: ['_fn', fnName(ins.fn)], size: 16 }); return; }
+        if (typeof ins.value !== 'number') this.fail(i, 'pushref without operand');
+        const kind = REF_KIND[ins.value >>> 24];
+        if (!kind) this.fail(i, `pushref of unsupported asset type ${ins.value >>> 24}`);
+        stack.push({ e: ['_as', this.asset(kind, ins.value & 0xffffff, i)], size: 16 });
+        return;
+      }
+      // Copy-on-write bookkeeping: krplayer derives array owners from the variable written (see gm_gotchas.md).
+      case Ext.setowner: this.pop(stack, i); return;
+      case Ext.savearef: case Ext.restorearef: return;
+      case Ext.pushaf: { // row index -> element
+        const index = this.pop(stack, i).e, row = this.pop(stack, i).e;
+        stack.push({ e: ['_ai', row, index], size: 16 });
+        return;
+      }
+      case Ext.popaf: { // value row index -> row[index] = value
+        const index = this.pop(stack, i).e, row = this.pop(stack, i).e, value = this.pop(stack, i).e;
+        out.push(this.assign(['_ai', row, index], value));
+        return;
+      }
     }
     this.fail(i, `extended opcode ${ins.i16} not supported yet`);
   }
 
   private call(fn: string, args: Kr[], i: number): Kr {
     if (fn in PSEUDO) return PSEUDO[fn];
-    const b = BUILTINS.get(fn);
+    if (fn.startsWith(SCRIPT)) return ['fnc_g', fnName(fn), ...args];
+    switch (fn) {
+      case '@@NewGMLArray@@': return ['_ar', ...args];
+      case '@@NewGMLObject@@': {
+        const [ctor, ...rest] = args;
+        const f = isOp(ctor, 'var_method') && isOp(ctor[2], '_fn') ? ctor[2][1] : isOp(ctor, '_fn') ? ctor[1] : ctor;
+        return ['fnc_new', f, ...rest];
+      }
+      case 'method': return ['var_method', ...args];
+      case '@@GetInstance@@': return args[0]; // obj.method(): the object stands for its instance
+    }
+    const b = lookupBuiltin(fn);
     if (b) return b.ref === null ? [b.op, ...args] : [b.op, b.ref, ...args];
     this.fail(i, `unknown function ${fn}`);
   }
 }
+
+/** Function key in krpj: the GM function name without the gml_Script_ prefix. */
+export const fnName = (fn: string) => (fn.startsWith(SCRIPT) ? fn.slice(SCRIPT.length) : fn);
 
 /**
  * Whether a read and a write name the same target, such that `a = a op b` can become `a op= b`.

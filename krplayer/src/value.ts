@@ -2,18 +2,42 @@
 // Builtins and the VM call these; nothing else re-implements coercion (see architecture.md).
 //
 // Representation: real = number, string = string, bool = boolean, undefined = undefined,
-// array = Value[]. Asset references are their index (a number); GM 2023.8+ typed refs
-// are not modelled yet (see gm_gotchas.md).
+// array = GArray (a JS array carrying its copy-on-write owner), struct = GmStruct, method = GmMethod.
+// Asset references and instance ids are numbers; GM 2023.8+ typed refs and int64 are not
+// modelled yet (int64 literals become reals; see gm_gotchas.md).
 
-export type Value = number | string | boolean | undefined | Value[];
+export type Value = number | string | boolean | undefined | GArray | GmStruct | GmMethod;
+
+/** A GML array. `o` is the owner token of the variable it was last written through (copy-on-write). */
+export interface GArray extends Array<Value> { o?: number }
+
+/** Anything with GML variables: instances, structs and the global scope. Keys are variable slots. */
+export class Scope {
+  readonly vars = new Map<number, Value>();
+}
+
+export class GmStruct extends Scope {
+  /** Constructor function key, or null for literals / json_parse. */
+  ctor: string | null;
+  constructor(ctor: string | null = null) { super(); this.ctor = ctor; }
+}
+
+/** A function value: a user function (index into the project's functions), bound to a scope or not. */
+export class GmMethod {
+  readonly fn: number;
+  readonly self: Scope | null;
+  readonly name: string;
+  constructor(fn: number, self: Scope | null, name: string) { this.fn = fn; this.self = self; this.name = name; }
+}
 
 /** GM's default math_get_epsilon(). Real comparisons use it. */
 export const EPSILON = 0.00001;
 
 export class GmlError extends Error {}
 
-const typeName = (v: Value): string =>
-  typeof v === 'number' ? 'number' : typeof v === 'string' ? 'string' : typeof v === 'boolean' ? 'bool' : v === undefined ? 'undefined' : 'array';
+export const typeName = (v: Value): string =>
+  typeof v === 'number' ? 'number' : typeof v === 'string' ? 'string' : typeof v === 'boolean' ? 'bool' : v === undefined ? 'undefined'
+    : v instanceof GmStruct ? 'struct' : v instanceof GmMethod ? 'method' : 'array';
 
 /** A value used as a real. Bools are 1/0; anything else is an error, like GM. */
 export function real(v: Value): number {
@@ -21,6 +45,9 @@ export function real(v: Value): number {
   if (typeof v === 'boolean') return v ? 1 : 0;
   throw new GmlError(`expected a number, got ${typeName(v)}${typeof v === 'string' ? ` "${v}"` : ''}`);
 }
+
+/** real() for function arguments that GM also accepts as undefined (-> 0). */
+export const num = (v: Value): number => (v === undefined ? 0 : real(v));
 
 /** if/while conditions: reals are true above 0.5. */
 export function truthy(v: Value): boolean {
@@ -39,8 +66,7 @@ export function add(a: Value, b: Value): Value {
 export function equals(a: Value, b: Value): boolean {
   const an = typeof a === 'number' || typeof a === 'boolean', bn = typeof b === 'number' || typeof b === 'boolean';
   if (an && bn) return Math.abs(real(a) - real(b)) <= EPSILON;
-  if (typeof a === 'string' && typeof b === 'string') return a === b;
-  return a === b; // undefined == undefined, same array
+  return a === b; // strings by value, undefined == undefined, everything else by reference
 }
 
 /** a < b (-1), a == b (0), a > b (1). Reals use the epsilon; strings compare by code unit. */
@@ -64,16 +90,35 @@ export function idiv(a: Value, b: Value): number {
 /** Bitwise operators work on 64-bit ints in GM; reals are truncated. */
 export function bits(a: Value): bigint { return BigInt(Math.trunc(real(a))); }
 export const fromBits = (v: bigint): number => Number(BigInt.asIntN(64, v));
+/** Fast path for bitwise ops whose operands fit in 32 bits (the common case). */
+export const fits32 = (x: number) => x >= -2147483648 && x <= 2147483647;
 
-/** string(): integers print bare, other reals with 2 decimals. */
-export function str(v: Value): string {
+/** string() of a real: integers print bare, others with 2 decimals. */
+export function realStr(v: number): string {
+  if (Number.isNaN(v)) return 'NaN';
+  if (!Number.isFinite(v)) return v > 0 ? 'inf' : '-inf';
+  if (Number.isInteger(v)) return String(v);
+  const s = v.toFixed(2);
+  return s === '-0.00' ? '0.00' : s;
+}
+
+/** string(): reals as realStr, structs and arrays like GM's debug form. */
+export function str(v: Value, names?: (slot: number) => string): string {
   if (typeof v === 'string') return v;
-  if (typeof v === 'number') {
-    if (Number.isNaN(v)) return 'NaN';
-    if (!Number.isFinite(v)) return v > 0 ? 'inf' : '-inf';
-    return Number.isInteger(v) ? String(v) : v.toFixed(2);
-  }
+  if (typeof v === 'number') return realStr(v);
   if (typeof v === 'boolean') return v ? 'true' : 'false';
   if (v === undefined) return 'undefined';
-  return `[ ${v.map(str).join(',')} ]`;
+  if (v instanceof GmMethod) return `function ${v.name}`;
+  if (v instanceof GmStruct) {
+    const parts = [...v.vars].map(([k, x]) => `${names ? names(k) : k} : ${typeof x === 'string' ? JSON.stringify(x) : str(x, names)}`);
+    return parts.length ? `{ ${parts.join(', ')} }` : '{  }';
+  }
+  return `[ ${v.map((x) => (typeof x === 'string' ? JSON.stringify(x) : str(x, names))).join(',')} ]`;
+}
+
+/** A new array owned by nobody (it takes the owner of the first variable it is stored in). */
+export function newArray(n = 0, fill: Value = 0): GArray {
+  const a: GArray = new Array(n);
+  for (let i = 0; i < n; i++) a[i] = fill;
+  return a;
 }

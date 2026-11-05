@@ -23,7 +23,7 @@ async function exec(body: unknown[], frames = 0) {
   const g = await load({ krpj: project({ o: obj([['evt_create', body]]) }, [{ object: 'o', x: 0, y: 0 }]), url: (x) => x }, p);
   for (let i = 0; i < frames; i++) g.frame();
   const inst = g.instances[0];
-  return Object.fromEntries(g.a.varNames.map((n, i) => [n, inst.vars[i]]));
+  return Object.fromEntries([...inst.vars].map(([i, v]) => [g.a.varNames[i], v]));
 }
 
 test('value rules: epsilon equality, no number+string, string()', () => {
@@ -70,7 +70,79 @@ test('motion, with, collisions and alarms', async () => {
   for (let i = 0; i < 4; i++) g.frame();
   const [m, w] = g.instances, slot = (n: string) => g.a.varNames.indexOf(n);
   assert.equal(m.x, 8);
-  assert.equal(m.vars[slot('rang')], true);
-  assert.ok((m.vars[slot('hits')] as number) >= 1);
-  assert.equal(w.vars[slot('touched')], true);
+  assert.equal(m.vars.get(slot('rang')), true);
+  assert.ok((m.vars.get(slot('hits')) as number) >= 1);
+  assert.equal(w.vars.get(slot('touched')), true);
+});
+
+/** Like exec, with user functions in the project. */
+async function execFn(body: unknown[], functions: Krpj['functions'], scripts: (string | null)[] = []) {
+  const p = createHeadless(() => [10, 10]);
+  const pj = { ...project({ o: obj([['evt_create', body]]) }, [{ object: 'o', x: 0, y: 0 }]), functions, scripts };
+  const g = await load({ krpj: pj, url: (x) => x }, p);
+  const inst = g.instances[0];
+  return Object.fromEntries([...inst.vars].map(([i, v]) => [g.a.varNames[i], v]));
+}
+
+test('user functions: arguments, argument_count, return; script ids call through script_execute', async () => {
+  const v = await execFn([
+    ['var_set', ['_lv', 'a'], ['fnc_g', 'add2', 3, 4]],
+    ['var_set', ['_lv', 'n'], ['fnc_g', 'count']],
+    ['var_set', ['_lv', 'c'], ['ctr_script_execute', ['_fn', 'add2'], 10, 5]],
+  ], {
+    add2: { args: [], body: [['ctr_return', ['opr_add', ['_lv', 'argument0'], ['_lv', 'argument1']]]] },
+    count: { args: [], body: [['ctr_return', ['_lv', 'argument_count']]] },
+  }, ['add2']);
+  assert.deepEqual([v.a, v.n, v.c], [7, 0, 15]);
+});
+
+test('methods bind self; structs come from constructors', async () => {
+  const v = await execFn([
+    ['var_set', ['_lv', 'hp'], 10],
+    ['var_set', ['_lv', 'hit'], ['var_method', -1, ['_fn', 'hurt']]],
+    ['fnc_m', ['_lv', 'hit'], 3],
+    ['var_set', ['_lv', 'p'], ['fnc_new', 'Point', 1, 2]],
+    ['var_set', ['_lv', 'px'], ['_iv', ['_lv', 'p'], 'x2']],
+  ], {
+    hurt: { args: [], body: [['var_change', '-', ['_lv', 'hp'], ['_lv', 'argument0']]] },
+    Point: { args: [], body: [['var_set', ['_lv', 'x2'], ['_lv', 'argument0']], ['var_set', ['_lv', 'y2'], ['_lv', 'argument1']]], ctor: true },
+  });
+  assert.equal(v.hp, 7);
+  assert.equal(v.px, 1);
+});
+
+test('arrays are copied on write through a variable that does not own them (copy-on-write)', async () => {
+  const v = await execFn([
+    ['var_set', ['_lv', 'a'], ['_ar', 1, 2, 3]],
+    ['var_set', ['_lv', 'b'], ['_lv', 'a']],
+    ['var_set', ['_ai', ['_lv', 'b'], 0], 99],
+    ['fnc_g', 'poke', ['_lv', 'a']],
+    ['var_set', ['_ai', ['_ai', ['_lv', 'grid'], 1], 2], 5],
+  ], { poke: { args: [], body: [['var_set', ['_ai', ['_lv', 'argument0'], 1], 42]] } });
+  assert.deepEqual(v.a, [1, 2, 3]);
+  assert.deepEqual(v.b, [99, 2, 3]);
+  assert.deepEqual(v.grid, [0, [0, 0, 5]]);
+});
+
+test('obj.var = v with no instance of obj does nothing (only reads fail)', async () => {
+  const v = await exec([['var_set', ['_iv', ['_as', 'o2'], 'z'], 1], ['var_set', ['_lv', 'ok'], true]]).catch((e: Error) => e.message);
+  // 'o2' isn't an asset in this project, so use an object with no instances instead:
+  assert.match(String(v), /unknown asset "o2"/);
+  const p = createHeadless(() => [10, 10]);
+  const pj = project({
+    o: obj([['evt_create', [['var_set', ['_iv', ['_as', 'none'], 'z'], 1], ['var_set', ['_lv', 'ok'], true]]]]),
+    none: obj([]),
+  }, [{ object: 'o', x: 0, y: 0 }]);
+  const g = await load({ krpj: pj, url: (x) => x }, p);
+  assert.equal(g.instances[0].vars.get(g.a.varNames.indexOf('ok')), true);
+});
+
+test('event_inherited runs the parent object\'s version of the event', async () => {
+  const p = createHeadless(() => [10, 10]);
+  const pj = project({
+    base: obj([['evt_create', [['var_set', ['_lv', 'log'], ['opr_add', ['_lv', 'log'], 'b']]]]]),
+    kid: { ...obj([['evt_create', [['var_set', ['_lv', 'log'], 'k'], ['ins_event_inherited']]]]), parent: 'base' },
+  }, [{ object: 'kid', x: 0, y: 0 }]);
+  const g = await load({ krpj: pj, url: (x) => x }, p);
+  assert.equal(g.instances[0].vars.get(g.a.varNames.indexOf('log')), 'kb');
 });

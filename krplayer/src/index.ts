@@ -7,7 +7,7 @@
 import { fromFiles, fromKrpj, fromUrl, type ProjectSource } from './loader/source.ts';
 import { receiveFromOpener } from './loader/handoff.ts';
 import { createWebPlatform } from './platform/web.ts';
-import { load } from './play.ts';
+import { prepare } from './play.ts';
 
 const STYLE = `
 .kr-root { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; color: #ddd; font: 14px system-ui, sans-serif; }
@@ -55,20 +55,34 @@ function pickKrpj(ui: Shell): Promise<ProjectSource> {
   });
 }
 
+/** Browsers only allow audio after a user gesture, so the game starts on the first click or key. */
+function gesture(ui: Shell): Promise<void> {
+  ui.say('Click or press any key to start');
+  return new Promise((resolve) => {
+    const go = () => { removeEventListener('keydown', go); removeEventListener('pointerdown', go); ui.say(''); resolve(); };
+    addEventListener('keydown', go); addEventListener('pointerdown', go);
+  });
+}
+
 async function run(source: ProjectSource, ui: Shell): Promise<void> {
   ui.say('loading…');
-  const game = await load(source, createWebPlatform(ui.canvas));
-  ui.say('');
+  const platform = createWebPlatform(ui.canvas);
+  const game = await prepare(source, platform, (m) => ui.say(`loading… ${m}`));
   document.title = game.a.title;
+  await gesture(ui);
+  await platform.audioContext.resume();
   const fit = () => {
     const s = Math.min(innerWidth / ui.canvas.width, innerHeight / ui.canvas.height);
     ui.canvas.style.width = `${Math.floor(ui.canvas.width * s)}px`;
     ui.canvas.style.height = `${Math.floor(ui.canvas.height * s)}px`;
   };
   addEventListener('resize', fit);
-  const stepMs = 1000 / game.a.fps;
-  let acc = stepMs, last = performance.now(), w = 0, h = 0;
+  const fail = (e: unknown) => { ui.say(`Game error:
+${(e as Error).message}`, true); console.error(e); };
+  try { game.start(); } catch (e) { return fail(e); }
+  let acc = 0, last = performance.now(), w = 0, h = 0;
   const tick = (now: number) => {
+    const stepMs = 1000 / game.speed;
     acc += Math.min(now - last, 250);
     last = now;
     try {
@@ -76,14 +90,11 @@ async function run(source: ProjectSource, ui: Shell): Promise<void> {
         if (n === 4) { acc = 0; break; } // too far behind: drop time rather than spiral
         game.frame();
         acc -= stepMs;
+        if (game.ended) break;
       }
-    } catch (e) {
-      ui.say(`Game error:\n${(e as Error).message}`, true);
-      console.error(e);
-      return;
-    }
+    } catch (e) { return fail(e); }
     if (ui.canvas.width !== w || ui.canvas.height !== h) { w = ui.canvas.width; h = ui.canvas.height; fit(); }
-    if (game.ended) { ui.say('Game ended.'); return; }
+    if (game.ended) { ui.say(game.endMessage || 'Game ended.'); return; }
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);

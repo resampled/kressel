@@ -12,6 +12,8 @@ import { readFont, type GmFont } from './chunks/font.ts';
 import { readObjt, type GmObject } from './chunks/objt.ts';
 import { readRoom, type GmRoom } from './chunks/room.ts';
 import { readCode, readRefs, type GmCode, type GmRefs } from './chunks/code.ts';
+import { readAgrp, readAudo, readSond, type GmSound } from './chunks/audio.ts';
+import { readBgnd, readGlob, readScpt, type GmScript, type GmTileset } from './chunks/misc.ts';
 
 export interface GmModel {
   buf: ArrayBuffer;
@@ -26,10 +28,18 @@ export interface GmModel {
   rooms: GmRoom[];
   code: GmCode[];
   refs: GmRefs;
+  scripts: GmScript[];
+  /** Code ids of the global init scripts, in run order. */
+  globalInit: number[];
+  sounds: GmSound[];
+  audioGroups: string[];
+  /** Audio group 0's embedded audio (data.win AUDO). */
+  audio: Uint8Array[];
+  tilesets: GmTileset[];
 }
 
 /** Chunks gm2kr doesn't convert yet. Present-and-non-empty means the game uses a missing feature. */
-const UNSUPPORTED = ['SCPT', 'GLOB', 'SOND', 'PATH', 'TMLN', 'BGND', 'SHDR'];
+const UNSUPPORTED = ['PATH', 'TMLN', 'SHDR'];
 
 export function readModel(buf: ArrayBuffer): GmModel {
   const chunks = readChunks(buf);
@@ -62,5 +72,11 @@ export function readModel(buf: ArrayBuffer): GmModel {
     rooms: opt('ROOM', (r) => readRoom(r, fmt)),
     code: opt('CODE', readCode),
     refs: readRefs(need('VARI'), need('FUNC')),
+    scripts: opt('SCPT', readScpt),
+    globalInit: chunkReader(buf, chunks, 'GLOB') ? readGlob(need('GLOB')) : [],
+    sounds: opt('SOND', readSond),
+    audioGroups: opt('AGRP', readAgrp),
+    audio: opt('AUDO', readAudo),
+    tilesets: opt('BGND', readBgnd),
   };
 }

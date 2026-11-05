@@ -19,7 +19,13 @@ export interface Sprite {
   /** Collision mask kind. Defaults to "rect". */
   mask?: 'rect' | 'rotated' | 'precise';
 }
-export interface Sound { name: string; src: string; volume: number; stream: boolean }
+export interface Sound {
+  name: string; src: string; volume: number; stream: boolean;
+  /** Pitch multiplier (default 1). */
+  pitch?: number;
+  /** Audio group index (into `audio_groups`), default 0. */
+  group?: number;
+}
 export interface Font {
   name: string; atlas: string; font_name: string; size: number; bold: boolean; italic: boolean;
   antialias: number; line_height: number; ranges: [number, number][];
@@ -27,7 +33,22 @@ export interface Font {
   glyphs: Record<string, [number, number, number, number, number, number]>;
   kerning?: Record<string, [number, number][]>;
 }
-export interface KrFunction { args: string[]; body: Script }
+/** A tile set: one image cut into a grid of tile_w x tile_h tiles, each padded by border_x/border_y. */
+export interface Tileset {
+  name: string; image: string;
+  tile_w: number; tile_h: number; border_x: number; border_y: number; columns: number;
+  /** Animation frames per tile (default 1) and microseconds per frame. */
+  frames?: number; frame_time?: number;
+  /** Animated tile sets: tile -> its frames' source tiles (tile_count * frames entries). */
+  ids?: number[];
+}
+export interface KrFunction {
+  args: string[];
+  body: Script;
+  /** Number of arguments GameMaker declared (imports; named args are not kept). */
+  argc?: number;
+  ctor?: boolean;
+}
 export interface KrObject {
   sprite: string | null;
   parent: string | null;
@@ -36,6 +57,8 @@ export interface KrObject {
   solid?: boolean;
   /** Collision mask sprite, when it differs from the sprite. */
   mask?: string | null;
+  /** Depth for instances created without a layer (GM object depth). */
+  depth?: number;
   imported_from?: string;
   scripts: Hat[];
 }
@@ -47,17 +70,56 @@ export interface RoomInstance {
   image_index?: number; image_speed?: number;
   /** Instance creation code, run after the instance's create event. */
   creation?: Script;
+  /** GameMaker instance id (imports keep them, since code can refer to room instances by id). */
+  id?: number;
 }
-interface LayerBase { name: string; depth: number; visible?: boolean }
+interface LayerBase {
+  name: string; depth: number; visible?: boolean;
+  /** Offset and scroll speed (pixels per step). */
+  x?: number; y?: number; hspeed?: number; vspeed?: number;
+  /** GameMaker layer id (imports). */
+  id?: number;
+}
 export interface BackgroundLayer extends LayerBase {
   type: 'background'; color: number; sprite: string | null;
   htiled?: boolean; vtiled?: boolean; stretch?: boolean;
+  /** Drawn above instances. */
+  foreground?: boolean;
+  alpha?: number; image_index?: number; image_speed?: number;
 }
 export interface InstanceLayer extends LayerBase { type: 'instances'; instances: RoomInstance[] }
-export type Layer = BackgroundLayer | InstanceLayer;
+/** [x, y, sprite, left, top, width, height, scale_x, scale_y, colour (ABGR)] */
+export type LegacyTile = [number, number, string, number, number, number, number, number, number, number];
+export interface AssetSprite {
+  sprite: string; x: number; y: number;
+  scale_x?: number; scale_y?: number; angle?: number; colour?: number; alpha?: number;
+  image_index?: number; image_speed?: number;
+  name?: string;
+}
+/** Sprites and GMS1-style tiles placed in the room editor. */
+export interface AssetLayer extends LayerBase { type: 'assets'; tiles?: LegacyTile[]; sprites?: AssetSprite[] }
+/** A tile map: rows * cols cells, each a tile index (bits 28-30: mirror, flip, rotate; 0 = empty). */
+export interface TileLayer extends LayerBase { type: 'tiles'; tileset: string; cols: number; rows: number; data: number[] }
+export type Layer = BackgroundLayer | InstanceLayer | AssetLayer | TileLayer;
+export interface View {
+  view: [number, number, number, number]; port: [number, number, number, number];
+  border?: [number, number]; speed?: [number, number];
+  /** Object followed by the view. */
+  follow?: string | null;
+  visible?: boolean;
+}
 export interface Room {
   width: number; height: number;
   persistent?: boolean;
+  /** Clear colour (BGR) when no background covers the room, and whether it's drawn. */
+  colour?: number; show_colour?: boolean;
+  /** Room speed (imports from GMS1-style games; GMS2 uses cfg_defaults.fps). */
+  speed?: number;
+  views_enabled?: boolean;
+  /** Instance creation order by instance id (imports: GM's room instance list); defaults to layer order. */
+  instance_order?: number[];
+  /** Up to 8 views. */
+  views?: View[];
   preload?: string[];
   layers: Layer[];
   scripts: Hat[];
@@ -72,9 +134,18 @@ export interface Krpj {
   sprites: Record<string, Sprite>;
   sounds: Record<string, Sound>;
   fonts: Record<string, Font>;
+  tilesets?: Record<string, Tileset>;
   functions?: Record<string, KrFunction>;
   objects?: Record<string, KrObject>;
   rooms?: Record<string, Room>;
   /** Room keys in game order (room_goto_next etc.). Defaults to the order of `rooms`. */
   room_order?: string[];
+  /** Scripts run once at game start, before the first room, with self = global (GM 2.3+ script files). */
+  global_init?: Script[];
+  /** Script asset index -> function key (script_execute(n), asset_get_index). null for non-function scripts. */
+  scripts?: (string | null)[];
+  /** Audio group names, by index. */
+  audio_groups?: string[];
+  /** Included files: path the game opens (relative to working_directory) -> asset path. */
+  included_files?: Record<string, string>;
 }
