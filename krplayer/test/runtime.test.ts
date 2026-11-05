@@ -102,6 +102,15 @@ test('equal depth: the newest instance draws first', async () => {
   assert.equal(g.globalScope.vars.get(g.a.varNames.indexOf('order')), 'cba');
 });
 
+test('the application surface keeps its size when a room view port has another aspect', async () => {
+  const pj = project({ o: obj([]) }, [{ object: 'o', x: 0, y: 0 }]);
+  Object.assign(pj.rooms!.rm, { views_enabled: true, views: [{ view: [0, 0, 100, 100], port: [0, 0, 200, 50], visible: true }] });
+  const g = await load({ krpj: pj, url: (x) => x }, createHeadless(() => [10, 10]));
+  g.frame();
+  const s = g.surface(0);
+  assert.deepEqual([s.w, s.h], [100, 100]);
+});
+
 /** Like exec, with user functions in the project. */
 async function execFn(body: unknown[], functions: Krpj['functions'], scripts: (string | null)[] = []) {
   const p = createHeadless(() => [10, 10]);

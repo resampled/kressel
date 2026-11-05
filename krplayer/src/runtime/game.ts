@@ -550,16 +550,7 @@ export class Game {
       v.camera = i;
       this.views.push(v);
     }
-    // The application surface takes the size of the first visible view's port (or the room).
-    const first = this.viewsEnabled ? this.views.find((v) => v.visible) : undefined;
-    this.resizeAppSurface(first ? first.pw : room.width, first ? first.ph : room.height);
-  }
-
-  resizeAppSurface(w: number, h: number): void {
-    const s = this.surfaces.get(APP_SURFACE)!;
-    if (s.w === w && s.h === h) return;
-    this.p.renderer.freeSurface(s.tex);
-    this.surfaces.set(APP_SURFACE, { tex: this.p.renderer.createSurface(w, h), w, h });
+    // The application surface keeps its size across rooms (see gm_gotchas.md); draw() stretches the first port to fill it.
   }
 
   private compact(): void {
@@ -772,7 +763,7 @@ export class Game {
     for (const [v, i] of passes) {
       const c = this.cameras[v.camera] ?? newCamera(-1);
       this.viewCurrent = i;
-      // Ports are in window coordinates; the app surface is the first port's size.
+      // Ports are in window coordinates, scaled so the first port fills the app surface (even if their aspects differ).
       const sx = app.w / (passes[0][0].pw || app.w), sy = app.h / (passes[0][0].ph || app.h);
       this.drawRoom(app.tex, c.x, c.y, c.w, c.h, c.angle, (v.px - passes[0][0].px) * sx, (v.py - passes[0][0].py) * sy, v.pw * sx, v.ph * sy);
     }
