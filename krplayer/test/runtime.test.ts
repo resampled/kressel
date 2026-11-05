@@ -5,6 +5,7 @@ import { createHeadless } from '../src/platform/headless.ts';
 import { load, prepare } from '../src/play.ts';
 import { equals, str, add } from '../src/value.ts';
 import { follow } from '../src/runtime/game.ts';
+import { warpSetup } from '../src/runtime/debug.ts';
 
 function project(objects: Krpj['objects'], instances: { object: string; x: number; y: number }[]): Krpj {
   return {
@@ -213,4 +214,19 @@ test('view follow: a border of half the view or more centres the target (GM CCam
   assert.equal(follow(0, 150, 100, 20, 5, 1000), 5);
   // A view larger than the room ends up at a negative position (left clamp runs first).
   assert.equal(follow(0, 10, 200, 20, -1, 100), -100);
+});
+
+test('debug warp setup: ?set= and ?call= run in URL order just before the warp room is entered', async () => {
+  const pj = project({ w: obj([['evt_create', [['var_set', ['_lv', 'seen'], ['opr_add', ['_iv', ['_kw', 'global'], 'zone'], ['_ai', ['_iv', ['_kw', 'global'], 'arr'], 2]]]]]]) }, []);
+  const rm = pj.rooms!.rm;
+  pj.rooms = { rm, rm2: { ...rm, layers: [{ name: 'I', type: 'instances', depth: 0, instances: [{ object: 'w', x: 0, y: 0 }] }] } };
+  pj.functions = { mk: { args: [], body: [['var_set', ['_iv', ['_kw', 'global'], 'zone'], ['opr_mul', ['_lv', 'argument0'], 2]]] } };
+  const g = await prepare({ krpj: pj, url: (x) => x }, createHeadless(() => [10, 10]));
+  const q = new URLSearchParams('set=zone=1,arr[2]=5,s="a,b"&call=mk(3)');
+  assert.throws(() => warpSetup(g, new URLSearchParams('call=nope')), /no such function/);
+  g.start(1, false, warpSetup(g, q));
+  g.goto(0); g.frame();
+  const gv = (n: string) => g.globalScope.vars.get(g.a.varSlot(n));
+  assert.equal(g.instances[0].vars.get(g.a.varSlot('seen')), 11);
+  assert.deepEqual([gv('arr'), gv('s')], [[0, 0, 5], 'a,b']);
 });

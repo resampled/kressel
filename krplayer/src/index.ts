@@ -3,9 +3,11 @@
 //   2. <meta id="kressel-load-project" src> -> load that game.json (assets next to it, or the CDN) or .krpj
 //   3. otherwise                          -> let the user open a .krpj project
 // Shared assets base: <meta name="kressel-shared-assets" content="/kr/sa/">.
-// Debug: ?room=<name|index> sends the game's first room change to that room (the init room still runs);
-// add &direct to skip the init room entirely. ?debug exposes the Game as `kr` in the console.
+// Debug (all need ?debug): ?room=<name|index> sends the game's first room change to that room (the init room still runs);
+// add &direct to skip the init room entirely. ?set=name=v,name[i]=v and ?call=fn,fn(a,b) run (in URL order)
+// just before the warp room is entered. ?debug also exposes the Game as `kr` in the console.
 
+import { warpSetup } from './runtime/debug.ts';
 import { fromFiles, fromKrpj, fromUrl, type ProjectSource } from './loader/source.ts';
 import { receiveFromOpener } from './loader/handoff.ts';
 import { createWebPlatform } from './platform/web.ts';
@@ -82,11 +84,14 @@ async function run(source: ProjectSource, ui: Shell): Promise<void> {
   const fail = (e: unknown) => { ui.say(`Game error:
 ${(e as Error).message}`, true); console.error(e); };
   try {
-    const q = new URLSearchParams(location.search), want = q.get('room');
-    const warp = want ? game.findRoom(want) : -1;
+    const q = new URLSearchParams(location.search), debug = q.has('debug');
+    if (!debug && ['room', 'direct', 'set', 'call'].some((k) => q.has(k))) console.warn('kressel: ?room/direct/set/call are ignored without ?debug');
+    const want = debug ? q.get('room') : null, warp = want ? game.findRoom(want) : -1;
     if (want && warp < 0) throw new Error(`?room=${want}: no such room`);
-    if (q.has('debug')) (globalThis as { kr?: unknown }).kr = game; // console access: kr.room.name, kr.roomIndex
-    game.start(warp, q.has('direct'));
+    const init = debug ? warpSetup(game, q) : null;
+    if (init && warp < 0) throw new Error('?set= / ?call= need ?room=');
+    if (debug) (globalThis as { kr?: unknown }).kr = game; // console access: kr.room.name, kr.roomIndex
+    game.start(warp, debug && q.has('direct'), init);
   } catch (e) { return fail(e); }
   let acc = 0, last = performance.now(), w = 0, h = 0;
   const tick = (now: number) => {
