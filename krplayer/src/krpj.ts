@@ -18,6 +18,8 @@ export interface Sprite {
   bbox?: [number, number, number, number];
   /** Collision mask kind. Defaults to "rect". */
   mask?: 'rect' | 'rotated' | 'precise';
+  /** Precise masks: file of one or one-per-frame bitmaps, rows of ceil(w / 8) bytes, MSB = leftmost pixel. */
+  mask_bits?: string;
 }
 export interface Sound {
   name: string; src: string; volume: number; stream: boolean;

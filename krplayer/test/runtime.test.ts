@@ -75,6 +75,21 @@ test('motion, with, collisions and alarms', async () => {
   assert.equal(w.vars.get(slot('touched')), true);
 });
 
+test('precise masks collide per pixel (diagonal slope)', async () => {
+  // 8x8 lower-left triangle: row y has pixels 0..y set.
+  const bits = new Uint8Array(8).map((_, y) => (0xff << (7 - y)) & 0xff);
+  const p = createHeadless(() => [8, 8], undefined, async () => bits);
+  const pj = project({ o: obj([], 'spr_box'), slope: obj([], 'spr_tri') }, [{ object: 'o', x: 0, y: 0 }, { object: 'slope', x: 10, y: 10 }]);
+  pj.sprites.spr_tri = { name: 'spr_tri', frames: ['./tri.png'], origin: [0, 0], speed: 0, mask: 'precise', mask_bits: './tri.bin' };
+  const g = await load({ krpj: pj, url: (x) => x }, p);
+  const [o, s] = g.instances;
+  const hit = (x: number, y: number) => g.placeMeeting(o, x, y, s.id) !== null;
+  assert.equal(hit(17, 9), false); // overlaps only the empty upper-right half, which a bbox test would hit
+  assert.equal(hit(17, 10), true); // reaches pixel (7, 7)
+  assert.equal(hit(12, 5), true); // reaches pixel (2, 2)
+  assert.equal(hit(13, 5), false);
+});
+
 /** Like exec, with user functions in the project. */
 async function execFn(body: unknown[], functions: Krpj['functions'], scripts: (string | null)[] = []) {
   const p = createHeadless(() => [10, 10]);

@@ -63,7 +63,8 @@ Quirks found while reimplementing the runtime and the data.win format. Each has 
 * `random()` is deterministic per run like GM (fixed seed), but not GM's sequence.
 * `effect_create_*` is drawn as an approximation (see `drw_effect`).
 * int64 literals become reals (exact up to 2^53); `typeof` never says `"int64"`.
-* Precise collision masks are tested as rotated rectangles; `collision_ellipse` as its bounding box.
+* Precise masks are tested per pixel (at pixel centres) by place_*/instance_place/collision events/collision_point/collision_rectangle, but `collision_circle`/`collision_line` still test the other instance's bounding box; `collision_ellipse` tests its own bounding box.
+* Deltarune's diagonal walls (`obj_sul`/`obj_sur`/`obj_sdl`/`obj_sdr`, children of `obj_solidblock`) are precise triangles. Their bbox is the whole square, so treating them as boxes blocks movement near slopes (repro: Ch1 `?room=room_torbathroom`, hold left; with box masks Kris doesn't move).
 * Paths and timelines aren't implemented (Deltarune Chapter 1 has none: its PATH and TMLN chunks are empty).
 * krplayer reports `os_type` = `os_windows`, so games take their PC code paths.
 * `ds_list_write` / `ds_map_find_first` order use krplayer's own formats/insertion order, not GM's hash order.

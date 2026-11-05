@@ -9,7 +9,7 @@ import { GmlError, GmStruct, real, Scope, truthy, type GArray, type Value } from
 import { VM } from '../vm/vm.ts';
 import { ASYNC, EV, emptyEvents, type Assets, type Events, type ObjectDef } from './assets.ts';
 import { Instance, NOI } from './instance.ts';
-import { overlaps, shape } from './collision.ts';
+import { newShape, overlaps, shape } from './collision.ts';
 import { Effects } from './effects.ts';
 import { Layers, ELEM, newCamera, viewFrom, type Camera, type Element, type RtLayer, type RtView } from './layers.ts';
 import { Sounds } from './sound.ts';
@@ -93,8 +93,8 @@ export class Game {
   private readonly byId = new Map<number, Instance>();
   private readonly drawList: Instance[] = [];
   private readonly layerOrder: RtLayer[] = [];
-  readonly sa = new Float64Array(12);
-  readonly sb = new Float64Array(12);
+  readonly sa = newShape();
+  readonly sb = newShape();
   private readonly global: Instance;
 
   constructor(a: Assets, p: Platform) {

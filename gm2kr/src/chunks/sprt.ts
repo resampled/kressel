@@ -1,4 +1,4 @@
-// SPRT: sprites. Collision masks are not read yet (bbox collisions only).
+// SPRT: sprites, with their collision masks.
 
 import { FormatError, type Reader } from '../io/reader.ts';
 
@@ -14,6 +14,8 @@ export interface GmSprite {
   speed: number; speedType: number;
   /** TPAG item pointers, one per frame. */
   frames: number[];
+  /** Collision masks (one, or one per frame): rows of ceil(width / 8) bytes, MSB = leftmost pixel. */
+  masks: Uint8Array[];
 }
 
 export function readSprt(r: Reader): GmSprite[] {
@@ -35,6 +37,9 @@ export function readSprt(r: Reader): GmSprite[] {
       s.pos -= 4; // GMS1 layout: the frame list starts here
     }
     const frames = s.ptrList(1 << 14);
-    return { name, width, height, margins, maskKind, origin, speed, speedType, frames };
+    if (width > 1 << 14 || height > 1 << 14) throw new FormatError(`sprite ${name}: size ${width}x${height} too large`, p);
+    const n = s.count(1 << 14), size = ((width + 7) >> 3) * height, masks: Uint8Array[] = [];
+    for (let i = 0; i < n; i++) masks.push(s.bytes(size).slice());
+    return { name, width, height, margins, maskKind, origin, speed, speedType, frames, masks };
   });
 }

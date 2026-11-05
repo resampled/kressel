@@ -13,8 +13,10 @@ export interface SpriteDef {
   ox: number; oy: number;
   /** left, top, right, bottom (inclusive pixels). */
   bbox: [number, number, number, number];
-  /** 0 rect, 1 rotated rect, 2 precise (treated as rotated rect for now). */
+  /** 0 rect, 1 rotated rect, 2 precise. */
   maskKind: number;
+  /** Precise mask bitmaps (see Sprite.mask_bits), mask count and row stride in bytes. Null: use the bbox. */
+  bits: Uint8Array | null; nBits: number; stride: number;
   /** Frames per step (already divided by the game speed for "fps" sprites). */
   fpsDiv: boolean; speed: number;
 }
@@ -173,10 +175,12 @@ export async function loadAssets(pj: Krpj, url: (path: string) => string, platfo
     const frames: TextureId[] = [];
     for (const f of s.frames) frames.push(await tex(f));
     const size = frames.length ? platform.renderer.textureSize(frames[0]) : [1, 1];
+    const stride = (size[0] + 7) >> 3, bits = s.mask === 'precise' && s.mask_bits ? await platform.fetchBytes(url(s.mask_bits)) : null;
+    const nBits = bits ? Math.floor(bits.length / (stride * size[1])) : 0;
     sprites[i] = {
       index: i, name: k, frames, width: size[0], height: size[1], ox: s.origin[0], oy: s.origin[1],
       bbox: s.bbox ?? [0, 0, size[0] - 1, size[1] - 1], maskKind: s.mask === 'rotated' ? 1 : s.mask === 'precise' ? 2 : 0,
-      fpsDiv: s.speed_type !== 'frame', speed: s.speed,
+      fpsDiv: s.speed_type !== 'frame', speed: s.speed, bits: nBits ? bits : null, nBits, stride,
     };
   }), 16);
   await Promise.all(Object.entries(pj.fonts).map(async ([k, f], i) => {

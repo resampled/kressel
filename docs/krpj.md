@@ -188,7 +188,8 @@ Fields beyond the example above. All are optional unless noted; the types live i
 **Sprites**
 * `speed`: frames per second; with `"speed_type": "frame"`, frames per game frame instead.
 * `bbox`: collision box `[left, top, right, bottom]` in inclusive image pixels. Defaults to the whole image.
-* `mask`: `"rect"` (default; collides as the axis-aligned box around the scaled/rotated box), `"rotated"` (the rotated box itself) or `"precise"` (per-pixel; krplayer currently treats it as `"rotated"`).
+* `mask`: `"rect"` (default; collides as the axis-aligned box around the scaled/rotated box), `"rotated"` (the rotated box itself) or `"precise"` (per-pixel, using `mask_bits`; without it, treated as `"rotated"`).
+* `mask_bits`: precise masks only. A file of one mask, or one per frame (picked by `floor(image_index)`), each `ceil(width / 8)` bytes per row for `height` rows; the high bit of each byte is the leftmost pixel. Pixels outside `bbox` never collide.
 * Frames are full, untrimmed images; `origin` is relative to their top-left.
 
 **Sounds**: `src`, `volume`, `stream` (decoded on first use rather than at load), `pitch` (default 1), `group` (default 0).

@@ -71,9 +71,17 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
       frames.push('./' + path);
     }
     const g = s.margins;
+    let maskBits: string | undefined;
+    if (s.maskKind === 1 && s.masks.length) {
+      maskBits = `sprites/${s.name}/masks.bin`;
+      const all = new Uint8Array(s.masks.reduce((n, k) => n + k.length, 0));
+      s.masks.reduce((o, k) => (all.set(k, o), o + k.length), 0);
+      files.set(maskBits, all);
+    }
     sprites[s.name] = {
       name: s.name, frames, origin: s.origin, speed: s.speed, ...(s.speedType === 1 ? { speed_type: 'frame' as const } : {}),
       bbox: [g.left, g.top, g.right, g.bottom], mask: (['rect', 'precise', 'rotated'] as const)[s.maskKind] ?? 'rect',
+      ...(maskBits ? { mask_bits: './' + maskBits } : {}),
     };
   }
   log(`${m.sprites.length} sprites`);

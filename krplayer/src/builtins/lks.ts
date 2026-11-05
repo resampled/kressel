@@ -20,7 +20,7 @@ define('lks_sprite_from_surface', (g, s, t) => {
   const sf = g.surface(s[t]), x = n(s, t, 1), y = n(s, t, 2), w = n(s, t, 3), h = n(s, t, 4);
   const sp: SpriteDef = {
     index: g.a.sprites.length, name: `__newsprite${g.a.sprites.length}`, frames: [g.p.renderer.copyTexture(sf.tex, x, y, w, h)],
-    width: w, height: h, ox: n(s, t, 7), oy: n(s, t, 8), bbox: [0, 0, w - 1, h - 1], maskKind: 0, fpsDiv: true, speed: 0,
+    width: w, height: h, ox: n(s, t, 7), oy: n(s, t, 8), bbox: [0, 0, w - 1, h - 1], maskKind: 0, bits: null, nBits: 0, stride: 0, fpsDiv: true, speed: 0,
   };
   g.a.sprites.push(sp);
   return sp.index;
