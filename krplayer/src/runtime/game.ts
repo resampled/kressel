@@ -671,20 +671,16 @@ export class Game {
     }
   }
 
-  /** Views that follow an object keep it inside their border, moving at most their speed. */
+  /** Visible views whose camera follows an instance, as GM's CCamera.Update (see gm_gotchas.md). */
   private followViews(): void {
+    const rw = this.room.width, rh = this.room.height;
     for (const v of this.views) {
-      const c = this.cameras[v.camera];
+      const c = v.visible ? this.cameras[v.camera] : null;
       if (!c || c.target < 0) continue;
       const t = this.first(c.target);
       if (!t) continue;
-      let nx = c.x, ny = c.y;
-      if (t.x - c.bx < c.x) nx = t.x - c.bx; else if (t.x + c.bx > c.x + c.w) nx = t.x + c.bx - c.w;
-      if (t.y - c.by < c.y) ny = t.y - c.by; else if (t.y + c.by > c.y + c.h) ny = t.y + c.by - c.h;
-      nx = Math.max(0, Math.min(nx, this.room.width - c.w)); ny = Math.max(0, Math.min(ny, this.room.height - c.h));
-      if (c.sx >= 0) nx = c.x + Math.max(-c.sx, Math.min(c.sx, nx - c.x));
-      if (c.sy >= 0) ny = c.y + Math.max(-c.sy, Math.min(c.sy, ny - c.y));
-      c.x = nx; c.y = ny;
+      c.x = follow(c.x, Math.floor(t.x), c.w, c.bx, c.sx, rw);
+      c.y = follow(c.y, Math.floor(t.y), c.h, c.by, c.sy, rh);
     }
   }
 
@@ -883,6 +879,25 @@ export class Game {
 
 /** Deepest first; at equal depth the newest instance draws first (GM adds new layer elements at the front). */
 const byDepth = (a: Instance, b: Instance) => b.depth - a.depth || b.order - a.order;
+
+/**
+ * One axis of GM's camera follow: a border of at least half the view centres the target; otherwise the
+ * view scrolls only when the target crosses the border. Clamped to the room (left/top first, so a view
+ * larger than the room ends up negative), then limited to the speed (speed < 0: no limit).
+ */
+export function follow(pos: number, at: number, size: number, border: number, speed: number, roomSize: number): number {
+  let l = pos;
+  if (2 * border >= size) l = at - size / 2;
+  else if (at - border < pos) l = at - border;
+  else if (at + border > pos + size) l = at + border - size;
+  if (l < 0) l = 0;
+  if (l + size > roomSize) l = roomSize - size;
+  if (speed >= 0) {
+    if (l < pos && pos - l > speed) l = pos - speed;
+    if (l > pos && l - pos > speed) l = pos + speed;
+  }
+  return l;
+}
 
 /** vk_anykey (1) / vk_nokey (0) / a key code. */
 export function keyState(keys: Uint8Array, k: number): boolean {

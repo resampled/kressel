@@ -4,6 +4,7 @@ import type { Krpj, Script } from '../src/krpj.ts';
 import { createHeadless } from '../src/platform/headless.ts';
 import { load, prepare } from '../src/play.ts';
 import { equals, str, add } from '../src/value.ts';
+import { follow } from '../src/runtime/game.ts';
 
 function project(objects: Krpj['objects'], instances: { object: string; x: number; y: number }[]): Krpj {
   return {
@@ -200,4 +201,16 @@ test('debug start room: warp redirects the first room change, direct skips the i
   const d = await prepare(src, p);
   d.start(1, true);
   assert.equal(d.room.name, 'rm2');
+});
+
+test('view follow: a border of half the view or more centres the target (GM CCamera.Update)', () => {
+  // Deltarune Ch1 room_schoollobby: 320x240 view, border 160x240, room 940x420, Kris at markerB (110, 200).
+  assert.equal(follow(0, 110, 320, 160, -1, 940), 0); // centred at -50, clamped
+  assert.equal(follow(0, 200, 240, 240, -1, 420), 80); // centred, not pushed down to 180
+  // Smaller border: scroll only past it, then clamp, then the speed limit.
+  assert.equal(follow(0, 50, 100, 20, -1, 1000), 0);
+  assert.equal(follow(0, 150, 100, 20, -1, 1000), 70);
+  assert.equal(follow(0, 150, 100, 20, 5, 1000), 5);
+  // A view larger than the room ends up at a negative position (left clamp runs first).
+  assert.equal(follow(0, 10, 200, 20, -1, 100), -100);
 });
