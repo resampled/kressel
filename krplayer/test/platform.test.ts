@@ -20,3 +20,37 @@ test('asset paths resolve against configured bases', () => {
   assert.equal(resolveAsset(cfg, '/sa/~admin/coin.png'), '/kr/sa/~admin/coin.png');
   assert.throws(() => resolveAsset(cfg, 'http://evil/x.png'), /unrecognised asset path/);
 });
+
+test('file store partitions by project and enforces quotas', async () => {
+  const { FileStore, memoryBackend, PROJECT_QUOTA, TOTAL_QUOTA } = await import('../src/platform/filestore.ts');
+  const be = memoryBackend(), warns: string[] = [];
+  const st = new FileStore(be, (m) => { warns.push(m); });
+  await st.open('a');
+  st.write('save.ini', 'x=1');
+  await st.open('b');
+  assert.equal(st.read('save.ini'), null);
+  await st.open('a');
+  assert.equal(st.read('save.ini'), 'x=1');
+  // Per-project: a write past the quota is refused and the old contents stay.
+  st.write('save.ini', 'y'.repeat(PROJECT_QUOTA));
+  assert.equal(st.read('save.ini'), 'x=1');
+  assert.equal(warns.length, 1);
+  // Total: fill other projects, then the oldest of them are evicted for a new write.
+  let t = 0;
+  const now = Date.now;
+  Date.now = () => ++t;
+  try {
+    const big = 'z'.repeat(PROJECT_QUOTA - 100), n = Math.floor(TOTAL_QUOTA / PROJECT_QUOTA);
+    for (let i = 0; i < n; i++) { await st.open('p' + i); st.write('f', big); }
+    await st.open('a');
+    assert.equal(st.read('save.ini'), 'x=1');
+    st.write('more', big);
+    assert.equal(warns.length, 1);
+    assert.equal(be.data.has('p0\0f'), false);
+    assert.equal(be.data.has('p1\0f'), true);
+    assert.equal(be.data.has('a\0more'), true);
+  } finally { Date.now = now; }
+  st.remove('more');
+  assert.equal(st.read('more'), null);
+  assert.equal(be.data.has('a\0more'), false);
+});

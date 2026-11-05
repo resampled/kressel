@@ -31,7 +31,8 @@ krplayer/src/
   opcodes.ts        opcode registry (+ opcodes.gen.ts, generated)
   config.ts         base URLs, injected by the host page
   platform/         Renderer/Audio/Input/Storage interfaces; headless (+ soft.ts, a software renderer for
-                    screenshots in tests); web (WebGL2 batch renderer, WebAudio, keyboard, localStorage)
+                    screenshots in tests); web (WebGL2 batch renderer, WebAudio, keyboard, IndexedDB saves);
+                    filestore (saved-file partitions and quotas, see below)
   loader/           project sources (URL, in-memory files, .krpj archive) and the gm2kr handoff
   compile/          tree → bytecode, name resolution
   vm/               dispatch loop, call frames, with-stack, copy-on-write arrays
@@ -68,6 +69,7 @@ scripts/
   1. a URL (a `game.json` or a `.krpj`), for published projects on the CDN;
   2. a `.krpj` the user opens in the player;
   3. **in-memory handoff**: gm2kr opens the player with `?from=opener`, the player posts `kr-player-ready` to its opener, and gm2kr replies with the files as transferred ArrayBuffers (`loader/handoff.ts`). The player only accepts that message from its own opener and serves the files from blob URLs. Nothing is uploaded and the Django site isn't involved.
+* **Saved files.** Files a game writes (saves, ini, text, buffers) live in IndexedDB `kratience-fs`, partitioned by `cfg_db_relay.slug` (`_unpublished` if empty). `Storage.open(slug)` loads that partition into memory while assets load, so file calls stay synchronous; every write goes straight through to IndexedDB. Each project gets 500 KB (path + contents, UTF-8). A write that would go over is refused with a warning and the old file is kept. All projects together get 50 MB: a write that would go over evicts the least recently written files of *other* projects first. If two tabs run the same game, each keeps its own in-memory copy, and the last write wins (`platform/filestore.ts`).
 * **Debug params need `?debug`.** `?room`, `?direct`, `?set` and `?call` are ignored (with a console warning) unless `?debug` is also on the URL.
 * **Debug start room.** `?debug&room=<name|index>` on the player URL (works with any source, e.g. `?from=opener&debug&room=room_town_krisyard`) still runs global init and the init room, but the game's first room change goes to that room instead, so setup code in the init room (e.g. Deltarune's `obj_initializer`) still runs. Add `&direct` to enter the room straight away and skip the init room. It's a debug option: imported code isn't changed, and flags the skipped rooms would set stay unset.
 * **Debug start state.** With `?room=`, `&set=name=value` (or `name[i]=value`, optional `global.` prefix) sets a global and `&call=fn` (or `fn(1,"a")`) calls a project function as global. They run in URL order just before the warp room is entered (after the init room, so its resets don't undo them). Each param can repeat or take a comma list. Values are numbers, `true`/`false` (1/0) or strings (`"quoted"` when they contain commas). Unknown functions fail when the page loads (`runtime/debug.ts`). Example: Deltarune Ch1's init runs `scr_gamestart` (darkzone 0, plot 0, Kris alone), so `?room=room_field3` alone gives a light-world Kris in a dark room; `?debug&room=room_field3&set=darkzone=1,plot=40,char[1]=2,char[2]=3` starts it as the game would (dark world, Susie and Ralsei following).

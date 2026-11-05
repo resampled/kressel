@@ -102,7 +102,7 @@ export class Game {
     this.vm = new VM(this);
     this.fx = new Effects(this.random);
     this.snd = new Sounds(p, a);
-    this.files = new Files(p.storage, a.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'), a.files);
+    this.files = new Files(p.storage, a.files);
     this.speed = a.fps;
     this.startTime = p.now();
     // Room creation code runs as a dummy instance, like GM's.

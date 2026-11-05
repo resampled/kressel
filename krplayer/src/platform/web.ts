@@ -1,6 +1,7 @@
-// Browser platform: a batched WebGL2 renderer, WebAudio, keyboard input and localStorage.
+// Browser platform: a batched WebGL2 renderer, WebAudio, keyboard input and IndexedDB saves.
 
 import { WINDOW, type Audio, type Platform, type Renderer, type TextureId, type VoiceId } from './types.ts';
+import { FileStore, idbBackend } from './filestore.ts';
 
 const D2R = Math.PI / 180;
 const MAX_QUADS = 8192, FLOATS = 5; // x y u v colour(rgba8 as one float slot)
@@ -372,12 +373,7 @@ export function createWebPlatform(canvas: HTMLCanvasElement): Platform & { audio
     audio,
     audioContext: audio.ctx,
     input,
-    storage: {
-      read: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
-      write: (k, v) => { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } },
-      remove: (k) => { try { localStorage.removeItem(k); } catch { /* */ } },
-      keys: (p) => { try { return Object.keys(localStorage).filter((k) => k.startsWith(p)); } catch { return []; } },
-    },
+    storage: new FileStore(idbBackend()),
     now: () => performance.now(),
     hidden: () => document.hidden,
     setFullscreen: (on) => { if (on && !document.fullscreenElement) canvas.parentElement?.requestFullscreen().catch(() => {}); else if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {}); },

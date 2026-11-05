@@ -3,6 +3,7 @@
 
 import type { Audio, Platform, Renderer } from './types.ts';
 import { SoftRenderer, type Pixels } from './soft.ts';
+import { FileStore, memoryBackend } from './filestore.ts';
 
 export interface HeadlessPlatform extends Platform {
   /** Advances the fake clock. */
@@ -17,7 +18,7 @@ export interface HeadlessPlatform extends Platform {
 export function createHeadless(textureSize: (url: string) => [number, number] = () => [1, 1], decode?: (url: string) => Promise<Pixels>,
   fetchBytes: (url: string) => Promise<Uint8Array> = async (u) => { throw new Error(`headless: no file ${u}`); }): HeadlessPlatform {
   let time = 0, nextId = 1;
-  const store = new Map<string, string>(), sizes = new Map<number, [number, number]>();
+  const sizes = new Map<number, [number, number]>();
   const stats = { frames: 0, draws: 0, sounds: 0, log: [] as string[] };
   const input = { keys: new Uint8Array(256), pressed: new Uint8Array(256), released: new Uint8Array(256), mouseX: 0, mouseY: 0, mouseButtons: 0, typed: '', lastKey: 0 };
   let win: [number, number] = [640, 480];
@@ -54,10 +55,7 @@ export function createHeadless(textureSize: (url: string) => [number, number] = 
     renderer: soft ?? counting,
     audio,
     input,
-    storage: {
-      read: (k) => store.get(k) ?? null, write: (k, v) => { store.set(k, v); }, remove: (k) => { store.delete(k); },
-      keys: (p) => [...store.keys()].filter((k) => k.startsWith(p)),
-    },
+    storage: new FileStore(memoryBackend(), (m) => { stats.log.push(m); }),
     hidden: () => false, setFullscreen() {}, isFullscreen: () => false, setTitle() {},
     log: (m) => { stats.log.push(m); },
     fetchBytes,

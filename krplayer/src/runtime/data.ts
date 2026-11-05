@@ -1,5 +1,5 @@
 // ds_* data structures, json_encode/decode, ini files, text files, buffers and the virtual file
-// system behind them. Saved files go to Storage (keyed by game); included files are read-only.
+// system behind them. Saved files go to Storage (the project's partition); included files are read-only.
 
 import type { Storage } from '../platform/types.ts';
 import { GmlError, GmStruct, num, real, str, type GArray, type Value } from '../value.ts';
@@ -31,13 +31,12 @@ export class Handles<T> {
 
 /**
  * Paths are case-insensitive and relative to the game: "./x", "x" and working_directory + "x" are
- * the same file. Writes land in Storage under the game's prefix; reads fall back to included files.
+ * the same file. Writes land in Storage; reads fall back to included files.
  */
 export class Files {
   private readonly st: Storage;
-  private readonly prefix: string;
   private readonly included: Map<string, Uint8Array>;
-  constructor(st: Storage, game: string, included: Map<string, Uint8Array>) { this.st = st; this.prefix = `kr:${game}:`; this.included = included; }
+  constructor(st: Storage, included: Map<string, Uint8Array>) { this.st = st; this.included = included; }
 
   static norm(path: string): string {
     let p = path.replaceAll('\\', '/').toLowerCase();
@@ -46,22 +45,22 @@ export class Files {
   }
   exists(path: string): boolean {
     const p = Files.norm(path);
-    return this.st.read(this.prefix + p) !== null || this.included.has(p);
+    return this.st.read(p) !== null || this.included.has(p);
   }
   readText(path: string): string | null {
-    const p = Files.norm(path), saved = this.st.read(this.prefix + p);
+    const p = Files.norm(path), saved = this.st.read(p);
     if (saved !== null) return saved.startsWith('b64:') ? new TextDecoder().decode(fromB64(saved.slice(4))) : saved;
     const inc = this.included.get(p);
     return inc ? new TextDecoder().decode(inc) : null;
   }
   readBytes(path: string): Uint8Array | null {
-    const p = Files.norm(path), saved = this.st.read(this.prefix + p);
+    const p = Files.norm(path), saved = this.st.read(p);
     if (saved !== null) return saved.startsWith('b64:') ? fromB64(saved.slice(4)) : new TextEncoder().encode(saved);
     return this.included.get(p) ?? null;
   }
-  writeText(path: string, text: string): void { this.st.write(this.prefix + Files.norm(path), text.startsWith('b64:') ? text + ' ' : text); }
-  writeBytes(path: string, b: Uint8Array): void { this.st.write(this.prefix + Files.norm(path), 'b64:' + toB64(b)); }
-  remove(path: string): void { this.st.remove(this.prefix + Files.norm(path)); }
+  writeText(path: string, text: string): void { this.st.write(Files.norm(path), text.startsWith('b64:') ? text + ' ' : text); }
+  writeBytes(path: string, b: Uint8Array): void { this.st.write(Files.norm(path), 'b64:' + toB64(b)); }
+  remove(path: string): void { this.st.remove(Files.norm(path)); }
   copy(from: string, to: string): void {
     const b = this.readBytes(from);
     if (b) this.writeBytes(to, b);

@@ -64,7 +64,7 @@ ID,Section,Category,Applies to,Status,Included In…,Notes,Build progress
 6.05,Input,"Touch and virtual keys (device_mouse_*, virtual_key_*)",Both,Partial,Later,Needs an on-screen control overlay.,Not started
 6.06,Input,"get_string, get_integer, show_message, show_question",Both,Partial,Early,Replace with in-canvas modals; browser dialogs block the loop.,Not started
 6.07,Input,Clipboard (clipboard_*),Both,Stubbed,None,Permission-gated. Stub returns empty.,Not started
-7.01,"Files, saves & storage",ini_*,Both,Partial,Early,Back with IndexedDB. Deltarune-style save files depend on this.,"Started: ini_* on the virtual file system (Storage), ini_open_from_string"
+7.01,"Files, saves & storage",ini_*,Both,Partial,Early,Back with IndexedDB. Deltarune-style save files depend on this.,"Started: ini_* on the virtual file system (Storage, IndexedDB), ini_open_from_string"
 7.02,"Files, saves & storage","file_text_*, file_bin_*",Both,Partial,Early,Virtual file system on IndexedDB or OPFS.,Started: file_text_* read/write/append on the virtual file system; file_bin_* not yet
 7.03,"Files, saves & storage","file_exists, file_delete, file_find_*, directory_*",Both,Partial,Early,Virtual paths only.,Started: file_exists/delete/copy/rename on the virtual file system; directories always exist
 7.04,"Files, saves & storage","working_directory, program_directory, game_save_id",Both,Partial,Early,Return virtual paths.,"Started: working_directory etc. are ""./"""

@@ -87,11 +87,14 @@ export interface Input {
   lastKey: number;
 }
 
+/** Saved files of one project (keys are paths). See platform/filestore.ts. */
 export interface Storage {
+  /** Selects the project partition (cfg_db_relay.slug) and loads its files; call before the game starts. */
+  open(project: string): Promise<void>;
   read(key: string): string | null;
   write(key: string, value: string): void;
   remove(key: string): void;
-  /** Keys starting with prefix. */
+  /** Keys starting with prefix. Writes over the project's quota are refused. */
   keys(prefix: string): string[];
 }
 
