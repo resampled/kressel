@@ -33,15 +33,15 @@ export function receiveFromOpener(timeoutMs = 30000): Promise<Map<string, Uint8A
   });
 }
 
-/** Sender side: opens the player and sends the project once it reports ready. Copies the files. */
+/** Sender side: opens the player and sends the project each time it reports ready (so reloads work). Copies the files. */
 export function sendToPlayer(playerUrl: string, files: Map<string, Uint8Array>): void {
   const url = new URL(playerUrl, location.href);
   url.searchParams.set('from', 'opener');
   const win = window.open(url.href, '_blank');
   if (!win) throw new Error('the player window was blocked (allow pop-ups for this page)');
   const onMessage = (e: MessageEvent) => {
+    if (win.closed) return removeEventListener('message', onMessage);
     if (e.source !== win || e.data?.type !== READY) return;
-    removeEventListener('message', onMessage);
     const out: Record<string, ArrayBuffer> = {};
     for (const [path, data] of files) out[path] = data.slice().buffer as ArrayBuffer;
     win.postMessage({ type: PROJECT, files: out } satisfies ProjectMessage, url.origin, Object.values(out));

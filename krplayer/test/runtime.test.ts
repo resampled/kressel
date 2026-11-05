@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Krpj, Script } from '../src/krpj.ts';
 import { createHeadless } from '../src/platform/headless.ts';
-import { load } from '../src/play.ts';
+import { load, prepare } from '../src/play.ts';
 import { equals, str, add } from '../src/value.ts';
 
 function project(objects: Krpj['objects'], instances: { object: string; x: number; y: number }[]): Krpj {
@@ -145,4 +145,23 @@ test('event_inherited runs the parent object\'s version of the event', async () 
   }, [{ object: 'kid', x: 0, y: 0 }]);
   const g = await load({ krpj: pj, url: (x) => x }, p);
   assert.equal(g.instances[0].vars.get(g.a.varNames.indexOf('log')), 'kb');
+});
+
+test('debug start room: warp redirects the first room change, direct skips the init room', async () => {
+  const pj = project({}, []), room = pj.rooms!.rm;
+  pj.rooms = { rm: room, rm2: room, rm3: room };
+  const p = createHeadless(() => [10, 10]), src = { krpj: pj, url: (x: string) => x };
+  const g = await prepare(src, p);
+  assert.equal(g.findRoom('rm3'), 2);
+  assert.equal(g.findRoom('1'), 1);
+  assert.equal(g.findRoom('nope'), -1);
+  g.start(2);
+  assert.equal(g.room.name, 'rm');
+  g.goto(1); g.frame();
+  assert.equal(g.room.name, 'rm3');
+  g.goto(1); g.frame();
+  assert.equal(g.room.name, 'rm2');
+  const d = await prepare(src, p);
+  d.start(1, true);
+  assert.equal(d.room.name, 'rm2');
 });

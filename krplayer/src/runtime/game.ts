@@ -118,10 +118,26 @@ export class Game {
 
   get room() { return this.a.rooms[this.roomIndex]; }
 
-  start(): void {
+  /** Debug warp: the room the game's first room change goes to instead (-1 = off). */
+  private warpRoom = -1;
+
+  /**
+   * Runs global init and enters the first room. With `warp` (a room index), the first room change
+   * goes there instead, so the init room still sets the game up; with `direct` the game enters it straight away.
+   */
+  start(warp = -1, direct = false): void {
+    if (warp >= 0 && !this.a.rooms[warp]) throw new GmlError(`start room ${warp} does not exist`);
     void this.snd.preload();
     for (const b of this.a.globalInit) this.vm.run(b, this.globalScope, null);
+    if (direct && warp >= 0) return this.enterRoom(warp, true);
+    this.warpRoom = warp;
     this.enterRoom(this.a.initRoom, true);
+  }
+
+  /** Room index for a room name or index string, or -1. */
+  findRoom(q: string): number {
+    const i = this.a.rooms.findIndex((r) => r.name === q);
+    return i >= 0 || !/^\d+$/.test(q) ? i : this.a.rooms[+q] ? +q : -1;
   }
 
   /** One game frame: a step, then drawing, then any room change. */
@@ -131,8 +147,9 @@ export class Game {
     this.step();
     if (this.pendingRoom < 0 && !this.ended) this.draw();
     if (this.pendingRoom >= 0 && !this.ended) {
-      const r = this.pendingRoom;
+      let r = this.pendingRoom;
       this.pendingRoom = -1;
+      if (this.warpRoom >= 0) { r = this.warpRoom; this.warpRoom = -1; }
       this.leaveRoom(r);
       this.enterRoom(r, false);
     }

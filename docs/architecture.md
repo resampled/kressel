@@ -68,6 +68,8 @@ scripts/
   1. a URL (a `game.json` or a `.krpj`), for published projects on the CDN;
   2. a `.krpj` the user opens in the player;
   3. **in-memory handoff**: gm2kr opens the player with `?from=opener`, the player posts `kr-player-ready` to its opener, and gm2kr replies with the files as transferred ArrayBuffers (`loader/handoff.ts`). The player only accepts that message from its own opener and serves the files from blob URLs. Nothing is uploaded and the Django site isn't involved.
+* **Debug start room.** `?room=<name|index>` on the player URL (works with any source, e.g. `?from=opener&room=room_town_krisyard`) still runs global init and the init room, but the game's first room change goes to that room instead, so setup code in the init room (e.g. Deltarune's `obj_initializer`) still runs. Add `&direct` to enter the room straight away and skip the init room. It's a debug option: imported code isn't changed, and flags the skipped rooms would set stay unset.
+* **Debug console handle.** `?debug` puts the running `Game` on `window.kr` (e.g. `kr.room.name`, `kr.roomIndex`). Without it nothing is exposed.
 
 ## Testing
 `pnpm test` runs `node --test` on `gm2kr/test` and `krplayer/test` (Node ≥ 23 for type stripping).
