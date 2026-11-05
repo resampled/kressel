@@ -90,6 +90,18 @@ test('precise masks collide per pixel (diagonal slope)', async () => {
   assert.equal(hit(13, 5), false);
 });
 
+test('equal depth: the newest instance draws first', async () => {
+  const log = (tag: string) => ['evt_draw', [['var_change', '+', ['_iv', ['_kw', 'global'], 'order'], tag]]];
+  const p = createHeadless(() => [10, 10]);
+  const pj = project({
+    a: obj([['evt_create', [['var_set', ['_iv', ['_kw', 'global'], 'order'], ''], ['ins_create_depth', 0, 0, 0, ['_as', 'c']]]], log('a')]),
+    b: obj([log('b')]), c: obj([log('c')]),
+  }, [{ object: 'a', x: 0, y: 0 }, { object: 'b', x: 0, y: 0 }]);
+  const g = await load({ krpj: pj, url: (x) => x }, p);
+  g.frame();
+  assert.equal(g.globalScope.vars.get(g.a.varNames.indexOf('order')), 'cba');
+});
+
 /** Like exec, with user functions in the project. */
 async function execFn(body: unknown[], functions: Krpj['functions'], scripts: (string | null)[] = []) {
   const p = createHeadless(() => [10, 10]);

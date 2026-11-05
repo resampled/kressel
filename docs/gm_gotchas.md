@@ -46,6 +46,7 @@ Quirks found while reimplementing the runtime and the data.win format. Each has 
 * **A room's views only apply when room flag bit 0 is set**; views keep their own "enabled" flag either way.
 
 ## Runtime (observed in Deltarune)
+* **At equal depth, the newest instance draws first.** GM adds new layer elements at the front, so a later-created instance draws *before* (under) older ones at the same depth. Deltarune Ch1 relies on it: in `room_town_krisyard`, `obj_carcutscene`'s alarm 5 creates an `obj_writer` at depth 0, and carcutscene's draw (also depth 0) reads `myd.stringmax`, which only the writer's draw sets. Drawing oldest-first crashes with "variable stringmax not set before reading it".
 * **All of a room's instances exist before any create event runs.** `obj_mainchara` is first in `room_krishallway`'s creation order, yet its create event reads `obj_markerA.x` (placed later). The create events (then creation code) run in the room's creation order, which is the room's instance list, not layer order.
 * **`obj.var = v` when no instance of `obj` exists does nothing**; only reading it is an error. Deltarune's `scr_controls_default` writes `obj_gamecontroller.gamepad_shoulderlb_reassign` from `obj_time`'s create event, which runs (via `obj_initializer2`) before `obj_gamecontroller` is created.
 

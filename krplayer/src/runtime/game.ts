@@ -890,7 +890,8 @@ export class Game {
   }
 }
 
-const byDepth = (a: Instance, b: Instance) => b.depth - a.depth || a.order - b.order;
+/** Deepest first; at equal depth the newest instance draws first (GM adds new layer elements at the front). */
+const byDepth = (a: Instance, b: Instance) => b.depth - a.depth || b.order - a.order;
 
 /** vk_anykey (1) / vk_nokey (0) / a key code. */
 export function keyState(keys: Uint8Array, k: number): boolean {
