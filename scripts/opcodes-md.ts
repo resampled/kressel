@@ -58,3 +58,10 @@ export function renderOpcodes(ops: ParsedOpcode[]): string {
     `import type { OpcodeDef } from './opcodes.ts';\n\n` +
     `export const OPCODES: readonly OpcodeDef[] = [\n${rows}\n];\n`;
 }
+
+/** Plain-JS copy for kreditor (no build step), written to kreditor/src/opcodes.gen.js. */
+export function renderOpcodesJs(ops: ParsedOpcode[]): string {
+  const rows = ops.map((o) => `  ${JSON.stringify(o)},`).join('\n');
+  return `// GENERATED from docs/krpj_opcodes.md by scripts/gen-opcodes.ts. Do not edit; run \`pnpm gen:opcodes\`.\n` +
+    `export const OPCODES = [\n${rows}\n];\n`;
+}

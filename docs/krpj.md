@@ -181,6 +181,7 @@ Fields beyond the example above. All are optional unless noted; the types live i
 * `global_init`: scripts run once at game start, in order, before the first room, with `self` = the global scope (GameMaker 2.3+ script files' top-level code, which also defines their functions as global variables).
 * `scripts`: script asset index → function key (or `null`), for code that names scripts by number (`script_execute(n)`, `asset_get_index`). A function reference (`["_fn", key]`) evaluates to its script index when it has one, and to a method otherwise.
 * `audio_groups`: audio group names by index (`sounds[k].group` indexes it).
+* `editor`: kreditor's canvas layout, ignored by the engine. `pos` maps a script owner (`"obj:<key>"`, `"room:<key>"`, `"fn:<key>"` or `"global"`) to the `[x, y]` of each of its top-level scripts (same order as `scripts` / `global_init`; `null` or missing = auto-placed). `loose` maps an owner to `{ "x", "y", "script" }` stacks dropped on the canvas without an event; they never run. Imports have no `editor` field.
 * `included_files`: path the game opens, relative to its working directory (`"lang/lang_en.json"`) → asset path (`"./files/lang/lang_en.json"`). Non-audio files are read up front (GML file functions are synchronous); audio is streamed when the game asks for it (`audio_create_stream`).
 
 **Functions** (`functions`): `args` are named parameters (locals initialised from the arguments; imports have none and use `argument0`... instead), `argc` the argument count GameMaker declared, `ctor` true for constructors (`fnc_new`).

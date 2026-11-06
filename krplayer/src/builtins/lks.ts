@@ -47,10 +47,18 @@ define('lks_font_from_sprite', (g, s, t) => {
 /** An included image file (decoded at load), or null if the game doesn't ship it. */
 function imageFile(g: Game, fn: string, path: string, removeback: boolean, smooth: boolean): Pixels | null {
   if (!g.p.decodeImage) throw new GmlError(`${fn}: this platform can't decode image files`);
-  if (removeback || smooth) throw new GmlError(`${fn}: removeback/smooth are not implemented in krplayer yet`);
+  // smooth only does anything with removeback (it softens the cut-out edges).
+  if (removeback && smooth) throw new GmlError(`${fn}: smooth is not implemented in krplayer yet`);
   const img = g.a.images.get(Files.norm(path)) ?? null;
   if (!img) g.p.log(`${fn}: ${path} is not an included image file`);
-  return img;
+  return img && removeback ? removeBack(img) : img;
+}
+
+/** removeback: a copy with every pixel of the bottom-left pixel's colour made fully transparent. */
+function removeBack(img: Pixels): Pixels {
+  const d = new Uint8ClampedArray(img.data), k = (img.h - 1) * img.w * 4, r = d[k], gr = d[k + 1], bl = d[k + 2];
+  for (let i = 0; i < d.length; i += 4) if (d[i] === r && d[i + 1] === gr && d[i + 2] === bl) d[i] = d[i + 1] = d[i + 2] = d[i + 3] = 0;
+  return { w: img.w, h: img.h, data: d };
 }
 
 function crop(img: Pixels, x: number, y: number, w: number, h: number): Pixels {

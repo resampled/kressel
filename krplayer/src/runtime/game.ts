@@ -305,6 +305,12 @@ export class Game {
         case GV.view_wport: return v.pw; case GV.view_hport: return v.ph;
         case GV.view_surface_id: return v.surface;
       }
+      const c = this.cameras[v.camera];
+      switch (id) {
+        case GV.view_xview: return c?.x ?? 0; case GV.view_yview: return c?.y ?? 0;
+        case GV.view_wview: return c?.w ?? 0; case GV.view_hview: return c?.h ?? 0;
+        case GV.view_angle: return c?.angle ?? 0; case GV.view_object: return c?.target ?? -1;
+      }
       throw new GmlError('built-in global is not an array');
     }
     const d = new Date();
@@ -369,6 +375,12 @@ export class Game {
         case GV.view_wport: view.pw = real(v); return; case GV.view_hport: view.ph = real(v); return;
         case GV.view_surface_id: view.surface = real(v); return;
       }
+      const c = this.cameras[view.camera];
+      switch (id) {
+        case GV.view_xview: if (c) c.x = real(v); return; case GV.view_yview: if (c) c.y = real(v); return;
+        case GV.view_wview: if (c) c.w = real(v); return; case GV.view_hview: if (c) c.h = real(v); return;
+        case GV.view_angle: if (c) c.angle = real(v); return; case GV.view_object: if (c) c.target = real(v); return;
+      }
       throw new GmlError('built-in global is not an array');
     }
     switch (id) {
@@ -431,8 +443,9 @@ export class Game {
     if (!blocks) return;
     const saved = this.eventKey;
     // destroy() runs the destroy/cleanup events before marking the instance dead.
+    // Outside collisions and with, `other` is the instance itself (gm_gotchas.md).
     try {
-      for (const b of blocks) { if (!inst.alive) return; this.eventKey = b.ev ?? -1; this.vm.run(b, inst, other); }
+      for (const b of blocks) { if (!inst.alive) return; this.eventKey = b.ev ?? -1; this.vm.run(b, inst, other ?? inst); }
     } finally { this.eventKey = saved; }
   }
 

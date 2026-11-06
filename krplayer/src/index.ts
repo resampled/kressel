@@ -3,6 +3,8 @@
 //   2. <meta id="kressel-load-project" src> -> load that game.json (assets next to it, or the CDN) or .krpj
 //   3. otherwise                          -> let the user open a .krpj project
 // Shared assets base: <meta name="kressel-shared-assets" content="/kr/sa/">.
+// Embedding (kreditor's stage): <meta name="kressel-query" content="debug&room=x"> replaces location.search,
+// and <meta name="kressel-autostart"> skips the click-to-start prompt (the host page already had a gesture).
 // Debug (all need ?debug): ?room=<name|index> sends the game's first room change to that room (the init room still runs);
 // add &direct to skip the init room entirely. ?set=name=v,name[i]=v and ?call=fn,fn(a,b) run (in URL order)
 // just before the warp room is entered. ?debug also exposes the Game as `kr` in the console.
@@ -47,6 +49,10 @@ function pickKrpj(ui: Shell): Promise<ProjectSource> {
   });
 }
 
+const meta = (name: string) => document.querySelector(`meta[name="${name}"]`);
+/** URL params, or the embedding page's kressel-query meta (srcdoc frames have no query string). */
+const params = () => new URLSearchParams(meta('kressel-query')?.getAttribute('content') ?? location.search);
+
 /** Browsers only allow audio after a user gesture, so the game starts on the first click or key. */
 function gesture(ui: Shell): Promise<void> {
   ui.say('Click or press any key to start');
@@ -61,8 +67,15 @@ async function run(source: ProjectSource, ui: Shell): Promise<void> {
   const platform = createWebPlatform(ui.canvas);
   const game = await prepare(source, platform, (m) => ui.say(`loading… ${m}`));
   document.title = game.a.title;
-  await gesture(ui);
-  await platform.audioContext.resume();
+  if (meta('kressel-autostart')) {
+    ui.say('');
+    const wake = () => { platform.audioContext.resume(); };
+    wake(); // may stay suspended without activation; any click/key in the frame retries
+    addEventListener('pointerdown', wake, { once: true }); addEventListener('keydown', wake, { once: true });
+  } else {
+    await gesture(ui);
+    await platform.audioContext.resume();
+  }
   const fit = () => {
     const s = Math.min(ui.root.clientWidth / ui.canvas.width, ui.root.clientHeight / ui.canvas.height);
     ui.canvas.style.width = `${Math.floor(ui.canvas.width * s)}px`;
@@ -72,7 +85,7 @@ async function run(source: ProjectSource, ui: Shell): Promise<void> {
   const fail = (e: unknown) => { ui.say(`Game error:
 ${(e as Error).message}`, true); console.error(e); };
   try {
-    const q = new URLSearchParams(location.search), debug = q.has('debug');
+    const q = params(), debug = q.has('debug');
     if (!debug && ['room', 'direct', 'set', 'call'].some((k) => q.has(k))) console.warn('kressel: ?room/direct/set/call are ignored without ?debug');
     const want = debug ? q.get('room') : null, warp = want ? game.findRoom(want) : -1;
     if (want && warp < 0) throw new Error(`?room=${want}: no such room`);
@@ -107,7 +120,7 @@ async function boot() {
   const shared = document.querySelector('meta[name="kressel-shared-assets"]')?.getAttribute('content') ?? undefined;
   try {
     let source: ProjectSource;
-    if (new URLSearchParams(location.search).get('from') === 'opener' && window.opener) {
+    if (params().get('from') === 'opener' && window.opener) {
       ui.say('waiting for the project…');
       source = fromFiles(await receiveFromOpener(), shared);
     } else if (src) {

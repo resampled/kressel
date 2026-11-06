@@ -31,7 +31,11 @@ export function decompileAll(m: GmModel, onError?: (name: string, e: Error) => v
   const blocks = new Map<number, typeof m.code>();
   for (const c of m.code) (blocks.get(c.start) ?? blocks.set(c.start, []).get(c.start)!).push(c);
   for (const entries of blocks.values()) {
-    const head = entries.find((c) => c.offset === 0) ?? entries[0];
+    // An empty pre-2.3 script is a zero-length entry starting where the next script does (gm_gotchas.md),
+    // so the head is the longest offset-0 entry and zero-length entries are empty.
+    const head = entries.reduce((a, c) => (c.offset === 0 && (a.offset !== 0 || c.length > a.length) ? c : a));
+    for (const c of entries) if (c.length === 0) out.set(c.name, { body: [], args: c.args, child: false });
+    if (head.length === 0) continue;
     let ins;
     try { ins = disassemble(m.buf, head, m.refs, m.strings); } catch (e) {
       if (!onError) throw e;
@@ -40,6 +44,7 @@ export function decompileAll(m: GmModel, onError?: (name: string, e: Error) => v
     }
     const childStarts = new Set(entries.filter((c) => c.offset > 0).map((c) => head.start + c.offset));
     for (const c of entries) {
+      if (c.length === 0) continue;
       try {
         const d = new Decompiler(c.name, ins, head.start + head.length, assets, childStarts);
         if (c.offset === 0) { out.set(c.name, { body: d.run(), args: c.args, child: false }); continue; }

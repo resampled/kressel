@@ -29,6 +29,8 @@ export const GV = {
   pointer_null: 54, pointer_invalid: 55, view_surface_id: 56, background_colour: 57, background_color: 58,
   background_showcolour: 59, background_showcolor: 60, display_aa: 61, game_id: 62, game_project_name: 63,
   health: 64, score: 65, lives: 66,
+  // GMS1 view arrays: still builtins in GMS2 runners, read and write the view camera's position/size/target.
+  view_xview: 67, view_yview: 68, view_wview: 69, view_hview: 70, view_object: 71, view_angle: 72,
 } as const;
 export const GV_READONLY = new Set<number>([
   GV.room_width, GV.room_height, GV.fps, GV.current_time, GV.mouse_x, GV.mouse_y, GV.instance_count, GV.undefined,
@@ -39,7 +41,8 @@ export const GV_READONLY = new Set<number>([
   GV.current_second, GV.mouse_lastbutton, GV.pointer_null, GV.pointer_invalid, GV.display_aa, GV.game_id, GV.game_project_name,
 ]);
 /** Built-in globals that are arrays (one entry per view). */
-export const GV_ARRAY = new Set<number>([GV.view_camera, GV.view_visible, GV.view_xport, GV.view_yport, GV.view_wport, GV.view_hport, GV.view_surface_id]);
+export const GV_ARRAY = new Set<number>([GV.view_camera, GV.view_visible, GV.view_xport, GV.view_yport, GV.view_wport, GV.view_hport, GV.view_surface_id,
+  GV.view_xview, GV.view_yview, GV.view_wview, GV.view_hview, GV.view_object, GV.view_angle]);
 
 export const IV_NAMES = new Map<string, number>(Object.entries(IV));
 export const GV_NAMES = new Map<string, number>(Object.entries(GV));

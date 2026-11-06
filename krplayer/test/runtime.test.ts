@@ -267,3 +267,39 @@ test('sprite_add: an included image as a strip, with sprite_collision_mask build
   const sp = g.a.sprites[v('s') as number];
   assert.deepEqual([sp.ox, sp.maskKind, sp.nBits, [...sp.bits!]], [1, 2, 2, [0x80, 0, 0, 0]]);
 });
+
+test('outside collisions and with, other is self (ch1_ribbit_mod obj_shop2 draws with other.rng)', async () => {
+  const pj = project({ o: obj([
+    ['evt_create', [['var_set', ['_lv', 'rng'], 3], ['var_set', ['_lv', 'c'], ['_iv', ['_kw', 'other'], 'rng']]]],
+    ['evt_step', [['var_set', ['_lv', 's'], ['_iv', ['_kw', 'other'], 'rng']]]],
+    ['evt_draw', [['var_set', ['_lv', 'd'], ['_iv', ['_kw', 'other'], 'rng']]]],
+  ]) }, [{ object: 'o', x: 0, y: 0 }]);
+  const g = await load({ krpj: pj, url: (x) => x }, createHeadless(() => [10, 10]));
+  g.frame();
+  const v = (k: string) => g.instances[0].vars.get(g.a.varSlot(k));
+  assert.deepEqual([v('c'), v('s'), v('d')], [3, 3, 3]);
+});
+
+test('GMS1 view_xview/yview/wview/hview are builtins on the view camera (ch1_ribbit_mod obj_checkersfog)', async () => {
+  const pj = project({ o: obj([['evt_create', [
+    ['var_set', ['_ai', ['_lv', 'view_xview'], 0], 30],
+    ['var_set', ['_lv', 'x0'], ['_ai', ['_lv', 'view_xview'], 0]],
+    ['var_set', ['_lv', 'w0'], ['_ai', ['_lv', 'view_wview'], 0]],
+  ]]]) }, [{ object: 'o', x: 0, y: 0 }]);
+  Object.assign(pj.rooms!.rm, { views_enabled: true, views: [{ view: [5, 0, 80, 60], port: [0, 0, 80, 60], visible: true }] });
+  const g = await load({ krpj: pj, url: (x) => x }, createHeadless(() => [10, 10]));
+  const v = (k: string) => g.instances[0].vars.get(g.a.varSlot(k));
+  assert.deepEqual([v('x0'), v('w0'), g.cameras[g.views[0].camera]!.x], [30, 80, 30]);
+});
+
+test('sprite_add removeback clears pixels of the bottom-left colour (ch1_ribbit_mod PROCESS_LOGO)', async () => {
+  // 2x2: top row red/green, bottom row blue/blue (bottom-left is the key colour).
+  const px = new Uint8ClampedArray([255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 0, 0, 255, 255]);
+  const pj = project({ o: obj([['evt_create', [['var_set', ['_lv', 's'], ['lks_sprite_add', 'img/a.png', 1, true, false, 0, 0]]]]]) }, [{ object: 'o', x: 0, y: 0 }]);
+  pj.included_files = { 'img/a.png': './files/img/a.png' };
+  const p = createHeadless(() => [10, 10], undefined, async () => new Uint8Array(1), { decodeImage: async () => ({ w: 2, h: 2, data: px }) });
+  const g = await load({ krpj: pj, url: (x) => x }, p);
+  const sp = g.a.sprites[g.instances[0].vars.get(g.a.varSlot('s')) as number];
+  assert.deepEqual([...sp.pixels![0].data].filter((_, i) => i % 4 === 3), [255, 255, 0, 0]);
+  assert.equal(px[11], 255); // the decoded image is left as it was
+});

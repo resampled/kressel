@@ -55,6 +55,9 @@ GEN8 says 2.0.0.0 and there is no SEQN/FEAT/TGIN chunk. `fmt.gms23` is false.
 * **Texture pages are plain PNGs** (8-bit RGBA), not QOI.
 * **Every GMS1-imported object has a PreCreate event (type 14)** whose body is just `event_inherited()`. It runs right before Create (`evt_pre_create`).
 * **Sprites added by the mod tool have odd TPAG items.** Some stretch a 1x1 page rect to the whole frame (`spr_puzzlemaster_beanie`: sw 1, tw 11). Others overhang their bounding box by a pixel (`spr_youb_attack`: tx 11 + tw 63 > bw 63). GM draws the page rect stretched to (tx, ty, tw, th). gm2kr does the same with nearest sampling and clips to the frame.
+* **An empty script is a zero-length code entry whose start address is the next entry's.** `gml_Script___init_background` (length 0) starts where `gml_Script___background_get_element` (1232 bytes) does. Grouping entries by start address (as for 2.3 child functions) made the empty one the block head, and the real script decompiled to nothing; `background_*` compat calls then failed with "trying to index a variable which is not an array" (`room_field_checkers1`).
+* **GMS1 view arrays are still builtins.** VARI lists `view_xview`, `view_yview`, `view_wview`, `view_hview` and `view_object` with id -6 (builtin), and the mod tool's code reads them as `push.v self.view_xview [array]` (`obj_checkersfog` Draw in `room_field_checkers2`). krplayer maps `view_*view[i]`, `view_angle[i]` and `view_object[i]` to view i's camera.
+* **`other` is the instance itself in ordinary events** (step, draw, alarm...), not `noone`: `obj_shop2` Draw does `draw_circle(131, 79, 12 + other.rng * 1.25, 0)` outside any `with` (`room_shop2`).
 * **An embedded sound can have audio id -1** (`snd_pombark`: flags 0x65, group 1), meaning no data, not an external file. It's emitted with `src: ""` and plays nothing.
 * **A call's result is sometimes never popped.** In `obj_dustpile_susie` Draw, `call draw_sprite_ext` is followed directly by the next statement with no `popz`. This is most likely from the mod tool's compiler. When an `if` statement starts with plain calls still on the stack, gm2kr emits them as statements.
 * **Included file names can be built at runtime**, e.g. `snd_init("keygen" + string(round(random_range(1, 5))) + ".ogg")` in `obj_crackintro`. So gm2kr also keeps audio whose name starts with a 4+ character string literal when its extension is a literal too.
@@ -79,6 +82,7 @@ GEN8 says 2.0.0.0 and there is no SEQN/FEAT/TGIN chunk. `fmt.gms23` is false.
 * Outside Room fires when the instance's bbox leaves the room. krplayer fires it once on leaving; whether GM repeats it every step while outside is unverified.
 
 * `sprite_add` sprites get a rectangle mask with an automatic bbox and animate one frame per step. A file that isn't shipped returns -1 (ch1_ribbit_mod asks for `spr/spr/spr_status_ailments.png`, which it doesn't ship).
+* `sprite_add`/`sprite_replace`/`background_replace` with removeback make every pixel of the bottom-left pixel's colour (RGB) fully transparent. smooth (with removeback) is not implemented and fails loudly (ch1_ribbit_mod `PROCESS_LOGO` uses removeback without smooth).
 * `get_string` / `get_integer` return the default when cancelled (or, for integers, when the input isn't a number).
 
 ## Known krplayer divergences (not fixes, gaps)

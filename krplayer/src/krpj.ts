@@ -150,4 +150,11 @@ export interface Krpj {
   audio_groups?: string[];
   /** Included files: path the game opens (relative to working_directory) -> asset path. */
   included_files?: Record<string, string>;
+  /** Editor-only layout, ignored by krplayer. Keys: "obj:<key>", "room:<key>", "fn:<key>", "global". */
+  editor?: {
+    /** Canvas position of each top-level script (index-aligned with scripts / global_init; functions have one). */
+    pos?: Record<string, ([number, number] | null)[]>;
+    /** Blocks lying loose on a canvas (not under an event), which never run. */
+    loose?: Record<string, { x: number | null; y: number | null; script: Script }[]>;
+  };
 }

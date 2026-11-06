@@ -2,12 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { OPCODES, opcodeId } from '../src/opcodes.ts';
-import { parseOpcodes, renderOpcodes } from '../../scripts/opcodes-md.ts';
+import { parseOpcodes, renderOpcodes, renderOpcodesJs } from '../../scripts/opcodes-md.ts';
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 test('opcodes.gen.ts is up to date with docs/krpj_opcodes.md (run pnpm gen:opcodes)', () => {
-  assert.equal(read('../src/opcodes.gen.ts'), renderOpcodes(parseOpcodes(read('../../docs/krpj_opcodes.md'))));
+  const ops = parseOpcodes(read('../../docs/krpj_opcodes.md'));
+  assert.equal(read('../src/opcodes.gen.ts'), renderOpcodes(ops));
+  assert.equal(read('../../kreditor/src/opcodes.gen.js'), renderOpcodesJs(ops));
 });
 
 test('opcode names are unique and prefixed', () => {

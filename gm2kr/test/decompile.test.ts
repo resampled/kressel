@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Op, T, VarKind, Ext, type Instr } from '../src/decompile/disasm.ts';
 import { Decompiler } from '../src/decompile/structure.ts';
+import { decompileAll } from '../src/decompile/program.ts';
+import type { GmModel } from '../src/model.ts';
 
 // Builds instruction lists the way GM's compiler lays them out (4-byte words, addresses from 0).
 type Spec = Partial<Instr> & { op: number };
@@ -159,4 +161,19 @@ test('a call left on the stack before an if is a statement (popz omitted by the 
   assert.deepEqual(decompile([call('instance_destroy', 0), pushv('x'), { op: Op.bf, target: 5 }, call('instance_destroy', 0), { op: Op.popz }]), [
     ['ins_destroy'], ['ctr_if', ['_lv', 'x'], [['ins_destroy']]],
   ]);
+});
+
+test('pre-2.3: an empty script (zero-length entry at the next script\'s address) does not swallow that script', () => {
+  // instance_destroy(); as call.i + function ref + popz.v, shared by gml_Script_empty (length 0) and gml_Script_real.
+  const buf = new ArrayBuffer(12), dv = new DataView(buf);
+  dv.setUint32(0, (Op.call << 24) | (T.Int32 << 16), true);
+  dv.setUint32(8, (Op.popz << 24) | (T.Var << 16), true);
+  const entry = (name: string, length: number) => ({ name, start: 0, length, offset: 0, locals: 0, args: 0 });
+  const m = {
+    buf, code: [entry('gml_Script_empty', 0), entry('gml_Script_real', 12)], strings: [],
+    refs: { vars: new Map(), funcs: new Map([[0, 'instance_destroy']]) },
+    objects: [], sprites: [], sounds: [], rooms: [], fonts: [], scripts: [], fmt: { gms23: false },
+  } as unknown as GmModel;
+  const out = decompileAll(m);
+  assert.deepEqual([out.get('gml_Script_empty')?.body, out.get('gml_Script_real')?.body], [[], [['ins_destroy']]]);
 });
