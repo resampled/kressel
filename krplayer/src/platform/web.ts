@@ -1,6 +1,6 @@
 // Browser platform: a batched WebGL2 renderer, WebAudio, keyboard input and IndexedDB saves.
 
-import { WINDOW, type Audio, type Platform, type Renderer, type TextureId, type VoiceId } from './types.ts';
+import { WINDOW, type Audio, type FontRasterizer, type Pixels, type Platform, type Renderer, type TextureId, type VoiceId } from './types.ts';
 import { FileStore, idbBackend } from './filestore.ts';
 
 const D2R = Math.PI / 180;
@@ -130,6 +130,21 @@ class GLRenderer implements Renderer {
     this.gl.deleteTexture(x.t);
     if (x.fb) this.gl.deleteFramebuffer(x.fb);
     this.tex[id] = null;
+  }
+  readPixels(id: TextureId): Pixels {
+    const x = this.tex[id];
+    if (!x?.fb) return { w: 0, h: 0, data: new Uint8ClampedArray(0) };
+    this.flush();
+    const gl = this.gl, data = new Uint8ClampedArray(x.w * x.h * 4);
+    // Surfaces are drawn upside down, so GL's bottom row is the surface's top row.
+    gl.bindFramebuffer(gl.FRAMEBUFFER, x.fb);
+    gl.readPixels(0, 0, x.w, x.h, gl.RGBA, gl.UNSIGNED_BYTE, data);
+    this.bindTarget();
+    return { w: x.w, h: x.h, data };
+  }
+  createTexture(px: Pixels): TextureId {
+    this.flush();
+    return this.upload(new ImageData(px.data as Uint8ClampedArray<ArrayBuffer>, px.w, px.h));
   }
   copyTexture(id: TextureId, x: number, y: number, w: number, h: number): TextureId {
     const src = this.tex[id];
@@ -341,6 +356,51 @@ class WebAudio implements Audio {
   setMasterGain(g: number): void { this.master.gain.value = g; }
 }
 
+/** Image files -> RGBA via a 2D canvas (not WebGL: strips can be wider than the max texture size). */
+async function decodeImage(bytes: Uint8Array): Promise<Pixels> {
+  const bmp = await createImageBitmap(new Blob([bytes as BlobPart]), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+  const c = new OffscreenCanvas(bmp.width, bmp.height).getContext('2d')!;
+  c.drawImage(bmp, 0, 0);
+  bmp.close();
+  return { w: c.canvas.width, h: c.canvas.height, data: c.getImageData(0, 0, c.canvas.width, c.canvas.height).data };
+}
+
+/** font_add: TTF/OTF files become FontFaces; glyphs are drawn white into a 2D canvas atlas. */
+class CanvasFonts implements FontRasterizer {
+  private readonly names: string[] = [];
+  async load(bytes: Uint8Array): Promise<number> {
+    const name = `kr_font_${this.names.length}`, face = new FontFace(name, bytes.slice().buffer);
+    try { await face.load(); } catch { return -1; }
+    document.fonts.add(face);
+    this.names.push(name);
+    return this.names.length - 1;
+  }
+  raster(font: number, px: number, bold: boolean, italic: boolean, first: number, last: number, antialias: boolean) {
+    const css = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${px}px "${this.names[font]}"`;
+    const m = new OffscreenCanvas(1, 1).getContext('2d')!;
+    m.font = css;
+    const fm = m.measureText('Mg'), ascent = Math.ceil(fm.fontBoundingBoxAscent), lineHeight = Math.max(1, ascent + Math.ceil(fm.fontBoundingBoxDescent));
+    // Each cell is padded so overhangs aren't clipped; the glyph offset undoes the padding.
+    const PAD = 2, ROW = 1024, glyphs: number[][] = [];
+    let x = 0, y = 0;
+    for (let ch = first; ch <= last; ch++) {
+      const adv = m.measureText(String.fromCodePoint(ch)).width, w = Math.ceil(adv) + PAD * 2;
+      if (x + w > ROW) { x = 0; y += lineHeight; }
+      glyphs.push([ch, x, y, w, lineHeight, Math.round(adv), -PAD]);
+      x += w;
+    }
+    const c = new OffscreenCanvas(ROW, y + lineHeight).getContext('2d')!;
+    c.font = css; c.fillStyle = '#fff'; c.textBaseline = 'alphabetic';
+    for (const [ch, gx, gy] of glyphs) c.fillText(String.fromCodePoint(ch), gx + PAD, gy + ascent);
+    const img = c.getImageData(0, 0, c.canvas.width, c.canvas.height), d = img.data;
+    for (let i = 3; i < d.length; i += 4) {
+      if (!antialias) d[i] = d[i] >= 128 ? 255 : 0;
+      d[i - 3] = d[i - 2] = d[i - 1] = 255; // white glyphs, tinted by the draw colour
+    }
+    return { atlas: { w: img.width, h: img.height, data: d }, glyphs, lineHeight };
+  }
+}
+
 /** Keys whose browser default (scrolling, focus moves) would get in the way of a game. */
 const SWALLOW = new Set([8, 9, 13, 32, 33, 34, 35, 36, 37, 38, 39, 40, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]);
 
@@ -385,5 +445,8 @@ export function createWebPlatform(canvas: HTMLCanvasElement): Platform & { audio
       if (!r.ok) throw new Error(`failed to load ${url} (${r.status})`);
       return new Uint8Array(await r.arrayBuffer());
     },
+    decodeImage,
+    fonts: new CanvasFonts(),
+    ask: (text, def) => prompt(text, def),
   };
 }

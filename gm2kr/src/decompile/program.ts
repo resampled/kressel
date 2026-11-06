@@ -18,6 +18,7 @@ export function assetNames(m: GmModel): AssetNames {
   return {
     objects: m.objects.map((o) => o.name), sprites: m.sprites.map((s) => s.name), sounds: m.sounds.map((s) => s.name),
     rooms: m.rooms.map((r) => r.name), fonts: m.fonts.map((f) => f.name),
+    ...(m.fmt.gms23 ? {} : { scripts: new Set(m.scripts.map((s) => s.name)) }),
   };
 }
 

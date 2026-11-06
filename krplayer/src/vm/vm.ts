@@ -372,7 +372,8 @@ function binary(op: number, a: Value, b: Value): Value {
     case BinOp.add: return typeof a === 'number' && typeof b === 'number' ? a + b : add(a, b);
     case BinOp.sub: return real(a) - real(b);
     case BinOp.mul: return real(a) * real(b);
-    case BinOp.div: { const y = real(b); if (y === 0) throw new GmlError('division by zero'); return real(a) / y; }
+    // Real division by zero gives inf / -inf / NaN, no error (gm_gotchas.md); `div` and `%` still fail.
+    case BinOp.div: return real(a) / real(b);
     case BinOp.idiv: return idiv(a, b);
     case BinOp.mod: return mod(a, b);
     case BinOp.eq: return equals(a, b);

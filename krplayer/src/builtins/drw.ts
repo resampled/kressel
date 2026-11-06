@@ -1,13 +1,15 @@
 // Drawing (drw_*).
 
 import { define, family, n, b, str, opt } from './registry.ts';
-import { GmlError, real } from '../value.ts';
+import { GmlError, real, type GArray, type Value } from '../value.ts';
 import { Instance } from '../runtime/instance.ts';
 import type { Game } from '../runtime/game.ts';
 import {
   drawSprite, drawSpriteGeneral, drawSpritePart, drawSpriteTiled, drawText, ellipse, line, mix, rect, roundrect, spriteOrThrow, textSize, triangle,
 } from '../runtime/draw.ts';
 import { gstr } from './opr.ts';
+
+const D2R = Math.PI / 180;
 
 const spr = (g: Game, v: unknown) => spriteOrThrow(g, real(v as number));
 const a = (g: Game) => g.alpha;
@@ -115,6 +117,8 @@ define('drw_roundrect_colour_ext', (g, s, t) => {
   roundrect(g, n(s, t, 0), n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4) / 2, n(s, t, 5) / 2, n(s, t, 6), n(s, t, 7), g.alpha, b(s, t, 8));
   return undefined;
 });
+/** GM rounds the precision to a multiple of 4 in 4..64. */
+define('drw_circle_precision', (g, s, t) => { g.circlePrecision = Math.max(4, Math.min(64, Math.round(n(s, t, 0) / 4) * 4)); return undefined; });
 define('drw_circle', (g, s, t) => { const r = n(s, t, 2); ellipse(g, n(s, t, 0), n(s, t, 1), r, r, g.colour, g.colour, g.alpha, b(s, t, 3)); return undefined; });
 define('drw_circle_colour', (g, s, t) => { const r = n(s, t, 2); ellipse(g, n(s, t, 0), n(s, t, 1), r, r, n(s, t, 3), n(s, t, 4), g.alpha, b(s, t, 5)); return undefined; });
 const ell = (g: Game, x1: number, y1: number, x2: number, y2: number, c1: number, c2: number, o: boolean) =>
@@ -209,6 +213,41 @@ family('drw_vertex', 'vertex_', {
   format_begin: () => undefined, format_add_position: () => undefined, format_add_position_3d: () => undefined, format_add_colour: () => undefined,
   format_add_color: () => undefined, format_add_normal: () => undefined, format_add_textcoord: () => undefined, format_end: () => ++vertexIds,
   create_buffer: () => ++vertexIds,
+});
+
+// Matrices are 16-element arrays (row-vector convention, translation in 12..14). krplayer draws in 2D only,
+// so matrix_set accepts the identity and fails loudly otherwise instead of drawing untransformed.
+const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+const matMul = (a: number[], b: number[]): GArray => Array.from({ length: 16 }, (_, k) => {
+  const r = k >> 2, c = k & 3;
+  return a[r * 4] * b[c] + a[r * 4 + 1] * b[4 + c] + a[r * 4 + 2] * b[8 + c] + a[r * 4 + 3] * b[12 + c];
+});
+const matrix = (v: Value, fn: string): number[] => {
+  if (!Array.isArray(v) || v.length < 16) throw new GmlError(`${fn}: not a matrix`);
+  return v.slice(0, 16).map((x) => real(x));
+};
+family('drw_matrix', 'matrix_', {
+  build_identity: () => [...IDENTITY],
+  /** Scale, then rotate about x, y, z (degrees), then translate. */
+  build: (_g, s, t) => {
+    const [x, y, z, ax, ay, az, sx, sy, sz] = Array.from({ length: 9 }, (_, k) => n(s, t, k));
+    const c = (d: number) => Math.cos(d * D2R), si = (d: number) => Math.sin(d * D2R);
+    const rx = [1, 0, 0, 0, 0, c(ax), si(ax), 0, 0, -si(ax), c(ax), 0, 0, 0, 0, 1];
+    const ry = [c(ay), 0, -si(ay), 0, 0, 1, 0, 0, si(ay), 0, c(ay), 0, 0, 0, 0, 1];
+    const rz = [c(az), si(az), 0, 0, -si(az), c(az), 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    const m = matMul(matMul(matMul([sx, 0, 0, 0, 0, sy, 0, 0, 0, 0, sz, 0, 0, 0, 0, 1], rx) as number[], ry) as number[], rz);
+    m[12] = x; m[13] = y; m[14] = z;
+    return m;
+  },
+  multiply: (_g, s, t) => matMul(matrix(s[t], 'matrix_multiply'), matrix(s[t - 1], 'matrix_multiply')),
+  get: (g, s, t) => [...(g.matrices[n(s, t, 0)] ?? IDENTITY)] as GArray,
+  set: (g, s, t) => {
+    const which = n(s, t, 0), m = matrix(s[t - 1], 'matrix_set');
+    if (!g.matrices[which]) throw new GmlError(`matrix_set: unknown matrix type ${which}`);
+    if (m.some((x, k) => x !== IDENTITY[k])) throw new GmlError('matrix_set: krplayer draws in 2D and does not support transform matrices yet');
+    g.matrices[which] = m;
+    return undefined;
+  },
 });
 
 // ---------------------------------------------------------------- surfaces

@@ -13,7 +13,7 @@ function spawnWith(g: Game, obj: Value, x: number, y: number, depth: number, lay
   const inst = g.create(o, x, y, depth);
   inst.layer = layer;
   for (const [k, v] of vars.vars) inst.vars.set(k, v);
-  g.event(inst, EV.create, null);
+  g.runCreate(inst);
   return inst.id;
 }
 
@@ -91,6 +91,15 @@ export const self = (g: Game): Instance => {
 };
 
 define('mov_motion_set', (g, s, t) => { const i = self(g); i.setDirection(n(s, t, 0)); i.setSpeed(n(s, t, 1)); return undefined; });
+/** GMS1 D&D move: 9 flags in numpad order (1 = down-left ... 5 = stop ... 9 = up-right); one set flag is picked at random. */
+const ACTION_DIRS = [225, 270, 315, 180, -1, 0, 135, 90, 45];
+define('mov_action_move', (g, s, t) => {
+  const flags = String(s[t]), on = ACTION_DIRS.filter((_, k) => flags[k] === '1');
+  if (!on.length) return undefined;
+  const d = on[Math.floor(g.random() * on.length)], i = self(g);
+  if (d < 0) i.setSpeed(0); else { i.setDirection(d); i.setSpeed(n(s, t, 1)); }
+  return undefined;
+});
 define('mov_motion_add', (g, s, t) => {
   const i = self(g), d = n(s, t, 0) * D2R, v = n(s, t, 1);
   i.setHV(i.hspeed + v * Math.cos(d), i.vspeed - v * Math.sin(d));
@@ -117,3 +126,9 @@ define('mov_wrap', (g, s, t) => {
 // The project has no paths (the PATH chunk is empty), so a path can never be started.
 define('mov_path_start', (_g, s, t) => { throw new GmlError(`path ${String(s[t])} does not exist`); });
 define('mov_path_end', (g) => { self(g).path = -1; return undefined; });
+/** instance_id_get(n): the nth active instance, in instance order (GM's instance_id[n]). */
+define('ins_id_get', (g, s, t) => {
+  let k = Math.trunc(n(s, t, 0));
+  if (k >= 0) for (const i of g.instances) if (i.alive && i.active && k-- === 0) return i.id;
+  return -4;
+});

@@ -2,9 +2,9 @@
 // a test wants pixels, e.g. a screenshot of frame N. Slow but exact enough to see what the game draws.
 // Textures come from the host as decoded RGBA (the platform has no image decoder of its own).
 
-import { WINDOW, type Renderer, type TextureId } from './types.ts';
+import { WINDOW, type Pixels, type Renderer, type TextureId } from './types.ts';
 
-export interface Pixels { w: number; h: number; data: Uint8ClampedArray }
+export type { Pixels };
 const D2R = Math.PI / 180;
 
 export class SoftRenderer implements Renderer {
@@ -34,6 +34,8 @@ export class SoftRenderer implements Renderer {
   endFrame(): void {}
   createSurface(w: number, h: number): TextureId { const id = this.next++; this.tex.set(id, blank(w, h)); return id; }
   freeSurface(t: TextureId): void { this.tex.delete(t); }
+  readPixels(t: TextureId): Pixels { const p = this.tex.get(t); return p ? { w: p.w, h: p.h, data: new Uint8ClampedArray(p.data) } : { w: 0, h: 0, data: new Uint8ClampedArray(0) }; }
+  createTexture(px: Pixels): TextureId { const id = this.next++; this.tex.set(id, { w: px.w, h: px.h, data: new Uint8ClampedArray(px.data) }); return id; }
   copyTexture(t: TextureId, x: number, y: number, w: number, h: number): TextureId {
     const s = this.tex.get(t), id = this.createSurface(w, h), d = this.tex.get(id)!;
     if (s) for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
@@ -105,10 +107,16 @@ export class SoftRenderer implements Renderer {
     const T = this.target, minX = Math.max(0, Math.floor(Math.min(X1, X2, X3))), maxX = Math.min(T.w, Math.ceil(Math.max(X1, X2, X3)));
     const minY = Math.max(0, Math.floor(Math.min(Y1, Y2, Y3))), maxY = Math.min(T.h, Math.ceil(Math.max(Y1, Y2, Y3)));
     const ch = (c: number, s: number) => ((c >> s) & 255) / 255;
+    // Top-left fill rule (as GPUs do): a pixel centre exactly on an edge belongs to one triangle only, so the
+    // two halves of a translucent rectangle don't blend their shared diagonal twice.
+    const sg = Math.sign(det), owns = (ax: number, ay: number, bx: number, by: number) => { const dy = (by - ay) * sg; return dy < 0 || (dy === 0 && (bx - ax) * sg > 0); };
+    const t1 = owns(X2, Y2, X3, Y3), t2 = owns(X3, Y3, X1, Y1), t3 = owns(X1, Y1, X2, Y2);
+    const inside = (e: number, top: boolean) => e > 0 || (e === 0 && top);
     for (let py = minY; py < maxY; py++) for (let px = minX; px < maxX; px++) {
       const X = px + 0.5, Y = py + 0.5;
-      const l1 = ((Y2 - Y3) * (X - X3) + (X3 - X2) * (Y - Y3)) / det, l2 = ((Y3 - Y1) * (X - X3) + (X1 - X3) * (Y - Y3)) / det, l3 = 1 - l1 - l2;
-      if (l1 < 0 || l2 < 0 || l3 < 0) continue;
+      const e1 = ((Y2 - Y3) * (X - X3) + (X3 - X2) * (Y - Y3)) * sg, e2 = ((Y3 - Y1) * (X - X3) + (X1 - X3) * (Y - Y3)) * sg, e3 = Math.abs(det) - e1 - e2;
+      if (!inside(e1, t1) || !inside(e2, t2) || !inside(e3, t3)) continue;
+      const l1 = e1 / Math.abs(det), l2 = e2 / Math.abs(det), l3 = 1 - l1 - l2;
       const f = this.fog;
       this.blend(px, py, f ? ch(this.fogCol, 0) : l1 * ch(c1, 0) + l2 * ch(c2, 0) + l3 * ch(c3, 0),
         f ? ch(this.fogCol, 8) : l1 * ch(c1, 8) + l2 * ch(c2, 8) + l3 * ch(c3, 8), f ? ch(this.fogCol, 16) : l1 * ch(c1, 16) + l2 * ch(c2, 16) + l3 * ch(c3, 16), alpha);

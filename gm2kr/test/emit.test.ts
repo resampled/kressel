@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { decodeQoi, encodePng } from '../src/emit/textures.ts';
+import { cropItem, decodePng, decodeQoi, encodePng } from '../src/emit/textures.ts';
 import { zip } from '../src/emit/zip.ts';
 import { crc32 } from '../src/emit/crc32.ts';
 import { readZip } from '../../krplayer/src/loader/zip.ts';
@@ -24,6 +24,21 @@ test('PNG encoder writes a valid header', async () => {
   assert.deepEqual([...png.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const v = new DataView(png.buffer, png.byteOffset);
   assert.deepEqual([v.getUint32(16), v.getUint32(20)], [2, 1]);
+});
+
+test('PNG decoder reads what the encoder writes (older GM texture pages are PNG)', async () => {
+  const data = new Uint8Array([255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 0, 9, 8, 7, 6, 1, 2, 3, 4, 50, 60, 70, 80]);
+  const img = await decodePng(await encodePng({ w: 3, h: 2, data }), 'test');
+  assert.deepEqual([img.w, img.h, [...img.data]], [3, 2, [...data]]);
+});
+
+test('stretched / overhanging texture items are drawn into the frame like GM, clipped to it', () => {
+  // A 1x1 red page pixel stretched to a 3x2 frame, and an item whose target overhangs a 2x2 frame by a pixel.
+  const page = { w: 2, h: 1, data: new Uint8Array([255, 0, 0, 255, 0, 0, 255, 255]) };
+  const fill = cropItem([page], { sx: 0, sy: 0, sw: 1, sh: 1, tx: 0, ty: 0, tw: 3, th: 2, bw: 3, bh: 2, page: 0 }, 't');
+  assert.deepEqual([...fill.data], Array(6).fill([255, 0, 0, 255]).flat());
+  const over = cropItem([page], { sx: 0, sy: 0, sw: 2, sh: 1, tx: 1, ty: 0, tw: 2, th: 1, bw: 2, bh: 2, page: 0 }, 't');
+  assert.deepEqual([...over.data.subarray(0, 8)], [0, 0, 0, 0, 255, 0, 0, 255]);
 });
 
 test('zip round-trips through the krplayer reader', async () => {

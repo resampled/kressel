@@ -2,6 +2,7 @@
 // linked "occurrence" chains stored in VARI/FUNC; resolve them into address -> name maps here.
 
 import { FormatError, Reader } from '../io/reader.ts';
+import type { GmFormat } from '../format.ts';
 
 export interface GmCode {
   name: string;
@@ -45,7 +46,7 @@ function walk(buf: ArrayBuffer, first: number, count: number, what: string, visi
   }
 }
 
-export function readRefs(vari: Reader, func: Reader): GmRefs {
+export function readRefs(vari: Reader, func: Reader, fmt: GmFormat): GmRefs {
   const vars = new Map<number, GmVar>(), funcs = new Map<number, string>();
   vari.skip(12); // global/instance counts, max locals
   while (vari.end - vari.pos >= 20) {
@@ -56,8 +57,9 @@ export function readRefs(vari: Reader, func: Reader): GmRefs {
   const n = func.count(1 << 16);
   for (let i = 0; i < n; i++) {
     const name = func.strPtr(), occ = func.u32(), first = func.i32();
-    // FUNC's first address points at the reference word, one word after the instruction.
-    if (occ) walk(func.buf, first - 4, occ, `function ${name}`, (at) => funcs.set(at, name));
+    // GMS2.3+ FUNC's first address points at the reference word, one word after the instruction;
+    // older builds point at the instruction itself.
+    if (occ) walk(func.buf, fmt.gms23 ? first - 4 : first, occ, `function ${name}`, (at) => funcs.set(at, name));
   }
   return { vars, funcs };
 }

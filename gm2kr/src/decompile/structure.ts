@@ -17,7 +17,15 @@ import { lookupBuiltin } from './builtins.ts';
 export type Kr = unknown;
 
 /** Asset names by index, for turning ids/refs into ["_as", name]. */
-export interface AssetNames { objects: string[]; sprites: string[]; sounds: string[]; rooms: string[]; fonts: string[] }
+export interface AssetNames {
+  objects: string[]; sprites: string[]; sounds: string[]; rooms: string[]; fonts: string[];
+  /**
+   * Set for pre-2.3 (bytecode 16) code: script names, called by name (`call scr_x`) instead of through a
+   * gml_Script_ function. Pre-2.3 code also encodes `a[i, j]` as index `i * 32000 + j`.
+   */
+  scripts?: Set<string>;
+}
+type AssetKind = Exclude<keyof AssetNames, 'scripts'>;
 
 export class DecompileError extends Error {
   /** For an unstructured branch: where it jumps (lets loops retry with a for/continue target). */
@@ -42,7 +50,7 @@ const BINOP: Record<number, string> = {
 const CMP = ['', 'opr_lt', 'opr_lte', 'opr_eq', 'opr_neq', 'opr_gte', 'opr_gt'];
 const CHANGE: Record<string, string> = { opr_add: '+', opr_sub: '-', opr_mul: '*', opr_div: '/', opr_mod: '%', opr_band: '&', opr_bor: '|', opr_bxor: '^', opr_shl: '<<', opr_shr: '>>' };
 /** pushref asset types (value >>> 24). Font = 6 observed in GM 2024 (see gm_gotchas.md). */
-const REF_KIND: Record<number, keyof AssetNames> = { 0: 'objects', 1: 'sprites', 2: 'sounds', 3: 'rooms', 6: 'fonts' };
+const REF_KIND: Record<number, AssetKind> = { 0: 'objects', 1: 'sprites', 2: 'sounds', 3: 'rooms', 6: 'fonts' };
 const PSEUDO: Record<string, Kr> = { '@@Other@@': ['_kw', 'other'], '@@This@@': ['_kw', 'self'], '@@Global@@': ['_kw', 'global'], '@@NullObject@@': null };
 const SCRIPT = 'gml_Script_';
 
@@ -112,7 +120,7 @@ export class Decompiler {
     if (n >= 0) return ['_as', this.asset('objects', n, i)];
     this.fail(i, `unknown instance type ${n}`);
   }
-  private asset(kind: keyof AssetNames, n: number, i: number): string {
+  private asset(kind: AssetKind, n: number, i: number): string {
     const name = this.assets[kind][n];
     if (name === undefined) this.fail(i, `${kind} index ${n} out of range`);
     return name;
@@ -136,8 +144,10 @@ export class Decompiler {
       case VarKind.stacktop: return this.varRef(this.popInst(stack, i), ins);
       case VarKind.array: case VarKind.pushaf: case VarKind.popaf: {
         // [inst, index] -> var[index]; pushaf/popaf push the row for a following [j] access.
-        const index = this.pop(stack, i).e;
-        return ['_ai', this.varRef(this.popInst(stack, i), ins), index];
+        const index = this.pop(stack, i).e, arr = this.varRef(this.popInst(stack, i), ins);
+        // Pre-2.3 2D access a[i, j]: i; chkindex; push 32000; mul; j; chkindex; add. Read as a[i][j], as GMS2.3 imports it.
+        if (this.assets.scripts && isOp(index, 'opr_add') && isOp(index[1], 'opr_mul') && index[1][2] === 32000) return ['_ai', ['_ai', arr, index[1][1]], index[2]];
+        return ['_ai', arr, index];
       }
     }
     this.fail(i, `variable access kind 0x${ins.vkind.toString(16)} not supported yet`);
@@ -327,6 +337,7 @@ export class Decompiler {
       const s: Item[] = [];
       const body = this.block(i + 1, t, s, ctx);
       if (s.length) this.fail(i, 'conditional leaves values on the stack');
+      this.orphans(stack, out);
       out.push(['ctr_if', test, body]);
       return t;
     }
@@ -338,9 +349,18 @@ export class Decompiler {
       if (thenB.length || elseB.length || thenS.length !== 1 || elseS.length !== 1) this.fail(i, 'unrecognised conditional expression');
       stack.push({ e: ['opr_cond', test, thenS[0].e, elseS[0].e], size: 16 });
     } else {
+      this.orphans(stack, out);
       out.push(['ctr_if', test, thenB, elseB]);
     }
     return e;
+  }
+
+  /**
+   * Values still on the stack when an if statement starts can only be calls whose result was never
+   * popped (the compiler that built ch1_ribbit_mod sometimes omits the popz): they're statements.
+   */
+  private orphans(stack: Item[], out: Kr[]): void {
+    if (stack.every((v) => !v.dup && isOp(v.e) && !v.e[0].startsWith('_'))) for (const v of stack.splice(0)) out.push(v.e);
   }
 
   /**
@@ -353,14 +373,17 @@ export class Decompiler {
     const retry = (attempt: (cont: number) => Kr): Kr => {
       let cont = this.stepStart(top, back);
       const tried = new Set<number>();
+      let first: DecompileError | undefined;
       for (;;) {
         try { return attempt(cont); } catch (e) {
           if (!(e instanceof DecompileError)) throw e;
+          // Report the first (best-guess) attempt's error: later fallbacks fail for less useful reasons.
+          first ??= e;
           tried.add(cont);
           const t = e.target;
           if (t > topAddr && t <= b.at && !tried.has(t)) cont = t;
           else if (!tried.has(-1)) cont = -1;
-          else throw e;
+          else throw first;
         }
       }
     };
@@ -507,6 +530,7 @@ export class Decompiler {
       // Copy-on-write bookkeeping: krplayer derives array owners from the variable written (see gm_gotchas.md).
       case Ext.setowner: this.pop(stack, i); return;
       case Ext.savearef: case Ext.restorearef: return;
+      case Ext.chkindex: return; // pre-2.3 array index check: leaves the index on the stack
       case Ext.pushaf: { // row index -> element
         const index = this.pop(stack, i).e, row = this.pop(stack, i).e;
         stack.push({ e: ['_ai', row, index], size: 16 });
@@ -523,7 +547,7 @@ export class Decompiler {
 
   private call(fn: string, args: Kr[], i: number): Kr {
     if (fn in PSEUDO) return PSEUDO[fn];
-    if (fn.startsWith(SCRIPT)) return ['fnc_g', fnName(fn), ...args];
+    if (fn.startsWith(SCRIPT) || this.assets.scripts?.has(fn)) return ['fnc_g', fnName(fn), ...args];
     switch (fn) {
       case '@@NewGMLArray@@': return ['_ar', ...args];
       case '@@NewGMLObject@@': {

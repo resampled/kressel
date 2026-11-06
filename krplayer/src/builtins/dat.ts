@@ -24,6 +24,11 @@ define('dat_list_size', (g, s, t) => list(g, s[t]).a.length);
 define('dat_list_index_of', (g, s, t) => list(g, s[t]).a.findIndex((x) => equals(x, s[t - 1])));
 define('dat_list_clear', (g, s, t) => { list(g, s[t]).a = []; return undefined; });
 define('dat_list_sort', (g, s, t) => { const asc = real(s[t - 1]) > 0.5; list(g, s[t]).a.sort((x, y) => (asc ? compare(x, y) : compare(y, x))); return undefined; });
+define('dat_list_shuffle', (g, s, t) => {
+  const a = list(g, s[t]).a;
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(g.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return undefined;
+});
 define('dat_list_write', (g, s, t) => listWrite(list(g, s[t])));
 define('dat_list_read', (g, s, t) => { listRead(list(g, s[t]), str(s, t, 1)); return undefined; });
 
@@ -165,6 +170,14 @@ family('dat_buffer', 'buffer_', {
   exists: (g, s, t) => g.data.buffers.has(s[t]),
   write: (g, s, t) => { buf(g, s[t]).write(n(s, t, 1), s[t - 2]); return 0; },
   read: (g, s, t) => buf(g, s[t]).read(n(s, t, 1)),
+  peek: (g, s, t) => buf(g, s[t]).peek(n(s, t, 1), n(s, t, 2)),
+  /** RGBA bytes, top row first. GMS2.3 takes (buffer, surface, offset); older (buffer, surface, mode, offset, modulo). */
+  get_surface: (g, s, t, argc) => {
+    const bf = buf(g, s[t]), px = g.p.renderer.readPixels(g.surface(s[t - 1]).tex), off = n(s, t, argc >= 5 ? 3 : 2);
+    if (off < 0 || off + px.data.length > bf.data.length) throw new GmlError('buffer_get_surface: buffer too small for the surface');
+    bf.data.set(px.data, off);
+    return undefined;
+  },
   seek: (g, s, t) => { const bf = buf(g, s[t]), base = n(s, t, 1); bf.pos = Math.max(0, (base === 0 ? 0 : base === 1 ? bf.pos : bf.data.length) + n(s, t, 2)); return undefined; },
   tell: (g, s, t) => buf(g, s[t]).pos,
   get_size: (g, s, t) => buf(g, s[t]).data.length,

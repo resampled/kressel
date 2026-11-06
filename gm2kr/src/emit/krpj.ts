@@ -39,6 +39,7 @@ function hat(e: GmEvent, assets: AssetNames, where: string): Hat {
       break;
     case 8: if (DRAW[s]) return [DRAW[s]]; break;
     case 12: return ['evt_cleanup'];
+    case 14: return ['evt_pre_create'];
   }
   throw new Error(`${where}: event type ${e.type} subtype ${s} not supported yet`);
 }
@@ -58,7 +59,7 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
     return d.body as Script;
   };
 
-  const pages: Image[] = m.textures.map((t, i) => decodePage(t.data, i));
+  const pages: Image[] = await Promise.all(m.textures.map((t, i) => decodePage(t.data, i)));
 
   const sprites: Record<string, Sprite> = {};
   for (const s of m.sprites) {
@@ -121,6 +122,12 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
   const sounds: Record<string, Sound> = {};
   for (const s of m.sounds) {
     let data: Uint8Array;
+    if (s.audio < 0 && s.flags & 1) {
+      // Embedded, but with no audio data (e.g. a dangling entry left by a mod tool): GM plays nothing.
+      log(`sound ${s.name}: embedded with no audio data`);
+      sounds[s.name] = { name: s.name, src: '', volume: s.volume, stream: false, ...(s.group ? { group: s.group } : {}) };
+      continue;
+    }
     if (s.audio < 0) {
       const read = extra.get(s.file);
       if (!read) throw new Error(`sound ${s.name}: external file ${s.file} is missing from the game folder`);
@@ -148,11 +155,15 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
 
   // Included files. Audio is only kept when the game names it (games often ship unused music).
   const named = new Set(m.strings.map((s) => s.toLowerCase()));
+  // Names built at runtime ("keygen" + string(n) + ".ogg") are kept too: a literal of 4+ name characters that
+  // starts the file name, when its extension is also a literal.
+  const stems = [...named].filter((s) => s.length >= 4 && /^[a-z0-9_]+$/.test(s));
+  const builtName = (base: string) => named.has(base.slice(base.lastIndexOf('.'))) && stems.some((s) => base.startsWith(s));
   const included: Record<string, string> = {};
   for (const [path, read] of extra) {
     if (RUNNER_FILE.test(path) || m.sounds.some((s) => s.audio < 0 && s.file === path)) continue;
     const base = path.slice(path.lastIndexOf('/') + 1).toLowerCase();
-    if (AUDIO_EXT.test(path) && !named.has(base) && !named.has(path.toLowerCase())) continue;
+    if (AUDIO_EXT.test(path) && !named.has(base) && !named.has(path.toLowerCase()) && !builtName(base)) continue;
     files.set(`files/${path}`, await read());
     included[path] = `./files/${path}`;
   }
@@ -163,9 +174,14 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
     if (!d.child) continue;
     functions[fnName(entry)] = { args: [], body: d.body as Script, ...(d.args ? { argc: d.args } : {}), ...(ctors.has(entry) ? { ctor: true } : {}) };
   }
+  // Pre-2.3 scripts are top-level entries (gml_Script_<name>), called by the script's name.
+  if (!m.fmt.gms23) for (const s of m.scripts) {
+    const c = m.code[s.code], d = c && code.get(c.name);
+    if (d && !d.child) functions[s.name] = { args: [], body: d.body as Script };
+  }
   const scripts = m.scripts.map((s) => {
-    const c = m.code[s.code];
-    return c && code.get(c.name)?.child ? fnName(c.name) : null;
+    const c = m.code[s.code], d = c && code.get(c.name);
+    return d?.child ? fnName(c.name) : d && !m.fmt.gms23 ? s.name : null;
   });
 
   const objects: Record<string, KrObject> = {};

@@ -83,6 +83,11 @@ define('rom_element_type', (g, s, t) => {
   return g.layers.element(id)?.kind ?? -1;
 });
 define('rom_layer_force_depth', () => undefined);
+define('rom_layer_instance', (_g, s, t) => {
+  const id = real(s[t]);
+  for (const e of instElements.values()) if (e.id === id) return e.inst;
+  return -4;
+});
 
 /** A layer element of a given kind by id. */
 function el(g: Game, v: Value, kind: number, what: string): Element {

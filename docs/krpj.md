@@ -192,7 +192,7 @@ Fields beyond the example above. All are optional unless noted; the types live i
 * `mask_bits`: precise masks only. A file of one mask, or one per frame (picked by `floor(image_index)`), each `ceil(width / 8)` bytes per row for `height` rows; the high bit of each byte is the leftmost pixel. Pixels outside `bbox` never collide.
 * Frames are full, untrimmed images; `origin` is relative to their top-left.
 
-**Sounds**: `src`, `volume`, `stream` (decoded on first use rather than at load), `pitch` (default 1), `group` (default 0).
+**Sounds**: `src` (`""` for a sound with no audio data, which plays nothing), `volume`, `stream` (decoded on first use rather than at load), `pitch` (default 1), `group` (default 0).
 
 **Fonts**: `size`, `bold`, `italic`, `antialias`, `line_height`, `ranges` and `glyphs` (`"code": [x, y, w, h, shift, offset]` in the atlas) as in the example; `kerning` is optional.
 

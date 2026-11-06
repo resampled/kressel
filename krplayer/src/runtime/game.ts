@@ -58,6 +58,10 @@ export class Game {
   other: Scope | null = null;
   // draw state
   colour = 0xffffff; alpha = 1; font = -1; halign = 0; valign = 0;
+  /** draw_set_circle_precision: segments per circle/ellipse. */
+  circlePrecision = 24;
+  /** matrix_get/matrix_set (view, projection, world); krplayer only accepts identity. */
+  readonly matrices: GArray[] = [0, 1, 2].map(() => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   /** Set by game_end; the host stops the loop. */
   ended = false;
   endMessage = '';
@@ -180,8 +184,14 @@ export class Game {
   spawn(obj: ObjectDef, x: number, y: number, depth: number, layer = -1): Instance {
     const inst = this.create(obj, x, y, depth);
     inst.layer = layer;
-    this.event(inst, EV.create, null);
+    this.runCreate(inst);
     return inst;
+  }
+
+  /** The create event, preceded by GMS2's pre-create event. */
+  runCreate(inst: Instance): void {
+    this.event(inst, EV.pre_create, null);
+    if (inst.alive) this.event(inst, EV.create, null);
   }
 
   destroy(inst: Instance, runDestroy: boolean): void {
@@ -510,7 +520,7 @@ export class Game {
     }
     for (const [inst, def] of created) {
       if (!inst.alive) continue;
-      this.event(inst, EV.create, null);
+      this.runCreate(inst);
       const cc = room.creation.get(def);
       if (cc && inst.alive) this.vm.run(cc, inst, null);
     }
@@ -927,7 +937,7 @@ function eventBlocks(ev: Events, key: number): Block[] | null {
 function gmEventType(key: number): number {
   if (key < 0) return -1;
   if (key < EK.alarm) {
-    const t: Record<number, number> = { [EV.create]: 0, [EV.destroy]: 1, [EV.cleanup]: 12, [EV.step_begin]: 3, [EV.step]: 3, [EV.step_end]: 3 };
+    const t: Record<number, number> = { [EV.create]: 0, [EV.pre_create]: 14, [EV.destroy]: 1, [EV.cleanup]: 12, [EV.step_begin]: 3, [EV.step]: 3, [EV.step_end]: 3 };
     return t[key] ?? (key >= EV.draw_begin && key <= EV.draw_post ? 8 : 7);
   }
   if (key < EK.user) return 2;

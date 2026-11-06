@@ -146,6 +146,9 @@ A visual script may have several hats for the same event. They run in the order 
 * `evt_create` - Executes when the instance is created.
 > * KRPJ: ["evt_create",[...]]
 
+* `evt_pre_create` (compat) - Executes just before `evt_create` (GMS2's pre-create event, where GMS1 imports put an `event_inherited()`).
+> * KRPJ: ["evt_pre_create",[...]]
+
 * `evt_destroy` - Executes when the instance is destroyed with `ins_destroy` (unless run_destroy_event is false).
 > * KRPJ: ["evt_destroy",[...]]
 
@@ -424,11 +427,13 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `ins_object_name` (hidden) | obj obj | `object_get_name` | |
 | `ins_is_ancestor` | obj child, obj parent | `object_is_ancestor` | |
 | `ins_object_sprite` (hidden) | obj obj | `object_get_sprite` | |
+| `ins_id_get` (compat) | num n | `instance_id_get` | The nth active instance in instance order, or `noone`. |
 
 ## Movement
 | Opcode | Arguments | GML | Notes |
 |---|---|---|---|
 | `mov_motion_set` | num dir, num speed | `motion_set` | |
+| `mov_action_move` (compat) | str dirs, num speed | `action_move` | GMS1 D&D move: dirs is 9 `0`/`1` flags in numpad order (`1` down-left ... `5` stop ... `9` up-right); one set flag is picked at random. |
 | `mov_motion_add` | num dir, num speed | `motion_add` | |
 | `mov_towards_point` | num x, num y, num speed | `move_towards_point` | Sets speed/direction; doesn't move instantly. |
 | `mov_snap` | num hsnap, num vsnap | `move_snap` | |
@@ -476,6 +481,7 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `sen_gamepad_axis` | num slot, num axis | `gamepad_axis_value` | |
 | `sen_gamepad_info` (hidden) | ref `description`/`guid`, num slot | `gamepad_get_description` / `gamepad_get_guid` | |
 | `sen_gamepad_count` (hidden) | - | `gamepad_get_device_count` | |
+| `sen_gamepad_button_count` (hidden) | num slot | `gamepad_button_count` | 0 (no gamepads in the browser build yet). |
 | `sen_gamepad_test_mapping` (compat) | num slot, str mapping | `gamepad_test_mapping` | No-op in the browser. |
 | `sen_ask` (compat) | ref `string`/`integer`, str prompt, any default | `get_string` / `get_integer` | In-canvas modal; deprecated in GM. |
 | `sen_clipboard` (hidden) | - | `clipboard_get_text` | Stubbed. |
@@ -579,6 +585,14 @@ Arrays are 0-based (unlike Scratch lists), and block labels say so. Array functi
 | `lks_sprite_from_surface` (hidden) | as GML | `sprite_create_from_surface` | |
 | `lks_sprite_delete` (hidden) | spr s | `sprite_delete` | |
 | `lks_font_from_sprite` (hidden) | spr s, str map, bool prop, num sep | `font_add_sprite_ext` | |
+| `lks_sprite_add` (hidden) | str file, num imgnum, bool removeback, bool smooth, num xorig, num yorig | `sprite_add` | An included image file as a strip of imgnum frames (frame width = image width / imgnum). Included images are decoded at load, so this is synchronous like GM. Returns -1 (and logs) if the file isn't included; removeback/smooth aren't supported yet. |
+| `lks_sprite_replace` (hidden) | spr s, str file, num imgnum, bool removeback, bool smooth, num xorig, num yorig | `sprite_replace` | Same, in place. |
+| `lks_tileset_replace` (compat) | num ts, str file, bool removeback, bool smooth | `background_replace` | GMS1 backgrounds are tilesets in GMS2 builds: replaces the tileset's image, keeping its tile layout. |
+| `lks_sprite_assign` (hidden) | spr dest, spr src | `sprite_assign` | |
+| `lks_sprite_set_offset` (hidden) | spr s, num x, num y | `sprite_set_offset` | |
+| `lks_sprite_collision_mask` (hidden) | spr s, bool sepmasks, num bboxmode, num left, num top, num right, num bottom, num kind, num tolerance | `sprite_collision_mask` | bboxmode 0 automatic, 1 full image, 2 manual; kind 0 precise, 1 rectangle, 2 ellipse, 3 diamond. Precise masks need the pixels, which krplayer only has for `sprite_add` sprites. |
+| `lks_sprite_texture` (hidden) | spr s, num frame | `sprite_get_texture` | A texture handle, only useful to `vertex_submit`. |
+| `lks_font_add` (hidden) | str file, num size, bool bold, bool italic, num first, num last | `font_add` | An included TTF/OTF, rasterized (antialiased) when called. Sizes are points at 96 DPI. Returns -1 (and logs) if the file isn't included. |
 
 ## Sound
 Sound inputs take an `_as` sound or a voice id reporter (the value `snd_play` returns).
@@ -647,6 +661,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_triangle` | num x1, num y1, num x2, num y2, num x3, num y3, bool outline | `draw_triangle` | |
 | `drw_point` | num x, num y | `draw_point` | |
 | `drw_circle_colour` (hidden) | num x, num y, num r, col c1, col c2, bool outline | `draw_circle_colour` | c1 at the centre, c2 at the edge. |
+| `drw_circle_precision` (hidden) | num precision | `draw_set_circle_precision` | Segments per circle/ellipse, rounded to a multiple of 4 in 4-64 (default 24). |
 | `drw_ellipse_colour` (hidden) | num x1, num y1, num x2, num y2, col c1, col c2, bool outline | `draw_ellipse_colour` | |
 | `drw_line_colour` (hidden) | num x1, num y1, num x2, num y2, col c1, col c2 | `draw_line_colour` | |
 | `drw_line_width_colour` (hidden) | num x1, num y1, num x2, num y2, num w, col c1, col c2 | `draw_line_width_colour` | |
@@ -683,6 +698,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_texture` (compat, family) | ref fn, ... | `texture_*` | Texture paging hints (`prefetch`, `is_ready`...); ref drops `texture_`. |
 | `drw_texturegroup` (compat, family) | ref fn, ... | `texturegroup_*` | ref drops `texturegroup_`. |
 | `drw_vertex` (hidden, family) | ref fn, ... | `vertex_*` | Vertex formats and buffers; ref drops `vertex_`. |
+| `drw_matrix` (hidden, family) | ref fn, ... | `matrix_*` (`build`, `build_identity`, `multiply`, `get`, `set`) | 16-element arrays. krplayer draws in 2D, so `matrix_set` fails unless the matrix is the identity. |
 
 ## Rooms
 | Opcode | Arguments | GML | Notes |
@@ -705,6 +721,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `rom_layer_all` (hidden) | - | `layer_get_all` | Array of layer ids. |
 | `rom_layer_elements` (hidden) | layer l | `layer_get_all_elements` | Array of element ids. |
 | `rom_element_type` (hidden) | num element | `layer_get_element_type` | |
+| `rom_layer_instance` (hidden) | num element | `layer_instance_get_instance` | The instance of an instance element, or `noone`. |
 | `rom_layer_force_depth` (compat) | bool force, num depth | `layer_force_draw_depth` | |
 | `rom_bg` (hidden, family) | ref fn, ... | `layer_background_*` | ref drops `layer_background_` (`["rom_bg","blend",bg,255]`). |
 | `rom_tile` (hidden, family) | ref fn, ... | `layer_tile_*` | GMS1-style tiles in asset layers; ref drops `layer_tile_`. |
@@ -742,6 +759,7 @@ Camera inputs default to `["_ai",["_lv","view_camera"],0]`.
 | `cam_window_mouse` (hidden) | ref `x`/`y` | `window_mouse_get_x` / `window_mouse_get_y` | |
 | `cam_window_center` (hidden) | - | `window_center` | No-op: the window is the canvas. |
 | `cam_window_borderless` (compat) | bool on | `window_enable_borderless_fullscreen` | No-op. |
+| `cam_screen_save` (compat) | str file | `screen_save` | Not supported: fails when called. |
 
 ## Control (functions)
 Alarms, timing and dynamic calls. Timelines have no opcode: `timeline_index`/`timeline_running`/`timeline_position` are built-in variables set with `var_set` (the 'start timeline' block is sugar for that).
@@ -775,6 +793,7 @@ Arrays and structs (Variables) are better for visual scripts; `ds_*` mainly exis
 | `dat_list_index_of` (hidden) | ds l, any value | `ds_list_find_index` | |
 | `dat_list_clear` (hidden) | ds l | `ds_list_clear` | |
 | `dat_list_sort` (hidden) | ds l, bool ascending | `ds_list_sort` | |
+| `dat_list_shuffle` (hidden) | ds l | `ds_list_shuffle` | |
 | `dat_map_create` (hidden) | - | `ds_map_create` | |
 | `dat_map_destroy` (hidden) | ds m | `ds_map_destroy` | |
 | `dat_map_exists` (hidden) | ds m, any key | `ds_map_exists` | |

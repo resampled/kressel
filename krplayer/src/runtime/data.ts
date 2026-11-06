@@ -269,8 +269,14 @@ export class Buffer {
     }
     this.pos += size;
   }
-  read(type: number): Value {
-    this.alignPos();
+  /** buffer_peek: reads at offset without moving or aligning. */
+  peek(offset: number, type: number): Value {
+    const saved = this.pos;
+    this.pos = offset;
+    try { return this.read(type, false); } finally { this.pos = saved; }
+  }
+  read(type: number, align = true): Value {
+    if (align) this.alignPos();
     if (type === BUF.string || type === BUF.text) {
       let e = this.pos;
       while (e < this.data.length && this.data[e] !== 0) e++;

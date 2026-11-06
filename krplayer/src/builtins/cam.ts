@@ -104,3 +104,4 @@ family('sys_switch', 'switch_', {});
 const EPOCH = Date.UTC(1899, 11, 30);
 function dateTime(d: Date): number { return (d.getTime() - d.getTimezoneOffset() * 60000 - EPOCH) / 86400000; }
 function fromDateTime(v: number): Date { const d = new Date(EPOCH + v * 86400000); return new Date(d.getTime() + d.getTimezoneOffset() * 60000); }
+define('cam_screen_save', () => { throw new GmlError('screen_save is not supported in krplayer (no file to write a PNG to)'); });

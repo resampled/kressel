@@ -78,7 +78,7 @@ export function line(g: Game, x1: number, y1: number, x2: number, y2: number, w:
   quadC(g, x1 + nx, y1 + ny, x2 + nx, y2 + ny, x2 - nx, y2 - ny, x1 - nx, y1 - ny, c1, c2, c2, c1, alpha);
 }
 
-export function ellipse(g: Game, cx: number, cy: number, rx: number, ry: number, c1: number, c2: number, alpha: number, outline: boolean, segments = 24): void {
+export function ellipse(g: Game, cx: number, cy: number, rx: number, ry: number, c1: number, c2: number, alpha: number, outline: boolean, segments = g.circlePrecision): void {
   const r = g.p.renderer;
   for (let i = 0; i < segments; i++) {
     const a0 = (i / segments) * Math.PI * 2, a1 = ((i + 1) / segments) * Math.PI * 2;

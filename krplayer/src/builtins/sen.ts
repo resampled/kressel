@@ -1,6 +1,6 @@
 // Sensing (sen_*): input and collisions.
 
-import { define, n } from './registry.ts';
+import { define, n, str } from './registry.ts';
 import { real, type Value } from '../value.ts';
 import { keyState, type Game } from '../runtime/game.ts';
 import { shape } from '../runtime/collision.ts';
@@ -22,8 +22,16 @@ define('sen_gamepad_connected', () => false);
 define('sen_gamepad_button', () => false);
 define('sen_gamepad_axis', () => 0);
 define('sen_gamepad_count', () => 0);
+define('sen_gamepad_button_count', () => 0);
 define('sen_gamepad_info', () => '');
 define('sen_gamepad_test_mapping', () => undefined);
+/** get_string / get_integer: the platform's blocking prompt; cancelled (or unparseable) gives the default. */
+define('sen_ask', (g, s, t) => {
+  const def = s[t - 2], ans = g.p.ask ? g.p.ask(str(s, t, 1), str(s, t, 2)) : null;
+  if (s[t] === 'string') return ans ?? str(s, t, 2);
+  const v = ans === null || ans.trim() === '' ? NaN : Number(ans);
+  return Number.isFinite(v) ? v : real(def);
+});
 define('sen_clipboard', () => '');
 define('sen_clipboard_set', () => undefined);
 

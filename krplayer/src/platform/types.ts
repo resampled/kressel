@@ -6,6 +6,9 @@ export type TextureId = number;
 export type SoundId = number;
 export type VoiceId = number;
 
+/** Decoded RGBA8 pixels, rows top to bottom. */
+export interface Pixels { w: number; h: number; data: Uint8ClampedArray }
+
 /** The window (canvas) render target. */
 export const WINDOW = -1;
 
@@ -21,6 +24,10 @@ export interface Renderer {
   /** A texture that can be drawn into (GM surface). */
   createSurface(w: number, h: number): TextureId;
   freeSurface(tex: TextureId): void;
+  /** A texture from RGBA pixels, synchronously (runtime sprites: sprite_add, font_add). */
+  createTexture(px: Pixels): TextureId;
+  /** A surface's pixels, top row first (buffer_get_surface). */
+  readPixels(tex: TextureId): Pixels;
   /** Copies a rectangle of a texture into a new texture (sprite_create_from_surface). */
   copyTexture(tex: TextureId, x: number, y: number, w: number, h: number): TextureId;
   /** Where drawing goes: a surface, or WINDOW. Resets the view to the target's own pixels. */
@@ -98,6 +105,17 @@ export interface Storage {
   keys(prefix: string): string[];
 }
 
+/** Runtime fonts from font files (font_add). */
+export interface FontRasterizer {
+  /** Registers a TTF/OTF file; returns a handle, or -1 if it can't be parsed. */
+  load(bytes: Uint8Array): Promise<number>;
+  /**
+   * Renders chars first..last at px pixels into one atlas. Glyphs are [char, x, y, w, h, shift, offset]
+   * in GM's font glyph layout; lineHeight is the cell height.
+   */
+  raster(font: number, px: number, bold: boolean, italic: boolean, first: number, last: number, antialias: boolean): { atlas: Pixels; glyphs: number[][]; lineHeight: number };
+}
+
 export interface Platform {
   renderer: Renderer;
   audio: Audio;
@@ -114,4 +132,10 @@ export interface Platform {
   log(msg: string): void;
   /** Reads a project file (included files) by URL. */
   fetchBytes(url: string): Promise<Uint8Array>;
+  /** Decodes an image file (PNG/JPEG/GIF) to RGBA. Absent: sprite_add and friends fail. */
+  decodeImage?(bytes: Uint8Array): Promise<Pixels>;
+  /** Absent: font_add fails. */
+  fonts?: FontRasterizer;
+  /** A blocking text prompt (get_string); null if cancelled. Absent: the default is returned. */
+  ask?(prompt: string, def: string): string | null;
 }

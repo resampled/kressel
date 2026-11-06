@@ -45,6 +45,23 @@ Quirks found while reimplementing the runtime and the data.win format. Each has 
 * **Sprite frames can have a null texture** when the build strips them (console button prompts in the PC build). gm2kr keeps a blank frame of the sprite's size.
 * **A room's views only apply when room flag bit 0 is set**; views keep their own "enabled" flag either way.
 
+## Bytecode / data.win (observed, ch1_ribbit_mod: a mod of the 2018 Deltarune Ch1, bytecode 16, GMS2 pre-2.3)
+GEN8 says 2.0.0.0 and there is no SEQN/FEAT/TGIN chunk. `fmt.gms23` is false.
+* **FUNC's first-occurrence address points at the `call` instruction itself**, not at the reference word after it (2.3+). Walking from `first - 4` lands mid-chain and leaves the file.
+  * Repro: FUNC `scr_litemcheck` first = 0x630ee0, and the word there is `d9020001` (`call.i argc=2`).
+* **Scripts are top-level code entries (`gml_Script_<name>`) called by the script's own name** (`call scr_litemcheck`), with no `gml_Script_` function. gm2kr makes each a function keyed by the SCPT name.
+* **2D arrays are one index, `i * 32000 + j`**, with `chkindex` (break -1, no stack effect) after each index part. gm2kr imports `a[i, j]` as `a[i][j]`, as GMS2.3's project importer does, but only for pre-2.3 data.
+  * Repro: `scr_itemshift_temp`: `pushi -1; pushi 12; chkindex; push.i 32000; mul.i.i; pushbltn argument1; conv; chkindex; add.i.i; pop.v.i [array]tempitem`.
+* **Texture pages are plain PNGs** (8-bit RGBA), not QOI.
+* **Every GMS1-imported object has a PreCreate event (type 14)** whose body is just `event_inherited()`. It runs right before Create (`evt_pre_create`).
+* **Sprites added by the mod tool have odd TPAG items.** Some stretch a 1x1 page rect to the whole frame (`spr_puzzlemaster_beanie`: sw 1, tw 11). Others overhang their bounding box by a pixel (`spr_youb_attack`: tx 11 + tw 63 > bw 63). GM draws the page rect stretched to (tx, ty, tw, th). gm2kr does the same with nearest sampling and clips to the frame.
+* **An embedded sound can have audio id -1** (`snd_pombark`: flags 0x65, group 1), meaning no data, not an external file. It's emitted with `src: ""` and plays nothing.
+* **A call's result is sometimes never popped.** In `obj_dustpile_susie` Draw, `call draw_sprite_ext` is followed directly by the next statement with no `popz`. This is most likely from the mod tool's compiler. When an `if` statement starts with plain calls still on the stack, gm2kr emits them as statements.
+* **Included file names can be built at runtime**, e.g. `snd_init("keygen" + string(round(random_range(1, 5))) + ".ogg")` in `obj_crackintro`. So gm2kr also keeps audio whose name starts with a 4+ character string literal when its extension is a literal too.
+* **`buffer_get_surface` bytes are RGBA**: `obj_vaporized_new` reads each pixel as a u32 and uses `& 255` as red. The old signature is `(buffer, surface, mode, offset, modulo)`.
+* **Real division by zero doesn't error**: `/` gives inf, -inf or NaN (0/0), which then flows on, and drawing at a NaN position draws nothing. `obj_crackintro` Draw sets `b = sin((30 * i + a2) / 480)`, which is exactly 0 at `i = 0, a2 = 0`, then draws at `sin(a2 / b)`. That's 0/0 on the first frame, and the original runner shows the screen fine. `div` and `mod` by zero still fail in krplayer, which is assumed rather than observed.
+* **Font sizes are points at 96 DPI**: every TTF-based font in FONT has a glyph height of 4/3 × its size (`fnt_main` 12 → 16 px). `font_add` sizes are rasterized the same way.
+
 ## Runtime (observed in Deltarune)
 * **At equal depth, the newest instance draws first.** GM adds new layer elements at the front, so a later-created instance draws *before* (under) older ones at the same depth. Deltarune Ch1 relies on it: in `room_town_krisyard`, `obj_carcutscene`'s alarm 5 creates an `obj_writer` at depth 0, and carcutscene's draw (also depth 0) reads `myd.stringmax`, which only the writer's draw sets. Drawing oldest-first crashes with "variable stringmax not set before reading it".
 * **All of a room's instances exist before any create event runs.** `obj_mainchara` is first in `room_krishallway`'s creation order, yet its create event reads `obj_markerA.x` (placed later). The create events (then creation code) run in the room's creation order, which is the room's instance list, not layer order.
@@ -61,6 +78,9 @@ Quirks found while reimplementing the runtime and the data.win format. Each has 
 * Async save/load events fire at the start of the next step.
 * Outside Room fires when the instance's bbox leaves the room. krplayer fires it once on leaving; whether GM repeats it every step while outside is unverified.
 
+* `sprite_add` sprites get a rectangle mask with an automatic bbox and animate one frame per step. A file that isn't shipped returns -1 (ch1_ribbit_mod asks for `spr/spr/spr_status_ailments.png`, which it doesn't ship).
+* `get_string` / `get_integer` return the default when cancelled (or, for integers, when the input isn't a number).
+
 ## Known krplayer divergences (not fixes, gaps)
 * Asset references are plain indices, not GM 2023.8+ typed refs (`typeof(spr_x)` gives `"number"`, not `"ref"`).
 * `random()` is deterministic per run like GM (fixed seed), but not GM's sequence.
@@ -71,3 +91,6 @@ Quirks found while reimplementing the runtime and the data.win format. Each has 
 * Paths and timelines aren't implemented (Deltarune Chapter 1 has none: its PATH and TMLN chunks are empty).
 * krplayer reports `os_type` = `os_windows`, so games take their PC code paths.
 * `ds_list_write` / `ds_map_find_first` order use krplayer's own formats/insertion order, not GM's hash order.
+* Pre-2.3 arrays alias 1D and 2D access (`a[j]` is `a[0, j]`), but imports read `a[i, j]` as `a[i][j]`, so code that mixes the two forms on one array diverges.
+* `matrix_set` only accepts the identity matrix and `vertex_submit` isn't implemented. Both fail loudly (ch1_ribbit_mod's `obj_boingball` easter egg uses them).
+* `screen_save` fails when called. `sprite_add`/`font_add` removeback/smooth aren't supported, and precise `sprite_collision_mask` only works on `sprite_add` sprites.

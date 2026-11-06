@@ -2,7 +2,7 @@
 // The result is what the runtime works with; the JSON tree is not touched again.
 
 import type { Hat, Krpj, Layer, Node, RoomInstance, View } from '../krpj.ts';
-import type { Platform, SoundId, TextureId } from '../platform/types.ts';
+import type { Pixels, Platform, SoundId, TextureId } from '../platform/types.ts';
 import { EK, type Block } from '../compile/bytecode.ts';
 import { compileScript, CompileError, type CompileEnv } from '../compile/compiler.ts';
 import { GmMethod } from '../value.ts';
@@ -19,6 +19,8 @@ export interface SpriteDef {
   bits: Uint8Array | null; nBits: number; stride: number;
   /** Frames per step (already divided by the game speed for "fps" sprites). */
   fpsDiv: boolean; speed: number;
+  /** Frame pixels of sprites made at runtime from image files (sprite_add), for sprite_collision_mask. */
+  pixels?: Pixels[];
 }
 export interface FontDef {
   index: number; name: string; tex: TextureId; lineHeight: number;
@@ -39,9 +41,9 @@ export const EV = {
   create: 0, destroy: 1, cleanup: 2, step_begin: 3, step: 4, step_end: 5,
   draw_begin: 6, draw: 7, draw_end: 8, drawgui_begin: 9, drawgui: 10, drawgui_end: 11, draw_pre: 12, draw_post: 13,
   outside_room: 14, intersect_boundary: 15, game_start: 16, game_end: 17, room_start: 18, room_end: 19,
-  animation_end: 20, path_end: 21, resize: 22,
+  animation_end: 20, path_end: 21, resize: 22, pre_create: 23,
 } as const;
-const N_EV = 23;
+const N_EV = 24;
 /** evt_async kinds krplayer can fire. */
 export const ASYNC = ['save_load', 'dialog', 'audio_playback', 'system', 'image_loaded'];
 
@@ -100,6 +102,10 @@ export interface Assets {
   /** Included files: path -> bytes (preloaded), or a URL for audio (streamed on demand). */
   files: Map<string, Uint8Array>;
   fileUrls: Map<string, string>;
+  /** Included image files, decoded up front (sprite_add is synchronous); same keys as files. */
+  images: Map<string, Pixels>;
+  /** Included font files registered with the platform (font_add), by key. */
+  fontFiles: Map<string, number>;
   url(path: string): string;
 }
 
@@ -117,7 +123,7 @@ function flatten(ev: Events): void {
 function push(arr: (Block[] | null)[], i: number, b: Block) { (arr[i] ??= []).push(b); }
 function pushMap(m: Map<number, Block[]>, k: number, b: Block) { const l = m.get(k); if (l) l.push(b); else m.set(k, [b]); }
 
-const AUDIO = /\.(ogg|wav|mp3)$/i;
+const AUDIO = /\.(ogg|wav|mp3)$/i, IMAGE = /\.(png|jpe?g|gif)$/i, FONT = /\.(ttf|otf)$/i;
 
 export async function loadAssets(pj: Krpj, url: (path: string) => string, platform: Platform, progress: (msg: string) => void = () => {}): Promise<Assets> {
   const sprites: SpriteDef[] = [], fonts: FontDef[] = [], objects: ObjectDef[] = [], rooms: RoomDef[] = [];
@@ -205,6 +211,12 @@ export async function loadAssets(pj: Krpj, url: (path: string) => string, platfo
     fileUrls.set(key, u);
     if (AUDIO.test(path)) return;
     files.set(key, await platform.fetchBytes(u));
+  }));
+  // sprite_add / font_add are synchronous in GM, so the files they could load are decoded now.
+  const images = new Map<string, Pixels>(), fontFiles = new Map<string, number>();
+  await Promise.all([...files].map(async ([key, bytes]) => {
+    if (IMAGE.test(key) && platform.decodeImage) images.set(key, await platform.decodeImage(bytes));
+    else if (FONT.test(key) && platform.fonts) fontFiles.set(key, await platform.fonts.load(bytes));
   }));
   progress('compiling');
 
@@ -295,7 +307,7 @@ export async function loadAssets(pj: Krpj, url: (path: string) => string, platfo
     scripts: (pj.scripts ?? []).map((f) => (f === null ? -1 : fnIndex.get(f) ?? -1)),
     objectByName: new Map(objects.map((o) => [o.name, o])), assetIndex, varNames, varSlot, initRoom, fps: d.fps,
     width: d.width === 'default' ? first.width : d.width, height: d.height === 'default' ? first.height : d.height,
-    title: d.window_title, roomOrder, files, fileUrls, url,
+    title: d.window_title, roomOrder, files, fileUrls, images, fontFiles, url,
   };
 }
 
@@ -311,7 +323,7 @@ const SIMPLE: Record<string, number> = {
   evt_drawgui_begin: EV.drawgui_begin, evt_drawgui: EV.drawgui, evt_drawgui_end: EV.drawgui_end, evt_draw_pre: EV.draw_pre,
   evt_draw_post: EV.draw_post, evt_outside_room: EV.outside_room, evt_intersect_boundary: EV.intersect_boundary,
   evt_game_start: EV.game_start, evt_game_end: EV.game_end, evt_room_start: EV.room_start, evt_room_end: EV.room_end,
-  evt_animation_end: EV.animation_end, evt_path_end: EV.path_end, evt_resize: EV.resize,
+  evt_animation_end: EV.animation_end, evt_path_end: EV.path_end, evt_resize: EV.resize, evt_pre_create: EV.pre_create,
 };
 
 function addHat(ev: Events, hat: Hat, where: string, env: CompileEnv, index: Map<string, number>, owner: number): void {

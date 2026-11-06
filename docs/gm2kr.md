@@ -4,11 +4,11 @@ gm2kr, when built, creates a page that converts a GameMaker game folder (data.wi
 The player URL for that button comes from `<meta name="gm2kr-player-url">` in the page (dev: `http://localhost:8000/`).
 
 ## What converts today
-Verified on a GM 2024 (bytecode 17) game (asteroids) and on Deltarune Chapter 1 (bytecode 17, GMS2.3+ compiler):
+Verified on a GM 2024 (bytecode 17) game (asteroids), on Deltarune Chapter 1 (bytecode 17, GMS2.3+ compiler) and on ch1_ribbit_mod (bytecode 16, GMS2 pre-2.3: a mod of the 2018 Chapter 1 with PNG texture pages, 2D arrays, scripts called by name and runtime-loaded sprites/fonts from `spr/`):
 * **Code:** every code entry, including GMS2.3+ functions (child entries), global script init code (GLOB), methods, struct literals and constructors, `switch`, `repeat`, `for`/`continue`, `with`, multi-dimensional arrays and `callv` method calls. Script assets (SCPT) keep their indices.
 * **Assets:** sprites (untrimmed PNG frames, precise collision masks), sprite fonts, tile sets (BGND), sounds: embedded (AUDO), audio groups (`audiogroupN.dat`) and external files next to the game.
 * **Rooms:** views, instance layers (with GM instance ids and creation code), background layers (colour or sprite, tiled/stretched, scrolling), asset layers (GMS1-style tiles and sprites), tile layers.
-* **Included files:** everything else in the folder is packed under `files/`, except the runner's own files (data.win, audio groups, `options.ini`, executables and libraries) and **audio the game never names**: an `.ogg`/`.wav`/`.mp3` is only included when its file name (or path) appears as a string in the game, since games often ship music they don't use (Deltarune's `mus/` holds every chapter's).
+* **Included files:** everything else in the folder is packed under `files/`, except the runner's own files (data.win, audio groups, `options.ini`, executables and libraries) and **audio the game never names**: an `.ogg`/`.wav`/`.mp3` is only included when its file name (or path) appears as a string in the game, or starts with a string of 4+ name characters while its extension is also a string (names built at runtime, e.g. `"keygen" + string(n) + ".ogg"`), since games often ship music they don't use (Deltarune's `mus/` holds every chapter's).
 
 Anything else fails loudly with the chunk, code entry or address: paths, timelines, shaders, sequences/particles in asset layers, PNG texture pages and any GML function without an opcode in krpj_opcodes.md.
 

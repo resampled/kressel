@@ -7,7 +7,7 @@ import { Decompiler } from '../src/decompile/structure.ts';
 type Spec = Partial<Instr> & { op: number };
 const assets = { objects: ['obj_a', 'obj_b'], sprites: ['spr_a'], sounds: [], rooms: [], fonts: [] };
 
-function decompile(specs: Spec[]): unknown[] {
+function decompile(specs: Spec[], names: typeof assets & { scripts?: Set<string> } = assets): unknown[] {
   let at = 0;
   const ins = specs.map((s): Instr => {
     const i: Instr = { at, t1: T.Int32, t2: T.Int32, i16: 0, b1: 0, target: -1, value: null, v: null, vkind: 0, fn: null, ...s };
@@ -16,7 +16,7 @@ function decompile(specs: Spec[]): unknown[] {
   });
   // Branch targets are given as instruction indices; turn them into addresses.
   for (const i of ins) if (i.target >= 0) i.target *= 4;
-  return new Decompiler('test', ins, at, assets).run();
+  return new Decompiler('test', ins, at, names).run();
 }
 
 const pushi = (v: number): Spec => ({ op: Op.pushi, t1: T.Int16, value: v, i16: v });
@@ -135,5 +135,28 @@ test('method calls (callv) and 2D array writes (popaf)', () => {
   // a[1][2] = 5
   assert.deepEqual(decompile([pushi(5), pushi(-1), pushi(1), pushv('a', 0, VarKind.popaf), pushi(2), { op: Op.brk, i16: Ext.popaf }]), [
     ['var_set', ['_ai', ['_ai', ['_lv', 'a'], 1], 2], 5],
+  ]);
+});
+
+// Pre-2.3 (bytecode 16) code: scripts are called by name, 2D arrays are one index i * 32000 + j.
+const pre23 = { ...assets, scripts: new Set(['scr_hurt']) };
+const chk: Spec = { op: Op.brk, i16: Ext.chkindex };
+
+test('pre-2.3: a[i, j] (i; chkindex; 32000; mul; j; chkindex; add) reads as a[i][j]', () => {
+  // a[1, 2] = 5
+  const write = [pushi(5), pushi(-1), pushi(1), chk, { op: Op.push, t1: T.Int32, value: 32000 }, { op: Op.mul }, pushi(2), chk, { op: Op.add }, pop('a', 0, VarKind.array)];
+  assert.deepEqual(decompile(write, pre23), [['var_set', ['_ai', ['_ai', ['_lv', 'a'], 1], 2], 5]]);
+  // GMS2.3 code can mean that index literally.
+  assert.deepEqual(decompile(write), [['var_set', ['_ai', ['_lv', 'a'], ['opr_add', ['opr_mul', 1, 32000], 2]], 5]]);
+});
+
+test('pre-2.3: scripts are called by their name', () => {
+  assert.deepEqual(decompile([pushi(3), call('scr_hurt', 1), { op: Op.popz }], pre23), [['fnc_g', 'scr_hurt', 3]]);
+});
+
+test('a call left on the stack before an if is a statement (popz omitted by the mod compiler)', () => {
+  // f(); if (x) g();  -- with no popz after f()
+  assert.deepEqual(decompile([call('instance_destroy', 0), pushv('x'), { op: Op.bf, target: 5 }, call('instance_destroy', 0), { op: Op.popz }]), [
+    ['ins_destroy'], ['ctr_if', ['_lv', 'x'], [['ins_destroy']]],
   ]);
 });

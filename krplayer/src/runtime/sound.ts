@@ -21,7 +21,7 @@ export class Sounds {
 
   constructor(p: Platform, a: Assets) {
     this.p = p;
-    for (const s of a.sounds) this.sounds.push({ name: s.name, url: a.url(s.src), stream: s.stream, volume: s.volume, pitch: s.pitch, group: s.group, id: null, loading: null, gain: 1, destroyed: false });
+    for (const s of a.sounds) this.sounds.push({ name: s.name, url: s.src ? a.url(s.src) : '', stream: s.stream, volume: s.volume, pitch: s.pitch, group: s.group, id: null, loading: null, gain: 1, destroyed: false });
   }
 
   /** Starts decoding every (non-streamed) sound in the background. */
@@ -29,6 +29,7 @@ export class Sounds {
 
   private load(i: number): Promise<void> {
     const s = this.sounds[i];
+    if (!s.url) { s.loading ??= Promise.resolve(this.p.log(`audio: ${s.name} has no audio data`)); return s.loading; }
     s.loading ??= this.p.audio.load(s.url, s.stream).then((id) => { s.id = id; }, (e) => { this.p.log(`audio: couldn't load ${s.name}: ${(e as Error).message}`); });
     return s.loading;
   }

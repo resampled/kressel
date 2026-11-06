@@ -34,6 +34,17 @@ test('value rules: epsilon equality, no number+string, string()', () => {
   assert.deepEqual([str(100), str(1.5), str(undefined)], ['100', '1.50', 'undefined']);
 });
 
+test('real division by zero gives inf / NaN instead of failing (ch1_ribbit_mod obj_crackintro)', async () => {
+  const v = await exec([
+    ['var_set', ['_lv', 'z'], 0],
+    ['var_set', ['_lv', 'nan'], ['opr_div', 0, ['_lv', 'z']]],
+    ['var_set', ['_lv', 'inf'], ['opr_div', -3, ['_lv', 'z']]],
+    ['var_set', ['_lv', 'q'], 5],
+    ['var_change', '/', ['_lv', 'q'], ['_lv', 'z']],
+  ]);
+  assert.deepEqual([Number.isNaN(v.nan), v.inf, v.q], [true, -Infinity, Infinity]);
+});
+
 test('locals, loops, switch fall-through, compound assignment', async () => {
   const v = await exec([
     ['var_local', 'i', 0],
@@ -229,4 +240,30 @@ test('debug warp setup: ?set= and ?call= run in URL order just before the warp r
   const gv = (n: string) => g.globalScope.vars.get(g.a.varSlot(n));
   assert.equal(g.instances[0].vars.get(g.a.varSlot('seen')), 11);
   assert.deepEqual([gv('arr'), gv('s')], [[0, 0, 5], 'a,b']);
+});
+
+test('pre-create runs before create (GMS2 event 14)', async () => {
+  const pj = project({ o: obj([['evt_create', [['var_change', '+', ['_lv', 'log'], 'c']]], ['evt_pre_create', [['var_set', ['_lv', 'log'], 'p']]]]) }, [{ object: 'o', x: 0, y: 0 }]);
+  const g = await load({ krpj: pj, url: (x) => x }, createHeadless(() => [10, 10]));
+  assert.equal(g.instances[0].vars.get(g.a.varSlot('log')), 'pc');
+});
+
+test('sprite_add: an included image as a strip, with sprite_collision_mask building a precise mask', async () => {
+  // A 4x2 image: two 2x2 frames; only the top-left pixel of frame 0 is opaque.
+  const px = new Uint8ClampedArray(4 * 2 * 4);
+  px[3] = 255;
+  const pj = project({ o: obj([['evt_create', [
+    ['var_set', ['_lv', 's'], ['lks_sprite_add', 'img/strip.png', 2, false, false, 1, 0]],
+    ['var_set', ['_lv', 'w'], ['lks_sprite_info', 'width', ['_lv', 's']]],
+    ['var_set', ['_lv', 'n'], ['lks_sprite_info', 'number', ['_lv', 's']]],
+    ['var_set', ['_lv', 'missing'], ['lks_sprite_add', 'img/none.png', 1, false, false, 0, 0]],
+    ['lks_sprite_collision_mask', ['_lv', 's'], true, 1, 0, 0, 0, 0, 0, 0],
+  ]]]) }, [{ object: 'o', x: 0, y: 0 }]);
+  pj.included_files = { 'img/strip.png': './files/img/strip.png' };
+  const p = createHeadless(() => [10, 10], undefined, async () => new Uint8Array(1), { decodeImage: async () => ({ w: 4, h: 2, data: px }) });
+  const g = await load({ krpj: pj, url: (x) => x }, p);
+  const v = (k: string) => g.instances[0].vars.get(g.a.varSlot(k));
+  assert.deepEqual([v('w'), v('n'), v('missing')], [2, 2, -1]);
+  const sp = g.a.sprites[v('s') as number];
+  assert.deepEqual([sp.ox, sp.maskKind, sp.nBits, [...sp.bits!]], [1, 2, 2, [0x80, 0, 0, 0]]);
 });

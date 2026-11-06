@@ -71,7 +71,7 @@ export function readModel(buf: ArrayBuffer): GmModel {
     objects: opt('OBJT', readObjt),
     rooms: opt('ROOM', (r) => readRoom(r, fmt)),
     code: opt('CODE', readCode),
-    refs: readRefs(need('VARI'), need('FUNC')),
+    refs: readRefs(need('VARI'), need('FUNC'), fmt),
     scripts: opt('SCPT', readScpt),
     globalInit: chunkReader(buf, chunks, 'GLOB') ? readGlob(need('GLOB')) : [],
     sounds: opt('SOND', readSond),

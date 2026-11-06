@@ -1,7 +1,7 @@
 // Headless platform: deterministic clock, scriptable input, silent audio, in-memory storage. For tests
 // and traces. Rendering uses SoftRenderer when given a texture decoder (screenshots), else only counts.
 
-import type { Audio, Platform, Renderer } from './types.ts';
+import type { Audio, FontRasterizer, Platform, Renderer } from './types.ts';
 import { SoftRenderer, type Pixels } from './soft.ts';
 import { FileStore, memoryBackend } from './filestore.ts';
 
@@ -15,8 +15,11 @@ export interface HeadlessPlatform extends Platform {
   soft: SoftRenderer | null;
 }
 
+/** Optional host decoders (Node has no image or font decoding of its own). */
+export interface HeadlessExtras { decodeImage?: (bytes: Uint8Array) => Promise<Pixels>; fonts?: FontRasterizer }
+
 export function createHeadless(textureSize: (url: string) => [number, number] = () => [1, 1], decode?: (url: string) => Promise<Pixels>,
-  fetchBytes: (url: string) => Promise<Uint8Array> = async (u) => { throw new Error(`headless: no file ${u}`); }): HeadlessPlatform {
+  fetchBytes: (url: string) => Promise<Uint8Array> = async (u) => { throw new Error(`headless: no file ${u}`); }, extras: HeadlessExtras = {}): HeadlessPlatform {
   let time = 0, nextId = 1;
   const sizes = new Map<number, [number, number]>();
   const stats = { frames: 0, draws: 0, sounds: 0, log: [] as string[] };
@@ -29,6 +32,8 @@ export function createHeadless(textureSize: (url: string) => [number, number] = 
     beginFrame() {}, endFrame() { stats.frames++; },
     createSurface: (w, h) => { const id = nextId++; sizes.set(id, [w, h]); return id; },
     freeSurface: (t) => { sizes.delete(t); },
+    readPixels: (t) => { const [w, h] = sizes.get(t) ?? [0, 0]; return { w, h, data: new Uint8ClampedArray(w * h * 4) }; },
+    createTexture: (px) => { const id = nextId++; sizes.set(id, [px.w, px.h]); return id; },
     copyTexture: (_t, _x, _y, w, h) => { const id = nextId++; sizes.set(id, [w, h]); return id; },
     setTarget() {}, setView() {}, clear() {}, setBlend() {}, setFog() {}, setColorWrite() {}, setFilter() {},
     drawImage() { stats.draws++; }, drawQuad() { stats.draws++; }, triangle() { stats.draws++; }, systemText() {},
@@ -58,6 +63,6 @@ export function createHeadless(textureSize: (url: string) => [number, number] = 
     storage: new FileStore(memoryBackend(), (m) => { stats.log.push(m); }),
     hidden: () => false, setFullscreen() {}, isFullscreen: () => false, setTitle() {},
     log: (m) => { stats.log.push(m); },
-    fetchBytes,
+    fetchBytes, ...extras,
   };
 }
