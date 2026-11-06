@@ -13,24 +13,12 @@ import { receiveFromOpener } from './loader/handoff.ts';
 import { createWebPlatform } from './platform/web.ts';
 import { prepare } from './play.ts';
 
-const STYLE = `
-.kr-root { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; color: #ddd; font: 14px system-ui, sans-serif; }
-.kr-root canvas { display: block; image-rendering: pixelated; }
-.kr-msg { position: absolute; max-width: 640px; padding: 16px; text-align: center; white-space: pre-wrap; }
-.kr-err { color: #f66; text-align: left; font-family: ui-monospace, monospace; }
-.kr-drop { border: 2px dashed #555; border-radius: 8px; padding: 32px; }`;
-
+/** The page provides the shell (see index.html): .kr-root containing a <canvas> and a .kr-msg. Styling is up to the page. */
 function shell() {
-  const style = document.createElement('style');
-  style.textContent = STYLE;
-  const root = document.createElement('div');
-  root.className = 'kr-root';
-  const canvas = document.createElement('canvas');
-  const msg = document.createElement('div');
-  msg.className = 'kr-msg';
-  root.append(canvas, msg);
-  document.head.append(style);
-  document.body.append(root);
+  const root = document.querySelector<HTMLElement>('.kr-root');
+  const canvas = root?.querySelector('canvas');
+  const msg = root?.querySelector<HTMLElement>('.kr-msg');
+  if (!root || !canvas || !msg) throw new Error('kressel: page needs a .kr-root element containing a <canvas> and a .kr-msg');
   return {
     root, canvas,
     say(text: string, error = false) { msg.textContent = text; msg.classList.toggle('kr-err', error); msg.hidden = !text; },
@@ -76,11 +64,11 @@ async function run(source: ProjectSource, ui: Shell): Promise<void> {
   await gesture(ui);
   await platform.audioContext.resume();
   const fit = () => {
-    const s = Math.min(innerWidth / ui.canvas.width, innerHeight / ui.canvas.height);
+    const s = Math.min(ui.root.clientWidth / ui.canvas.width, ui.root.clientHeight / ui.canvas.height);
     ui.canvas.style.width = `${Math.floor(ui.canvas.width * s)}px`;
     ui.canvas.style.height = `${Math.floor(ui.canvas.height * s)}px`;
   };
-  addEventListener('resize', fit);
+  new ResizeObserver(fit).observe(ui.root); // .kr-root's size is set by the page, not just the window
   const fail = (e: unknown) => { ui.say(`Game error:
 ${(e as Error).message}`, true); console.error(e); };
   try {

@@ -1,7 +1,7 @@
 # kressel
 Core editor (kreditor), player engine (krplayer/kressel.js) & GameMaker converter (gm2kr) for Kratience. In heavy development.
 
-kressel.js loads the src of `<meta id="kressel-load-project" src="" />` (a .krpj project, or an unpacked game.json) on the page it's loaded at.
+kressel.js loads the src of `<meta id="kressel-load-project" src="" />` (a .krpj project, or an unpacked game.json) on the page it's loaded at. The page must also provide the player shell: a `.kr-root` element containing a `<canvas>` and a `.kr-msg` (see krplayer/index.html); the canvas is scaled to fit `.kr-root`.
 
 gm2kr.js creates a page that converts supplied GameMaker projects (must include data.win & referenced assets) to a downloadable .krpj project
 
