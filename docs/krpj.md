@@ -22,7 +22,7 @@ This is to allow expensive per-room assets to be loaded in during room transitio
 ## Example Small Project Structure (game.json)
 ```jsonc
 {
-    "krpj_v": "0.1", // kratience version. stuck at 0.1 for now
+    "krpj_v": "0.2", // format version (0.2: script layout moved from `editor` onto the scripts)
     "cfg_db_relay": { // for double checking information about the project from the DB
         "slug": "coin-collector",
         "title": "Coin Collector",
@@ -97,11 +97,12 @@ This is to allow expensive per-room assets to be loaded in during room transitio
       "visible": true,
       "persistent": false,
       "scripts": [
-        ["evt_create", [
+        {"x": 24, "y": 24, "script": ["evt_create", [ // placed by the editor (see Script layout)
           ["var_set", ["_lv", "move_speed"], 4],
           ["var_set", ["_iv", ["_kw", "global"], "score"], 0]
-        ]],
-        ["evt_step", [
+        ]]},
+        {"x": 320, "y": 24, "script": [["ins_destroy"]]}, // loose: no hat, never runs
+        ["evt_step", [ // bare: auto-placed (imports are all bare)
           ["ctr_if", ["sen_key_held", 39], [
             ["var_set", ["_lv", "x"], ["opr_add", ["_lv", "x"], ["_lv", "move_speed"]]]
           ]],
@@ -178,13 +179,18 @@ Fields beyond the example above. All are optional unless noted; the types live i
 * `cfg_defaults.width` / `height`: `"default"` means the size of `init_room`.
 * `room_order`: room keys in game order (`room_goto_next` etc.). Defaults to the key order of `rooms`.
 * Asset keys (`sprites`, `fonts`, `objects`, `rooms`, `sounds`, `tilesets`...) share one namespace, since `["_as", name]` names any of them. gm2kr uses the GameMaker asset names as keys, in GameMaker's order, so an asset's index within its kind is GM's index (imported code that uses raw asset numbers keeps working).
-* `global_init`: scripts run once at game start, in order, before the first room, with `self` = the global scope (GameMaker 2.3+ script files' top-level code, which also defines their functions as global variables).
+* `global_init`: scripts (bare or placed, see Script layout) run once at game start, in order, before the first room, with `self` = the global scope (GameMaker 2.3+ script files' top-level code, which also defines their functions as global variables).
 * `scripts`: script asset index → function key (or `null`), for code that names scripts by number (`script_execute(n)`, `asset_get_index`). A function reference (`["_fn", key]`) evaluates to its script index when it has one, and to a method otherwise.
 * `audio_groups`: audio group names by index (`sounds[k].group` indexes it).
-* `editor`: kreditor's canvas layout, ignored by the engine. `pos` maps a script owner (`"obj:<key>"`, `"room:<key>"`, `"fn:<key>"` or `"global"`) to the `[x, y]` of each of its top-level scripts (same order as `scripts` / `global_init`; `null` or missing = auto-placed). `loose` maps an owner to `{ "x", "y", "script" }` stacks dropped on the canvas without an event; they never run. Imports have no `editor` field.
 * `included_files`: path the game opens, relative to its working directory (`"lang/lang_en.json"`) → asset path (`"./files/lang/lang_en.json"`). Non-audio files are read up front (GML file functions are synchronous); audio is streamed when the game asks for it (`audio_create_stream`).
 
-**Functions** (`functions`): `args` are named parameters (locals initialised from the arguments; imports have none and use `argument0`... instead), `argc` the argument count GameMaker declared, `ctor` true for constructors (`fnc_new`).
+**Functions** (`functions`): `args` are named parameters (locals initialised from the arguments; imports have none and use `argument0`... instead), `argc` the argument count GameMaker declared, `ctor` true for constructors (`fnc_new`). `x`/`y` place the body on the editor canvas and `loose` holds placed stacks lying on it (see Script layout).
+
+**Script layout**: each entry of an object's or room's `scripts` and of `global_init` is either a bare script (a hat for objects/rooms, a block list for `global_init`) or a placed one, `{ "x": 24, "y": 24, "script": <the same>, "loose": true }`. `x`/`y` are the canvas position in editor pixels (`null` or missing = auto-placed). Entries that never run, so a half-built canvas still loads:
+* `"loose": true` (any list), or every entry of a function's `loose`.
+* In object/room `scripts`: an entry without a hat (a block list, or `[]`), or a hat with no block list after it (`["evt_step"]`).
+
+A hat with an empty block list (`["evt_step", []]`) is a real, empty event: like an empty event in GameMaker, it overrides the parent's. Imports only have bare scripts. (krpj 0.1 kept positions in a top-level `editor` field; kreditor moves them onto the scripts when it opens such a file.)
 
 **Sprites**
 * `speed`: frames per second; with `"speed_type": "frame"`, frames per game frame instead.
@@ -201,7 +207,7 @@ Fields beyond the example above. All are optional unless noted; the types live i
 
 **Objects**
 * `solid` (default `false`), `mask`: sprite key of a collision mask that differs from `sprite`, `depth`: the object's default depth.
-* `scripts`: event hats (see krpj_opcodes.md). An object without an event uses its parent's.
+* `scripts`: event hats (see krpj_opcodes.md), bare or placed (see Script layout). An object without an event uses its parent's.
 
 **Rooms**
 * `persistent` (default `false`), `speed` (GMS1-style room speed; 0 = use `cfg_defaults.fps`).

@@ -273,7 +273,7 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
   const roomOrder = g.roomOrder.map((i) => name(m.rooms, i)).filter((n): n is string => n !== null);
   const fps = g.fps || m.rooms[g.roomOrder[0] ?? 0]?.speed || 30;
   const krpj: Krpj = {
-    krpj_v: '0.1',
+    krpj_v: '0.2',
     cfg_db_relay: { slug: g.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), title: g.displayName || g.name, author: '', revision: 1, date_created: 0, date_updated: 0 },
     cfg_gm_compat: { imported_from: { tool: 'gm2kr', game: g.name, bytecode: g.bytecodeVersion, gm_version: g.version } },
     cfg_defaults: { width: g.windowWidth, height: g.windowHeight, fps, window_title: g.displayName || g.name },

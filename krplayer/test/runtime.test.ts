@@ -303,3 +303,23 @@ test('sprite_add removeback clears pixels of the bottom-left colour (ch1_ribbit_
   assert.deepEqual([...sp.pixels![0].data].filter((_, i) => i % 4 === 3), [255, 255, 0, 0]);
   assert.equal(px[11], 255); // the decoded image is left as it was
 });
+
+test('placed scripts run; loose stacks, hat-less entries and hats with nothing after them are skipped', async () => {
+  const log = (s: string) => [['var_change', '+', ['_iv', ['_kw', 'global'], 'log'], s]];
+  const pj = project({
+    o: obj([
+      { x: 24, y: 24, script: ['evt_create', log('c')] },
+      { x: 300, y: 80, script: log('loose') },          // a stack with no hat
+      { x: 0, y: 0, loose: true, script: ['evt_create', log('flagged')] },
+      log('bare'),                                       // a bare hat-less stack
+      ['evt_step'], ['evt_alarm', 0], [],                // hats with no script, an empty entry
+      { x: null, y: null, script: ['evt_draw', []] },    // an empty event
+      ['evt_step', log('s')],
+    ]),
+  }, [{ object: 'o', x: 0, y: 0 }]);
+  pj.global_init = [{ x: 0, y: 0, script: [['var_set', ['_iv', ['_kw', 'global'], 'log'], 'g']] }, { x: 9, y: 9, loose: true, script: log('no') }, []];
+  pj.rooms!.rm.scripts = [{ x: 1, y: 1, script: ['evt_create', log('r')] }, { x: 5, y: 5, script: log('no') }, ['evt_create']];
+  const g = await load({ krpj: pj, url: (x) => x }, createHeadless(() => [10, 10]));
+  g.frame();
+  assert.equal(g.globalScope.vars.get(g.a.varSlot('log')), 'gcrs');
+});

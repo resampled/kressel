@@ -141,7 +141,7 @@ Stores the rest of the script as the last argument. These are the 'hat' blocks. 
 
 Events run in GameMaker's order each step: begin step, alarms, keyboard, mouse, step, (built-in motion and paths), collisions, end step, then the draw events. An object without an event uses its parent's; `ins_event_inherited` runs the parent's version from inside one.
 
-A visual script may have several hats for the same event. They run in the order they appear in `scripts`, and `ctr_exit`/`ctr_return` only end the current hat. gm2kr always emits one hat per event.
+A visual script may have several hats for the same event. They run in the order they appear in `scripts`, and `ctr_exit`/`ctr_return` only end the current hat. gm2kr always emits one hat per event. Hats can be wrapped with their canvas position, and hat-less or bodiless entries are skipped (krpj.md "Script layout").
 
 * `evt_create` - Executes when the instance is created.
 > * KRPJ: ["evt_create",[...]]

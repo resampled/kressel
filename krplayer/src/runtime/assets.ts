@@ -1,7 +1,7 @@
 // Loads a project (game.json): compiles every script, resolves names to indices and loads textures.
 // The result is what the runtime works with; the JSON tree is not touched again.
 
-import type { Hat, Krpj, Layer, Node, RoomInstance, View } from '../krpj.ts';
+import type { Hat, Krpj, Layer, Node, RoomInstance, ScriptEntry, View } from '../krpj.ts';
 import type { Pixels, Platform, SoundId, TextureId } from '../platform/types.ts';
 import { EK, type Block } from '../compile/bytecode.ts';
 import { compileScript, CompileError, type CompileEnv } from '../compile/compiler.ts';
@@ -223,7 +223,11 @@ export async function loadAssets(pj: Krpj, url: (path: string) => string, platfo
   fnEntries.forEach(([k, f], i) => {
     functions[i] = { index: i, name: k, block: compileScript(f.body, `function ${k}`, env, f.args), argc: f.argc ?? f.args.length, ctor: f.ctor === true };
   });
-  const globalInit = (pj.global_init ?? []).map((s, i) => compileScript(s, `global_init/${i}`, env));
+  const globalInit = (pj.global_init ?? []).flatMap((e, i) => {
+    const s = entryScript(e);
+    if (s && !isScript(s)) throw new CompileError(`global_init/${i}: not a list of blocks`);
+    return s ? [compileScript(s, `global_init/${i}`, env)] : [];
+  });
 
   const sprite = (n: string | null | undefined, where: string): SpriteDef | null => {
     if (n == null) return null;
@@ -235,7 +239,7 @@ export async function loadAssets(pj: Krpj, url: (path: string) => string, platfo
   // Objects: compile own events, then inherit missing ones from parents.
   const own: Events[] = objEntries.map(([name, o], i) => {
     const ev = emptyEvents();
-    o.scripts.forEach((hat, h) => addHat(ev, hat, `${name}/scripts/${h}`, env, index, i));
+    o.scripts.forEach((e, h) => { const hat = runnableHat(e); if (hat) addHat(ev, hat, `${name}/scripts/${h}`, env, index, i); });
     return ev;
   });
   objEntries.forEach(([name, o], i) => {
@@ -275,7 +279,9 @@ export async function loadAssets(pj: Krpj, url: (path: string) => string, platfo
       });
     });
     const create: Block[] = [];
-    r.scripts.forEach((hat, h) => {
+    r.scripts.forEach((e, h) => {
+      const hat = runnableHat(e);
+      if (!hat) return;
       if (hat[0] !== 'evt_create') throw new CompileError(`${name}/scripts/${h}: room event ${String(hat[0])} not supported yet`);
       create.push(compileScript(hat[hat.length - 1] as Node[], `${name}/scripts/${h}`, env));
     });
@@ -326,11 +332,21 @@ const SIMPLE: Record<string, number> = {
   evt_animation_end: EV.animation_end, evt_path_end: EV.path_end, evt_resize: EV.resize, evt_pre_create: EV.pre_create,
 };
 
+// Top-level entries are bare scripts or placed ones ({ x, y, script, loose }, from the editor); see krpj.md.
+const isScript = (v: unknown): v is Node[] => Array.isArray(v) && v.every(Array.isArray);
+/** The entry's script, or null for a loose one. */
+function entryScript(e: ScriptEntry): Node[] | null {
+  if (Array.isArray(e)) return e;
+  return e && typeof e === 'object' && !e.loose && Array.isArray(e.script) ? e.script : null;
+}
+/** The entry's hat, or null when it never runs: loose, a stack without a hat, or a hat with no script after it. */
+function runnableHat(e: ScriptEntry): Hat | null {
+  const s = entryScript(e);
+  return s && typeof s[0] === 'string' && s.length > 1 && isScript(s[s.length - 1]) ? s : null;
+}
+
 function addHat(ev: Events, hat: Hat, where: string, env: CompileEnv, index: Map<string, number>, owner: number): void {
-  const head = hat[0];
-  if (typeof head !== 'string') throw new CompileError(`${where}: event hat must start with a name`);
-  const body = hat[hat.length - 1];
-  if (!Array.isArray(body)) throw new CompileError(`${where}: event ${head} has no script`);
+  const head = hat[0] as string, body = hat[hat.length - 1] as Node[];
   const label = head === 'evt_alarm' || head === 'evt_user' || head === 'evt_async' ? `${head}_${String(hat[1])}` : head;
   const b = compileScript(body, `${where.replace(/\/scripts\/\d+$/, '')}/${label}`, env);
   b.owner = owner;

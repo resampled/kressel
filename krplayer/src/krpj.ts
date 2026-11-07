@@ -6,6 +6,13 @@ export type Node = null | boolean | number | string | Node[] | { [k: string]: No
 export type Script = Node[];
 /** An event 'hat': ["evt_*", ...args, Script]. */
 export type Hat = Node[];
+/**
+ * A top-level script with its editor canvas position (x/y null or absent = auto-placed). A loose entry never runs.
+ * In object/room lists, an entry without a hat, or a hat with no script after it, never runs either.
+ */
+export interface Placed { x?: number | null; y?: number | null; loose?: boolean; script: Node[] }
+/** An object/room `scripts` or `global_init` entry: a bare script (imports) or a placed one (the editor). */
+export type ScriptEntry = Node[] | Placed;
 
 export interface Sprite {
   name: string;
@@ -50,6 +57,9 @@ export interface KrFunction {
   /** Number of arguments GameMaker declared (imports; named args are not kept). */
   argc?: number;
   ctor?: boolean;
+  /** Editor canvas position of the body (null or absent = auto-placed), and stacks lying loose on its canvas. */
+  x?: number | null; y?: number | null;
+  loose?: Placed[];
 }
 export interface KrObject {
   sprite: string | null;
@@ -62,7 +72,7 @@ export interface KrObject {
   /** Depth for instances created without a layer (GM object depth). */
   depth?: number;
   imported_from?: string;
-  scripts: Hat[];
+  scripts: ScriptEntry[];
 }
 export interface RoomInstance {
   object: string; x: number; y: number;
@@ -124,7 +134,7 @@ export interface Room {
   views?: View[];
   preload?: string[];
   layers: Layer[];
-  scripts: Hat[];
+  scripts: ScriptEntry[];
 }
 
 export interface Krpj {
@@ -143,18 +153,11 @@ export interface Krpj {
   /** Room keys in game order (room_goto_next etc.). Defaults to the order of `rooms`. */
   room_order?: string[];
   /** Scripts run once at game start, before the first room, with self = global (GM 2.3+ script files). */
-  global_init?: Script[];
+  global_init?: ScriptEntry[];
   /** Script asset index -> function key (script_execute(n), asset_get_index). null for non-function scripts. */
   scripts?: (string | null)[];
   /** Audio group names, by index. */
   audio_groups?: string[];
   /** Included files: path the game opens (relative to working_directory) -> asset path. */
   included_files?: Record<string, string>;
-  /** Editor-only layout, ignored by krplayer. Keys: "obj:<key>", "room:<key>", "fn:<key>", "global". */
-  editor?: {
-    /** Canvas position of each top-level script (index-aligned with scripts / global_init; functions have one). */
-    pos?: Record<string, ([number, number] | null)[]>;
-    /** Blocks lying loose on a canvas (not under an event), which never run. */
-    loose?: Record<string, { x: number | null; y: number | null; script: Script }[]>;
-  };
 }
