@@ -1,0 +1,50 @@
+:root {
+    --cyan: cyan;
+    --black: black;
+    --red: red;
+    --dark: #222;
+    --white: white;
+    --light: #ddd;
+    --select: yellow;
+    --evt: #FD7F28;
+    --ctl: #FFFF06;
+    --fnc: #EA79C7;
+    --opr: #B6E61E;
+    --var: #FE4040;
+    --ins: #0CCEFF;
+    --mov: #00A3E8;
+    --sen: #41DBBA;
+    --lks: #B49AFF;
+    --snd: #FF93FD;
+    --drw: #63E898;
+    --rom: #2FEF28;
+    --cam: #ce0e0a;
+    --dat: #C1795B;
+    --sys: #aaaaaa;
+}
+@font-face {font-family: mOsOul; src: url("./mOsOul.ttf");}
+@font-face {font-family: determinationsans; src: url("./determination_sans.ttf");}
+@keyframes backtick {
+}
+
+body { background: url("./battlebg.gif") repeat; margin: 0; font-family: mOsOul; font-size: 16px;}
+.nav1{
+background: var(--black); color: var(--white);
+width: 100%;
+display:flex;
+height: 1.7em; font-size: 1.3em;
+align-items: center;
+justify-content: space-between;
+}
+.n1-lft {padding: 0 .5em; display: flex;}
+.n1-lftbtn { padding-left: .5em;}
+.n1-play { color: var(--red);}
+.n1-rgt {padding: 0 .5em; display: flex;}
+.n1-krlogo { color: var(--cyan); font-size: 1.2em;}
+
+.nav2{
+background: var(--dark); color: var(--light);
+height: 1.3em;
+width: 100%;
+display: flex;
+}
