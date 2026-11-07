@@ -23,8 +23,6 @@ importers:
 
   gm2kr: {}
 
-  kreditor: {}
-
   krplayer: {}
 
 packages:
