@@ -9,7 +9,7 @@ const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8').re
 test('opcodes.gen.ts is up to date with docs/krpj_opcodes.md (run pnpm gen:opcodes)', () => {
   const ops = parseOpcodes(read('../../docs/krpj_opcodes.md'));
   assert.equal(read('../src/opcodes.gen.ts'), renderOpcodes(ops));
-  assert.equal(read('../../kreditor/src/opcodes.gen.js'), renderOpcodesJs(ops));
+  assert.equal(read('../../kreditor/mockup/src/opcodes.gen.js'), renderOpcodesJs(ops));
 });
 
 test('opcode names are unique and prefixed', () => {

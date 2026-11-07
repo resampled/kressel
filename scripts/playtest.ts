@@ -45,7 +45,18 @@ const bytes = async (u: string) => {
   throw new Error(`playtest: missing file ${u}`);
 };
 const png = async (b: Uint8Array) => { const i = await decodePng(b, 'image'); return { w: i.w, h: i.h, data: new Uint8ClampedArray(i.data.buffer, i.data.byteOffset, i.data.byteLength) }; };
-const p = createHeadless(() => [1, 1], async (u) => png(await bytes(u)), bytes, { decodeImage: png });
+// No font engine in Node: font_add gets box glyphs with plausible metrics (shapes are wrong, layout roughly right).
+const boxFonts = {
+  load: async () => 0,
+  raster(_f: number, px: number, _b: boolean, _i: boolean, first: number, last: number) {
+    console.log(`  note: font_add rendered as placeholder boxes (${px.toFixed(1)}px)`);
+    const lh = Math.max(2, Math.ceil(px * 1.2)), cw = Math.max(1, Math.round(px / 2)), n = Math.max(0, last - first + 1);
+    const W = Math.max(1, n * cw), data = new Uint8ClampedArray(W * lh * 4).fill(255);
+    for (let y = 0; y < lh; y++) for (let x = 0; x < W; x++) if (x % cw === cw - 1 || y < lh - px) data[(y * W + x) * 4 + 3] = 0;
+    return { atlas: { w: W, h: lh, data }, glyphs: Array.from({ length: n }, (_, k) => [first + k, k * cw, 0, cw, lh, cw, 0]), lineHeight: lh };
+  },
+};
+const p = createHeadless(() => [1, 1], async (u) => png(await bytes(u)), bytes, { decodeImage: png, fonts: boxFonts });
 const g = await prepare({ krpj, url: (x) => x }, p);
 g.start(room ? g.findRoom(room) : -1, direct);
 

@@ -28,20 +28,20 @@ export async function decodePage(data: Uint8Array, page: number): Promise<Image>
 }
 
 const u32be = (b: Uint8Array, at: number) => ((b[at] << 24) | (b[at + 1] << 16) | (b[at + 2] << 8) | b[at + 3]) >>> 0;
-/** Channels per PNG colour type (8-bit only): grey, RGB, palette, grey+alpha, RGBA. */
+/** Channels per PNG colour type: grey, RGB, palette, grey+alpha, RGBA. */
 const PNG_CHANNELS: Record<number, number> = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
 
-/** Decodes a PNG (8-bit, non-interlaced: what older GM texture pages use) to RGBA. */
+/** Decodes a non-interlaced PNG (any bit depth; 16-bit keeps the high byte) to RGBA. */
 export async function decodePng(b: Uint8Array, where: string): Promise<Image> {
-  let w = 0, h = 0, type = -1, plte: Uint8Array | null = null, trns: Uint8Array | null = null;
+  let w = 0, h = 0, type = -1, depth = 8, plte: Uint8Array | null = null, trns: Uint8Array | null = null;
   const idat: Uint8Array[] = [];
   for (let at = 8; at + 12 <= b.length;) {
     const len = u32be(b, at), name = tag(b, at + 4);
     if (at + 12 + len > b.length) throw new FormatError(`${where}: PNG chunk ${name} runs past the end`, at);
     const body = b.subarray(at + 8, at + 8 + len);
     if (name === 'IHDR') {
-      w = u32be(body, 0); h = u32be(body, 4); type = body[9];
-      if (body[8] !== 8 || !PNG_CHANNELS[type] || body[12] !== 0) throw new FormatError(`${where}: PNG bit depth ${body[8]}, colour type ${type}, interlace ${body[12]} not supported`, at);
+      w = u32be(body, 0); h = u32be(body, 4); depth = body[8]; type = body[9];
+      if (![1, 2, 4, 8, 16].includes(depth) || (depth < 8 && type !== 0 && type !== 3) || (depth > 8 && type === 3) || !PNG_CHANNELS[type] || body[12] !== 0) throw new FormatError(`${where}: PNG bit depth ${body[8]}, colour type ${type}, interlace ${body[12]} not supported`, at);
       if (w * h > MAX_PIXELS) throw new FormatError(`${where}: too large`, at);
     } else if (name === 'PLTE') plte = body;
     else if (name === 'tRNS') trns = body;
@@ -51,13 +51,13 @@ export async function decodePng(b: Uint8Array, where: string): Promise<Image> {
   }
   if (!w || !h) throw new FormatError(`${where}: PNG without IHDR`, 0);
   if (type === 3 && !plte) throw new FormatError(`${where}: palette PNG without PLTE`, 0);
-  const ch = PNG_CHANNELS[type], stride = w * ch, raw = await inflate(concat(idat), (stride + 1) * h, where);
+  const ch = PNG_CHANNELS[type], bits = ch * depth, bpp = Math.max(1, bits >> 3), stride = Math.ceil(w * bits / 8), raw = await inflate(concat(idat), (stride + 1) * h, where);
   const out = new Uint8Array(w * h * 4);
   let cur = new Uint8Array(stride), prev = new Uint8Array(stride);
   for (let y = 0; y < h; y++) {
     const f = raw[y * (stride + 1)], line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
     for (let x = 0; x < stride; x++) {
-      const a = x >= ch ? cur[x - ch] : 0, up = prev[x], c = x >= ch ? prev[x - ch] : 0;
+      const a = x >= bpp ? cur[x - bpp] : 0, up = prev[x], c = x >= bpp ? prev[x - bpp] : 0;
       let v = line[x];
       switch (f) {
         case 0: break;
@@ -69,13 +69,18 @@ export async function decodePng(b: Uint8Array, where: string): Promise<Image> {
       }
       cur[x] = v;
     }
+    // Sample n of the pixel: 16-bit keeps the high byte, sub-byte grey is scaled to 0..255 (palette indices aren't).
+    const s = (x: number, n: number) => {
+      if (depth >= 8) return cur[(x * ch + n) * (depth >> 3)];
+      const v = (cur[(x * depth) >> 3] >> (8 - depth - ((x * depth) & 7))) & ((1 << depth) - 1);
+      return type === 3 ? v : (v * 255) / ((1 << depth) - 1);
+    };
     for (let x = 0, o = y * w * 4; x < w; x++, o += 4) {
-      const k = x * ch;
       switch (type) {
-        case 6: out[o] = cur[k]; out[o + 1] = cur[k + 1]; out[o + 2] = cur[k + 2]; out[o + 3] = cur[k + 3]; break;
-        case 2: out[o] = cur[k]; out[o + 1] = cur[k + 1]; out[o + 2] = cur[k + 2]; out[o + 3] = 255; break;
-        case 0: case 4: out[o] = out[o + 1] = out[o + 2] = cur[k]; out[o + 3] = type === 4 ? cur[k + 1] : 255; break;
-        case 3: { const i = cur[k] * 3; out[o] = plte![i] ?? 0; out[o + 1] = plte![i + 1] ?? 0; out[o + 2] = plte![i + 2] ?? 0; out[o + 3] = trns?.[cur[k]] ?? 255; }
+        case 6: out[o] = s(x, 0); out[o + 1] = s(x, 1); out[o + 2] = s(x, 2); out[o + 3] = s(x, 3); break;
+        case 2: out[o] = s(x, 0); out[o + 1] = s(x, 1); out[o + 2] = s(x, 2); out[o + 3] = 255; break;
+        case 0: case 4: out[o] = out[o + 1] = out[o + 2] = s(x, 0); out[o + 3] = type === 4 ? s(x, 1) : 255; break;
+        case 3: { const p = s(x, 0), i = p * 3; out[o] = plte![i] ?? 0; out[o + 1] = plte![i + 1] ?? 0; out[o + 2] = plte![i + 2] ?? 0; out[o + 3] = trns?.[p] ?? 255; }
       }
     }
     [cur, prev] = [prev, cur];
