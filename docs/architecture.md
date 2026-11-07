@@ -44,7 +44,7 @@ krplayer/src/
                     opcode id → implementation, family() for family opcodes
   play.ts           source + platform → Game (browser and headless)
 
-kreditor/src/       plain JS, no build step (dev: `pnpm dev:editor`, then open /kreditor/)
+kreditor/mockup/src/ plain JS, no build step (dev: `pnpm dev:editor`, then open /kreditor/)
   state.js          open project + asset files, selection, undo (JSON snapshots), form helpers
   blocks.js         block canvas + palette, generated from opcodes.gen.js; pointer drag/snap/pan
   room.js           room layout editor (canvas) and room inspector
@@ -54,7 +54,7 @@ kreditor/src/       plain JS, no build step (dev: `pnpm dev:editor`, then open /
   opcodes.gen.js    GENERATED with krplayer/src/opcodes.gen.ts
 
 scripts/
-  gen-opcodes.ts    docs/krpj_opcodes.md → krplayer/src/opcodes.gen.ts + kreditor/src/opcodes.gen.js
+  gen-opcodes.ts    docs/krpj_opcodes.md → krplayer/src/opcodes.gen.ts + kreditor/mockup/src/opcodes.gen.js
   convert.ts        gm2kr from the command line (folder → .krpj)
 ```
 
