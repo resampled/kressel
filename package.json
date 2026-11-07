@@ -7,6 +7,7 @@
     "typecheck": "pnpm -r typecheck && tsc -p tsconfig.test.json",
     "test": "node --test \"gm2kr/test/**/*.test.ts\" \"krplayer/test/**/*.test.ts\"",
     "gen:opcodes": "node scripts/gen-opcodes.ts",
+    "playtest": "node scripts/playtest.ts",
     "dev:editor": "pnpm --filter kreditor dev",
     "dev:player": "pnpm --filter krplayer dev",
     "dev:gm2kr": "pnpm --filter gm2kr dev",

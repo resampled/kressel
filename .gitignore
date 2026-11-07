@@ -156,3 +156,6 @@ gm2kr/public/gm2kr.js*
 
 # stray output from tools writing to /proc/self/fd/* on Windows
 /proc/
+
+# headless playtest screenshots (scripts/playtest.ts)
+playtest-out/
