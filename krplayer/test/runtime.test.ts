@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import type { Krpj, Script } from '../src/krpj.ts';
 import { createHeadless } from '../src/platform/headless.ts';
 import { load, partition, prepare } from '../src/play.ts';
-import { equals, str, add } from '../src/value.ts';
+import { compare, equals, str, add } from '../src/value.ts';
 import { follow } from '../src/runtime/game.ts';
 import { warpSetup } from '../src/runtime/debug.ts';
 
@@ -32,6 +32,17 @@ test('value rules: epsilon equality, no number+string, string()', () => {
   assert.equal(equals(0.1 + 0.2, 0.3), true);
   assert.throws(() => add(1, 'a'), /unable to add/);
   assert.deepEqual([str(100), str(1.5), str(undefined)], ['100', '1.50', 'undefined']);
+});
+
+test('a numeric string compares with a real as a number (DR ch2 c_wait("5"))', async () => {
+  assert.deepEqual([compare('5', 0), compare(3, ' 5 '), compare('5abc', 5), equals('5', 5), equals(5, 'a')], [1, -1, 0, true, false]);
+  assert.throws(() => compare('a', 1), /unable to compare string and number/);
+  const v = await exec([
+    ['var_set', ['_lv', 'amt'], '5'],
+    ['var_set', ['_lv', 'gt'], ['opr_gt', ['_lv', 'amt'], 0]],
+    ['var_set', ['_lv', 'gte'], ['opr_gte', 4, ['_lv', 'amt']]],
+  ]);
+  assert.deepEqual([v.gt, v.gte], [true, false]);
 });
 
 test('real division by zero gives inf / NaN instead of failing (ch1_ribbit_mod obj_crackintro)', async () => {

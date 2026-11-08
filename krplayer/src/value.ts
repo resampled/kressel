@@ -65,16 +65,31 @@ export function add(a: Value, b: Value): Value {
   return real(a) + real(b);
 }
 
+/** GM's number pattern for comparing a string with a real. Unanchored at the end: "5abc" reads as 5. */
+const CMP_NUM = /^[-+]?(?:[0-9]{0,30}\.)?[0-9]{1,30}(?:[Ee][-+]?[1-2]?[0-9])?/;
+/** A string compared with a real: its leading number after trimming, or NaN if it has none. */
+function cmpStr(s: string): number {
+  const m = CMP_NUM.exec(s.trim());
+  return m ? Number(m[0]) : NaN;
+}
+
 export function equals(a: Value, b: Value): boolean {
   const an = typeof a === 'number' || typeof a === 'boolean', bn = typeof b === 'number' || typeof b === 'boolean';
   if (an && bn) return Math.abs(real(a) - real(b)) <= EPSILON;
+  // Real vs numeric string compares as numbers ("5" == 5); a non-numeric string is just unequal.
+  if (an && typeof b === 'string') return Math.abs(real(a) - cmpStr(b)) <= EPSILON;
+  if (bn && typeof a === 'string') return Math.abs(cmpStr(a) - real(b)) <= EPSILON;
   return a === b; // strings by value, undefined == undefined, everything else by reference
 }
 
 /** a < b (-1), a == b (0), a > b (1). Reals use the epsilon; strings compare by code unit. */
 export function compare(a: Value, b: Value): number {
   if (typeof a === 'string' && typeof b === 'string') return a < b ? -1 : a > b ? 1 : 0;
-  const x = real(a), y = real(b);
+  // A string against a real is read as a number (c_wait("5") in DR ch2); a non-numeric one is an error.
+  const x = typeof a === 'string' ? cmpStr(a) : real(a), y = typeof b === 'string' ? cmpStr(b) : real(b);
+  if (Number.isNaN(x) || Number.isNaN(y)) {
+    if (typeof a === 'string' || typeof b === 'string') throw new GmlError(`unable to compare ${typeName(a)} and ${typeName(b)}`);
+  }
   return Math.abs(x - y) <= EPSILON ? 0 : x < y ? -1 : 1;
 }
 

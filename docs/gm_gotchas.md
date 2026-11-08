@@ -91,6 +91,7 @@ GEN8 says 2.0.0.0 and there is no SEQN/FEAT/TGIN chunk. `fmt.gms23` is false.
 
 ## Runtime (assumed, verify with trace tests)
 * Real comparisons use `math_get_epsilon()` (default 0.00001): `0.1 + 0.2 == 0.3` is true.
+* **A string compared with a real is read as a number** (all of `== != < <= > >=`): it's trimmed, then its leading number is taken, so `"5" > 0`, `"5" == 5` and `"5abc" == 5` are true. Ordering a non-numeric string against a real is an error ("unable to compare"); `==` just gives false. Repro: DR ch2 `obj_ch2_scene6` calls `c_wait("5")`, and `obj_cutscene_master` Step then checks `cs_wait_amount > 0` / `cs_wait_timer >= cs_wait_amount`, which the original runner runs without error. The details come from the HTML5 runner's `yyCompareVal` (`g_NumberRE`) and haven't been checked against the VM.
 * `string()` of a non-integer real prints 2 decimals (`string(1.5)` = `"1.50"`).
 * `obj.var = v` writes to every instance of `obj`; reading `obj.var` reads the first instance.
 * Copy-on-write follows the HTML5 runner's model (copy when the owner differs; no reference counts), so writing an array that only one variable holds, through another variable, copies it like a shared one.
