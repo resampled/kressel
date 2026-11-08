@@ -24,7 +24,10 @@
 }
 @font-face {font-family: mOsOul; src: url("./mOsOul.ttf");}
 @font-face {font-family: determinationsans; src: url("./determination_sans.ttf");}
-@keyframes backtick {
+@keyframes backtick-minustop {
+      0% { margin-top: 0; }
+     20% { margin-top: -1px; }
+     80% { margin-top: 3px;}
 }
 
 body { background: url("./battlebg.gif") repeat; margin: 0; font-family: mOsOul; font-size: 16px;}
@@ -36,12 +39,12 @@ height: 1.7em; font-size: 1.3em;
 align-items: center;
 justify-content: space-between;
 }
-.n1-lft {padding: 0 .5em; display: flex;}
+.n1-lft {padding: 0 .5em; display: flex; align-items: center;}
 .n1-lftbtn { padding-left: .5em; cursor: pointer; user-select: none;}
-.n1-lftbtn:hover { color:var(--select);}
+.n1-lftbtn:hover { color:var(--select); animation: backtick-minustop step-start .2s; margin-top: 2px;}
 .n1-play { color: var(--red);}
 .n1-rgt {padding: 0 .5em; display: flex;}
-.n1-krlogo { color: var(--cyan); font-size: 1.2em;}
+.n1-krlogo { color: var(--cyan); font-size: 1.2em; font-family: determinationsans, Verdana; font-size: 1.5em;}
 .n1-complexity { border: 1px solid grey; width: 17vw; text-align: right;}
 
 .nav2{
@@ -51,6 +54,6 @@ width: 100%;
 display: flex;
 }
 .n2-drop {padding: 0 .3em; margin:0 .1em; cursor: pointer; border-left: 2px solid var(--light); border-right: 2px solid var(--light); border-radius: 5px; user-select: none;}
-.n2-drop:hover { color:var(--select);}
+.n2-drop:hover { color:var(--select); animation: backtick-minustop step-start .2s; margin-top: 2px;}
 .n2-search{padding-right: .2em;}
 input {background: var(--dark); color: var(--light); border: 1px solid var(--light); border-radius: 6px; display: block;}
