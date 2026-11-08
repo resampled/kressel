@@ -14,9 +14,10 @@ define('sen_key_released', (g, s, t) => keyState(g.p.input.released, n(s, t, 0))
 define('sen_key_clear', (g, s, t) => { const k = n(s, t, 0), i = g.p.input; i.keys[k] = 0; i.pressed[k] = 0; i.released[k] = 0; return undefined; });
 define('sen_io_clear', (g) => { const i = g.p.input; i.keys.fill(0); i.pressed.fill(0); i.released.fill(0); return undefined; });
 define('sen_mouse_held', (g, s, t) => (g.p.input.mouseButtons & (1 << (n(s, t, 0) - 1))) !== 0);
-define('sen_mouse_pressed', () => false);
-define('sen_mouse_released', () => false);
-define('sen_mouse_wheel', () => false);
+const mbit = (s: Value[], t: number) => { const b = n(s, t, 0); return b === -1 ? 7 : b > 0 ? 1 << (b - 1) : 0; };
+define('sen_mouse_pressed', (g, s, t) => (g.p.input.mousePressed & mbit(s, t)) !== 0);
+define('sen_mouse_released', (g, s, t) => (g.p.input.mouseReleased & mbit(s, t)) !== 0);
+define('sen_mouse_wheel', (g, s, t) => (s[t] === 'up' ? g.p.input.wheel > 0 : g.p.input.wheel < 0));
 // No gamepads in the browser build yet: none connected (games fall back to the keyboard).
 define('sen_gamepad_connected', () => false);
 define('sen_gamepad_button', () => false);

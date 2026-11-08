@@ -1,7 +1,7 @@
 // Files & data (dat_*): ds_*, JSON, ini, text files and buffers.
 
 import { define, family, n, str, opt } from './registry.ts';
-import { compare, equals, GmlError, GmStruct, real, type GArray, type Value } from '../value.ts';
+import { compare, equals, GmlError, NotImplemented, GmStruct, real, type GArray, type Value } from '../value.ts';
 import { Buffer, DS, DsList, DsMap, Ini, iniReal, listRead, listWrite, readLn, readReal, readString } from '../runtime/data.ts';
 import type { Game } from '../runtime/game.ts';
 import { gstr } from './opr.ts';
@@ -40,6 +40,64 @@ define('dat_map_set', (g, s, t) => { map(g, s[t]).m.set(s[t - 1], s[t - 2]); ret
 define('dat_map_add', (g, s, t) => { const m = map(g, s[t]).m; if (m.has(s[t - 1])) return false; m.set(s[t - 1], s[t - 2]); return true; });
 define('dat_map_delete', (g, s, t) => { map(g, s[t]).m.delete(s[t - 1]); return undefined; });
 define('dat_map_size', (g, s, t) => map(g, s[t]).m.size);
+define('dat_map_clear', (g, s, t) => { map(g, s[t]).m.clear(); return undefined; });
+define('dat_map_add_kind', (g, s, t) => {
+  const c = map(g, s[t - 1]);
+  if (c.m.has(s[t - 2])) return false;
+  c.m.set(s[t - 2], s[t - 3]);
+  g.data.nest(c, s[t - 3], s[t] === 'list' ? 'list' : 'map');
+  return true;
+});
+
+const stack = (g: Game, v: Value) => g.data.stacks.get(v, 'ds_stack');
+family('dat_stack', 'ds_stack_', {
+  create: (g) => g.data.stacks.add(new DsList()),
+  destroy: (g, s, t) => { g.data.stacks.free(s[t]); return undefined; },
+  push: (g, s, t, argc) => { const l = stack(g, s[t]); for (let k = 1; k < argc; k++) l.a.push(s[t - k]); return undefined; },
+  pop: (g, s, t) => stack(g, s[t]).a.pop(),
+  top: (g, s, t) => stack(g, s[t]).a.at(-1),
+  size: (g, s, t) => stack(g, s[t]).a.length,
+  empty: (g, s, t) => stack(g, s[t]).a.length === 0,
+  clear: (g, s, t) => { stack(g, s[t]).a = []; return undefined; },
+  copy: (g, s, t) => { stack(g, s[t]).a = [...stack(g, s[t - 1]).a]; return undefined; },
+});
+const queue = (g: Game, v: Value) => g.data.queues.get(v, 'ds_queue');
+family('dat_queue', 'ds_queue_', {
+  create: (g) => g.data.queues.add(new DsList()),
+  destroy: (g, s, t) => { g.data.queues.free(s[t]); return undefined; },
+  enqueue: (g, s, t, argc) => { const l = queue(g, s[t]); for (let k = 1; k < argc; k++) l.a.push(s[t - k]); return undefined; },
+  dequeue: (g, s, t) => queue(g, s[t]).a.shift(),
+  head: (g, s, t) => queue(g, s[t]).a[0],
+  tail: (g, s, t) => queue(g, s[t]).a.at(-1),
+  size: (g, s, t) => queue(g, s[t]).a.length,
+  empty: (g, s, t) => queue(g, s[t]).a.length === 0,
+  clear: (g, s, t) => { queue(g, s[t]).a = []; return undefined; },
+  copy: (g, s, t) => { queue(g, s[t]).a = [...queue(g, s[t - 1]).a]; return undefined; },
+});
+const prio = (g: Game, v: Value) => g.data.priorities.get(v, 'ds_priority');
+/** Index of the lowest (max: highest) priority; the earliest added wins ties (assumed). */
+const extreme = (q: { p: number[] }, max: boolean) => {
+  let k = -1;
+  for (let i = 0; i < q.p.length; i++) if (k < 0 || (max ? q.p[i] > q.p[k] : q.p[i] < q.p[k])) k = i;
+  return k;
+};
+const take = (q: { v: Value[]; p: number[] }, k: number): Value => { if (k < 0) return undefined; const v = q.v[k]; q.v.splice(k, 1); q.p.splice(k, 1); return v; };
+family('dat_priority', 'ds_priority_', {
+  create: (g) => g.data.priorities.add({ v: [], p: [] }),
+  destroy: (g, s, t) => { g.data.priorities.free(s[t]); return undefined; },
+  add: (g, s, t) => { const q = prio(g, s[t]); q.v.push(s[t - 1]); q.p.push(n(s, t, 2)); return undefined; },
+  change_priority: (g, s, t) => { const q = prio(g, s[t]), k = q.v.findIndex((x) => equals(x, s[t - 1])); if (k >= 0) q.p[k] = n(s, t, 2); return undefined; },
+  find_priority: (g, s, t) => { const q = prio(g, s[t]), k = q.v.findIndex((x) => equals(x, s[t - 1])); return k >= 0 ? q.p[k] : undefined; },
+  delete_value: (g, s, t) => { const q = prio(g, s[t]); take(q, q.v.findIndex((x) => equals(x, s[t - 1]))); return undefined; },
+  delete_min: (g, s, t) => { const q = prio(g, s[t]); return take(q, extreme(q, false)); },
+  delete_max: (g, s, t) => { const q = prio(g, s[t]); return take(q, extreme(q, true)); },
+  find_min: (g, s, t) => { const q = prio(g, s[t]); return q.v[extreme(q, false)]; },
+  find_max: (g, s, t) => { const q = prio(g, s[t]); return q.v[extreme(q, true)]; },
+  size: (g, s, t) => prio(g, s[t]).v.length,
+  empty: (g, s, t) => prio(g, s[t]).v.length === 0,
+  clear: (g, s, t) => { const q = prio(g, s[t]); q.v = []; q.p = []; return undefined; },
+  copy: (g, s, t) => { const d = prio(g, s[t]), q = prio(g, s[t - 1]); d.v = [...q.v]; d.p = [...q.p]; return undefined; },
+});
 define('dat_map_first', (g, s, t) => map(g, s[t]).m.keys().next().value);
 define('dat_map_next', (g, s, t) => {
   const keys = [...map(g, s[t]).m.keys()], i = keys.findIndex((k) => k === s[t - 1]);
@@ -157,7 +215,7 @@ define('dat_encode', (_g, s, t) => {
     case 'base64_encode': return btoa(String.fromCharCode(...new TextEncoder().encode(x)));
     case 'base64_decode': try { return new TextDecoder().decode(Uint8Array.from(atob(x), (c) => c.charCodeAt(0))); } catch { return ''; }
   }
-  throw new GmlError(`${String(s[t])} is not implemented in krplayer yet`);
+  throw new NotImplemented(`${String(s[t])} is not implemented in krplayer yet`);
 });
 
 // ---------------------------------------------------------------- buffers

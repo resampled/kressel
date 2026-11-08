@@ -1,7 +1,7 @@
 // GmModel -> game.json + asset files (zipped together, they make a .krpj).
 
 import type {
-  AssetLayer, Font, Hat, KrFunction, KrObject, Krpj, Layer, LegacyTile, Room, Script, Sound, Sprite, Tileset, View,
+  AssetLayer, Font, Hat, KrFunction, KrObject, Krpj, Layer, LegacyTile, Path, Room, Script, Shader, Sound, Sprite, Tileset, View,
 } from '../../../krplayer/src/krpj.ts';
 import type { GmModel } from '../model.ts';
 import type { GmEvent } from '../chunks/objt.ts';
@@ -16,6 +16,12 @@ const OTHER: Record<number, string> = { 0: 'evt_outside_room', 1: 'evt_intersect
 const ASYNC: Record<number, string> = { 60: 'image_loaded', 62: 'http', 63: 'dialog', 66: 'iap', 67: 'cloud', 68: 'networking', 69: 'steam', 70: 'social', 71: 'push_notification', 72: 'save_load', 73: 'audio_recording', 74: 'audio_playback', 75: 'system' };
 const STEP = ['evt_step', 'evt_step_begin', 'evt_step_end'];
 const KEY: Record<number, string> = { 5: 'held', 9: 'pressed', 10: 'released' };
+/** Mouse event subtypes -> evt_mouse kinds (11 = leave; 50+ global; 60/61 wheel). */
+const MOUSE: Record<number, string> = {};
+['left', 'right', 'middle'].forEach((b, i) => {
+  ['held', 'pressed', 'released'].forEach((k, j) => { MOUSE[j === 0 ? i : j * 3 + i + 1] = `${b}_${k}`; MOUSE[50 + j * 3 + i] = `global_${b}_${k}`; });
+});
+Object.assign(MOUSE, { 3: 'none', 10: 'enter', 11: 'leave', 60: 'wheel_up', 61: 'wheel_down' });
 const AUDIO_EXT = /\.(ogg|wav|mp3)$/i;
 /** Files next to data.win that are the runner's, not the game's. */
 const RUNNER_FILE = /(^|\/)(data\.win|audiogroup\d+\.dat|options\.ini|[^/]+\.(exe|dll|so|dylib|pdb))$/i;
@@ -30,6 +36,7 @@ function hat(e: GmEvent, assets: AssetNames, where: string): Hat {
     case 3: if (STEP[s]) return [STEP[s]]; break;
     case 4: if (assets.objects[s]) return ['evt_collision', ['_as', assets.objects[s]]]; break;
     case 5: case 9: case 10: return ['evt_key', KEY[e.type], s];
+    case 6: if (MOUSE[s]) return ['evt_mouse', MOUSE[s]]; break;
     case 7:
       if (OTHER[s]) return [OTHER[s]];
       if (s >= 10 && s <= 25) return ['evt_user', s - 10];
@@ -98,6 +105,13 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
       ...(animated ? { frames: t.frames, frame_time: t.frameTime, ids: t.ids } : {}),
     };
   }
+
+  const paths: Record<string, Path> = {};
+  for (const p of m.paths) {
+    paths[p.name] = { points: p.points, ...(p.smooth ? { smooth: true } : {}), ...(p.closed ? { closed: true } : {}), precision: p.precision };
+  }
+  const shaders: Record<string, Shader> = {};
+  for (const s of m.shaders) shaders[s.name] = { vertex: s.vertex, fragment: s.fragment };
 
   const fonts: Record<string, Font> = {};
   for (const f of m.fonts) {
@@ -211,7 +225,7 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
         ...(l.x ? { x: l.x } : {}), ...(l.y ? { y: l.y } : {}), ...(l.hspeed ? { hspeed: l.hspeed } : {}), ...(l.vspeed ? { vspeed: l.vspeed } : {}),
       };
       switch (l.type) {
-        case 'effect': return [];
+        case 'effect': case 'path': return [];
         case 'background': return [{
           ...base, type: 'background', visible: l.visible && l.bgVisible, color: l.color & 0xffffff, sprite: name(m.sprites, l.sprite),
           htiled: l.htiled, vtiled: l.vtiled, stretch: l.stretch, ...(l.foreground ? { foreground: true } : {}),
@@ -219,8 +233,9 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
           ...(l.frame ? { image_index: l.frame } : {}), ...(l.animSpeed !== 15 || l.animSpeedType ? { image_speed: l.animSpeed } : {}),
         }];
         case 'tiles': {
-          const ts = name(m.tilesets, l.tileset);
-          if (!ts) throw new Error(`room ${r.name}: layer ${l.name} has bad tileset ${l.tileset}`);
+          // A tile layer with no tileset (-1) draws nothing in GM, but code can still look it up.
+          const ts = l.tileset === -1 ? null : name(m.tilesets, l.tileset);
+          if (ts === null && l.tileset !== -1) throw new Error(`room ${r.name}: layer ${l.name} has bad tileset ${l.tileset}`);
           return [{ ...base, type: 'tiles', tileset: ts, cols: l.cols, rows: l.rows, data: [...l.data] }];
         }
         case 'assets': {
@@ -278,7 +293,7 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
     cfg_gm_compat: { imported_from: { tool: 'gm2kr', game: g.name, bytecode: g.bytecodeVersion, gm_version: g.version } },
     cfg_defaults: { width: g.windowWidth, height: g.windowHeight, fps, window_title: g.displayName || g.name },
     cfg_project: { init_room: roomOrder[0] ?? null },
-    sprites, sounds, fonts, tilesets, functions, objects, rooms, room_order: roomOrder,
+    sprites, sounds, fonts, tilesets, paths, shaders, functions, objects, rooms, room_order: roomOrder,
     global_init: m.globalInit.map((id) => script(id, 'global init')),
     scripts, audio_groups: m.audioGroups, included_files: included,
   };

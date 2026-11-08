@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FormatError, Reader, readStringAt } from '../src/io/reader.ts';
-import { readChunks } from '../src/datawin.ts';
-import { bytes, form } from './util.ts';
+import { chunkReader, readChunks } from '../src/datawin.ts';
+import { readPath, readShdr } from '../src/chunks/misc.ts';
+import { bytes, form, u32 } from './util.ts';
 
 test('reads little-endian values and tracks position', () => {
   const r = new Reader(bytes([1, 0, 0, 0, 0xff, 0xff]));
@@ -44,4 +45,13 @@ test('readChunks lists chunks and rejects truncated ones', () => {
   bad[12] = 99; // GEN8 claims 99 bytes
   assert.throws(() => readChunks(bad.buffer), FormatError);
   assert.throws(() => readChunks(bytes([0, 0, 0, 0])), /missing FORM/);
+});
+
+test('PATH: smooth/closed/precision and inline (x, y, speed) points; SHDR: null pointers are stripped shaders', () => {
+  const f32 = (x: number) => [...new Uint8Array(new Float32Array([x]).buffer)];
+  // Chunk bodies start at 16 (FORM header 8 + chunk header 8). PATH: count, pointer to the entry at 24.
+  const path = [...u32(1), ...u32(24), ...u32(0), ...u32(1), ...u32(0), ...u32(4), ...u32(2), ...f32(1), ...f32(2), ...f32(100), ...f32(3.5), ...f32(4), ...f32(50)];
+  const buf = form([['PATH', path], ['SHDR', [...u32(2), ...u32(0), ...u32(0)]]]), chunks = readChunks(buf);
+  assert.deepEqual(readPath(chunkReader(buf, chunks, 'PATH')!), [{ name: '', smooth: true, closed: false, precision: 4, points: [[1, 2, 100], [3.5, 4, 50]] }]);
+  assert.deepEqual(readShdr(chunkReader(buf, chunks, 'SHDR')!), []);
 });

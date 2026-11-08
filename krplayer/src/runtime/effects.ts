@@ -2,7 +2,7 @@
 // drawn as circles; it is not GM's exact particle setup (see the drw_effect note in krpj_opcodes.md).
 
 import type { Renderer } from '../platform/types.ts';
-import { GmlError } from '../value.ts';
+import { GmlError, NotImplemented } from '../value.ts';
 
 const MAX = 2048;
 // Per particle: x, y, vx, vy, r, dr, life, maxLife, gravity
@@ -31,7 +31,7 @@ export class Effects {
         for (let i = 0; i < 40; i++) this.burst(x, y, 4 * k, 2 * k, 0, 30, 0.08, colour, above);
         return;
     }
-    throw new GmlError(`effect kind ${kind} is not implemented in krplayer yet`);
+    throw new NotImplemented(`effect kind ${kind} is not implemented in krplayer yet`);
   }
 
   private burst(x: number, y: number, spd: number, r: number, dr: number, life: number, grav: number, c: number, above: boolean) {

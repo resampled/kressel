@@ -34,6 +34,8 @@ export class GmMethod {
 export const EPSILON = 0.00001;
 
 export class GmlError extends Error {}
+/** A GML feature krplayer lacks. Never caught by GML try/catch, so gaps stay loud. */
+export class NotImplemented extends GmlError {}
 
 export const typeName = (v: Value): string =>
   typeof v === 'number' ? 'number' : typeof v === 'string' ? 'string' : typeof v === 'boolean' ? 'bool' : v === undefined ? 'undefined'

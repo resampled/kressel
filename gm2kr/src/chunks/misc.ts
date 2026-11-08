@@ -46,3 +46,40 @@ export function readBgnd(r: Reader): GmTileset[] {
     return { name, tpag, tileW, tileH, borderX, borderY, columns, frames, frameTime, ids };
   });
 }
+
+export interface GmPath { name: string; smooth: boolean; closed: boolean; precision: number; points: [number, number, number][] }
+
+/** PATH: name, smooth, closed, precision, then an inline list of (x, y, speed) points. */
+export function readPath(r: Reader): GmPath[] {
+  return r.ptrList(1 << 14).map((p) => {
+    const e = r.at(p);
+    const name = e.strPtr(), smooth = e.bool(), closed = e.bool(), precision = e.u32();
+    const n = e.count(1 << 16), points: [number, number, number][] = [];
+    for (let i = 0; i < n; i++) points.push([e.f32(), e.f32(), e.f32()]);
+    return { name, smooth, closed, precision, points };
+  });
+}
+
+export interface GmShader { name: string; vertex: string; fragment: string; attributes: string[] }
+
+/**
+ * SHDR: name, type (top bit set in GMS2), then GLSL ES, GLSL and HLSL9 vertex/fragment source pointers,
+ * two HLSL11 blob pointers and the vertex attribute names. Only GLSL ES is kept (WebGL compiles it).
+ */
+export function readShdr(r: Reader): GmShader[] {
+  const out: GmShader[] = [];
+  const count = r.count(1 << 12);
+  for (let i = 0; i < count; i++) {
+    const p = r.ptr(true);
+    if (p === 0) continue; // stripped shaders leave null pointers (gm_gotchas.md)
+    const e = r.at(p);
+    const name = e.strPtr(), type = e.u32() & 0x7fffffff;
+    const vertex = e.strPtr(), fragment = e.strPtr();
+    e.skip(24); // GLSL, HLSL9 sources, HLSL11 blobs
+    const n = e.count(64), attributes: string[] = [];
+    for (let i = 0; i < n; i++) attributes.push(e.strPtr());
+    if (!vertex || !fragment) throw new FormatError(`shader ${name} (type ${type}) has no GLSL ES source; HLSL-only shaders aren't supported`, p);
+    out.push({ name, vertex, fragment, attributes });
+  }
+  return out;
+}

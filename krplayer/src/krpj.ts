@@ -51,6 +51,10 @@ export interface Tileset {
   /** Animated tile sets: tile -> its frames' source tiles (tile_count * frames entries). */
   ids?: number[];
 }
+/** A path: points [x, y, speed %], straight or smooth (curved), open or closed. */
+export interface Path { points: [number, number, number][]; smooth?: boolean; closed?: boolean; precision?: number }
+/** A GLSL ES shader pair, GameMaker conventions (in_Position/in_Colour/in_TextureCoord, gm_BaseTexture, gm_Matrices). */
+export interface Shader { vertex: string; fragment: string }
 export interface KrFunction {
   args: string[];
   body: Script;
@@ -110,8 +114,8 @@ export interface AssetSprite {
 }
 /** Sprites and GMS1-style tiles placed in the room editor. */
 export interface AssetLayer extends LayerBase { type: 'assets'; tiles?: LegacyTile[]; sprites?: AssetSprite[] }
-/** A tile map: rows * cols cells, each a tile index (bits 28-30: mirror, flip, rotate; 0 = empty). */
-export interface TileLayer extends LayerBase { type: 'tiles'; tileset: string; cols: number; rows: number; data: number[] }
+/** A tile map: rows * cols cells, each a tile index (bits 28-30: mirror, flip, rotate; 0 = empty). tileset null: draws nothing. */
+export interface TileLayer extends LayerBase { type: 'tiles'; tileset: string | null; cols: number; rows: number; data: number[] }
 export type Layer = BackgroundLayer | InstanceLayer | AssetLayer | TileLayer;
 export interface View {
   view: [number, number, number, number]; port: [number, number, number, number];
@@ -147,6 +151,8 @@ export interface Krpj {
   sounds: Record<string, Sound>;
   fonts: Record<string, Font>;
   tilesets?: Record<string, Tileset>;
+  paths?: Record<string, Path>;
+  shaders?: Record<string, Shader>;
   functions?: Record<string, KrFunction>;
   objects?: Record<string, KrObject>;
   rooms?: Record<string, Room>;

@@ -45,7 +45,7 @@ const OWN_INST = 1 << 24, OWN_GLOBAL = 2 << 24, OWN_ARG = 3 << 24, OWN_LOCAL = 4
  * `rows` are the leading indices of a multi-dimensional access (a[i][j]: rows [i], index j).
  */
 interface Ref { scope: number; id: number; inst: Node | undefined; index: Node | undefined; rows: Node[]; ro: boolean; own: number }
-interface Ctx { kind: 'loop' | 'with' | 'switch'; breaks: number[]; conts: number[] }
+interface Ctx { kind: 'loop' | 'with' | 'switch' | 'try'; breaks: number[]; conts: number[] }
 
 const isOp = (n: Node): n is [string, ...Node[]] => Array.isArray(n) && typeof n[0] === 'string';
 
@@ -86,6 +86,7 @@ class Compiler {
     if (!Array.isArray(n)) return;
     if (n[0] === 'fnc_def') return;
     if (n[0] === 'var_local' && typeof n[1] === 'string' && !this.locals.has(n[1])) this.locals.set(n[1], this.nLocals++);
+    if (n[0] === 'ctr_try' && typeof n[2] === 'string' && !this.locals.has(n[2])) this.locals.set(n[2], this.nLocals++); // catch (e)
     for (const c of n) this.hoistLocals(c);
   }
   private temp(): number { return this.nLocals++; }
@@ -282,12 +283,26 @@ class Compiler {
       case 'ctr_break': case 'ctr_continue': {
         const brk = head === 'ctr_break';
         let i = this.ctx.length - 1;
-        if (!brk) while (i >= 0 && this.ctx[i].kind === 'switch') i--;
+        // Leaving a try drops its handler; continue also passes through switches.
+        for (; i >= 0 && (this.ctx[i].kind === 'try' || (!brk && this.ctx[i].kind === 'switch')); i--) if (this.ctx[i].kind === 'try') this.emit(Op.TRY_END);
         const ctx = this.ctx[i];
         if (!ctx) this.fail(path, `${head} outside a loop`);
         if (brk && ctx.kind === 'with') this.emit(Op.WITH_EXIT);
         (brk ? ctx.breaks : ctx.conts).push(this.jump(Op.JMP));
         return;
+      }
+      case 'ctr_try': {
+        if (Array.isArray(d) && d.length) this.fail(path, 'ctr_try finally blocks are not implemented in krplayer yet');
+        const jcatch = this.jump(Op.TRY_BEGIN);
+        this.loop('try', () => this.script(a, `${path}/try`));
+        this.emit(Op.TRY_END);
+        const jend = this.jump(Op.JMP);
+        this.patch(jcatch);
+        // The VM pushes the exception: store it in the catch variable, or drop it.
+        if (typeof b === 'string') { const l = this.locals.get(b)!; this.emit(Op.SET, S.LOCAL, l, this.localOwn + l); }
+        else this.emit(Op.POP);
+        if (Array.isArray(c)) this.script(c, `${path}/catch`);
+        return this.patch(jend);
       }
       case 'ctr_exit': this.emit(Op.EXIT); return;
       case 'ctr_return':
@@ -449,7 +464,9 @@ class Compiler {
     }
     if (head in BIN) { this.expr(a, path); this.expr(b, path); this.emit(Op.BIN, BIN[head]); return; }
     if (head in UN) { this.expr(a, path); this.emit(Op.UN, UN[head]); return; }
-    if (head.startsWith('_') || head.startsWith('ctr_') || head.startsWith('evt_') || head.startsWith('var_local')) {
+    // Control blocks aren't values, but ctr_ function opcodes with a builtin (game_get_speed...) are.
+    const known = (() => { try { return opcodeId(head, ''); } catch { return -1; } })();
+    if (head.startsWith('_') || (head.startsWith('ctr_') && !IMPL[known]) || head.startsWith('evt_') || head.startsWith('var_local')) {
       this.fail(path, `${head} is not supported as an expression`);
     }
     let id: number;

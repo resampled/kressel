@@ -99,6 +99,27 @@ export class SoftRenderer implements Renderer {
   }
 
   triangle(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, c1: number, c2: number, c3: number, alpha: number): void {
+    this.tri(null, x1, y1, 0, 0, c1, x2, y2, 0, 0, c2, x3, y3, 0, 0, c3, alpha);
+  }
+  triangleTex(t: TextureId, x1: number, y1: number, u1: number, v1: number, c1: number, x2: number, y2: number, u2: number, v2: number, c2: number,
+    x3: number, y3: number, u3: number, v3: number, c3: number, alpha: number): void {
+    const img = this.tex.get(t);
+    if (img) this.tri(img, x1, y1, u1, v1, c1, x2, y2, u2, v2, c2, x3, y3, u3, v3, c3, alpha); else this.draws++;
+  }
+
+  // GLSL can't run here: shaders compile to handles and drawing ignores them (said once).
+  private shaderWarned = false;
+  compileShader(): number { return this.next++; }
+  setShader(sh: number): void {
+    if (sh >= 0 && !this.shaderWarned) { this.shaderWarned = true; console.warn('soft renderer: shaders are not emulated; drawing without them'); }
+  }
+  shaderUniform(): number { return this.next++; }
+  setUniformF(): void {}
+  setSampler(): void {}
+
+  /** Rasterizes a triangle: per-vertex colours, optionally modulating a texture sampled at interpolated u/v. */
+  private tri(img: Pixels | null, x1: number, y1: number, u1: number, v1: number, c1: number, x2: number, y2: number, u2: number, v2: number, c2: number,
+    x3: number, y3: number, u3: number, v3: number, c3: number, alpha: number): void {
     this.draws++;
     if (!this.enabled || alpha <= 0) return;
     const [X1, Y1] = this.w(x1, y1), [X2, Y2] = this.w(x2, y2), [X3, Y3] = this.w(x3, y3);
@@ -117,9 +138,17 @@ export class SoftRenderer implements Renderer {
       const e1 = ((Y2 - Y3) * (X - X3) + (X3 - X2) * (Y - Y3)) * sg, e2 = ((Y3 - Y1) * (X - X3) + (X1 - X3) * (Y - Y3)) * sg, e3 = Math.abs(det) - e1 - e2;
       if (!inside(e1, t1) || !inside(e2, t2) || !inside(e3, t3)) continue;
       const l1 = e1 / Math.abs(det), l2 = e2 / Math.abs(det), l3 = 1 - l1 - l2;
+      let tr = 1, tg = 1, tb = 1, ta = 1;
+      if (img) {
+        const tx = Math.floor((l1 * u1 + l2 * u2 + l3 * u3) * img.w), ty = Math.floor((l1 * v1 + l2 * v2 + l3 * v3) * img.h);
+        if (tx < 0 || ty < 0 || tx >= img.w || ty >= img.h) continue;
+        const k = (ty * img.w + tx) * 4;
+        tr = img.data[k] / 255; tg = img.data[k + 1] / 255; tb = img.data[k + 2] / 255; ta = img.data[k + 3] / 255;
+        if (ta <= 0) continue;
+      }
       const f = this.fog;
-      this.blend(px, py, f ? ch(this.fogCol, 0) : l1 * ch(c1, 0) + l2 * ch(c2, 0) + l3 * ch(c3, 0),
-        f ? ch(this.fogCol, 8) : l1 * ch(c1, 8) + l2 * ch(c2, 8) + l3 * ch(c3, 8), f ? ch(this.fogCol, 16) : l1 * ch(c1, 16) + l2 * ch(c2, 16) + l3 * ch(c3, 16), alpha);
+      this.blend(px, py, f ? ch(this.fogCol, 0) : tr * (l1 * ch(c1, 0) + l2 * ch(c2, 0) + l3 * ch(c3, 0)),
+        f ? ch(this.fogCol, 8) : tg * (l1 * ch(c1, 8) + l2 * ch(c2, 8) + l3 * ch(c3, 8)), f ? ch(this.fogCol, 16) : tb * (l1 * ch(c1, 16) + l2 * ch(c2, 16) + l3 * ch(c3, 16)), alpha * ta);
     }
   }
 

@@ -12,6 +12,19 @@ const arr = (v: Value, fn: string): GArray => {
 };
 
 define('var_arr_length', (_g, s, t) => arr(s[t], 'array_length').length);
+define('var_arr_get', (_g, s, t) => {
+  const a = arr(s[t], 'array_get'), i = Math.trunc(n(s, t, 1));
+  if (i < 0 || i >= a.length) throw new GmlError(`array_get: index ${i} out of range (length ${a.length})`);
+  return a[i];
+});
+/** Pre-2.3 2D helpers: height is the outer length, length_2d a row's length (0 if that row isn't an array). */
+define('var_arr_2d', (_g, s, t) => {
+  const a = s[t - 1];
+  if (!Array.isArray(a)) return 0;
+  if (s[t] === 'height') return a.length;
+  const row = a[Math.trunc(n(s, t, 2))];
+  return Array.isArray(row) ? row.length : 0;
+});
 define('var_arr_create', (_g, s, t, argc) => {
   const k = Math.trunc(n(s, t, 0)), v = argc > 1 ? s[t - 1] : 0;
   if (k < 0 || k > 1 << 26) throw new GmlError(`array_create: bad size ${k}`);
@@ -82,6 +95,11 @@ define('var_inst_exists', (g, s, t) => {
   if (!inst) return false;
   const name = str(s, t, 1);
   return IV_NAMES.has(name) || inst.vars.has(g.a.varSlot(name));
+});
+define('var_inst_names', (g, s, t) => {
+  const inst = g.first(real(s[t]));
+  if (!inst) throw new GmlError(`variable_instance_get_names: instance ${String(s[t])} does not exist`);
+  return [...inst.vars.keys()].map((k) => g.a.varNames[k]);
 });
 define('var_global_get', (g, s, t) => g.globalScope.vars.get(g.a.varSlot(str(s, t, 0))));
 define('var_global_set', (g, s, t) => { g.globalScope.vars.set(g.a.varSlot(str(s, t, 0)), s[t - 1]); return undefined; });

@@ -28,9 +28,13 @@ export class Instance extends Scope {
   /** Layer id the instance is on (-1: none, e.g. created with instance_create_depth). */
   layer = -1;
   path = -1; path_position = 0; path_positionprevious = 0; path_speed = 0; path_scale = 1; path_orientation = 0; path_endaction = 0;
+  /** Where the path's first point sits (path_start). */
+  pathX = 0; pathY = 0;
   readonly alarm = new Float64Array(12).fill(-1);
   /** Set by built-in motion; cleared by the outside-room check. */
   wasOutside = false;
+  /** Whether the mouse was over the mask last step (mouse enter/leave events). */
+  mouseOver = false;
 
   constructor(id: number, obj: ObjectDef) {
     super();

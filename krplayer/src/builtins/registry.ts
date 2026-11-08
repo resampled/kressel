@@ -2,7 +2,7 @@
 // the compiler rejects opcodes with no implementation (named, with their location).
 
 import { opcodeId } from '../opcodes.ts';
-import { GmlError, real, str as toStr, truthy, type Value } from '../value.ts';
+import { GmlError, NotImplemented, real, str as toStr, truthy, type Value } from '../value.ts';
 import type { Game } from '../runtime/game.ts';
 
 /**
@@ -23,7 +23,7 @@ export function define(name: string, fn: BuiltinFn): void {
 export function family(name: string, prefix: string, members: Record<string, BuiltinFn>): void {
   define(name, (g, s, t, argc) => {
     const m = s[t], f = typeof m === 'string' ? members[m] : undefined;
-    if (!f) throw new GmlError(`${prefix}${String(m)} is not implemented in krplayer yet`);
+    if (!f) throw new NotImplemented(`${prefix}${String(m)} is not implemented in krplayer yet`);
     return f(g, s, t - 1, argc - 1);
   });
 }

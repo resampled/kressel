@@ -56,6 +56,23 @@ export interface Renderer {
   ): void;
   /** A filled triangle with per-vertex colours. */
   triangle(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, c1: number, c2: number, c3: number, alpha: number): void;
+  /** A textured triangle (draw_primitive_begin_texture): normalized u/v and a BGR colour per vertex. */
+  triangleTex(
+    tex: TextureId, x1: number, y1: number, u1: number, v1: number, c1: number, x2: number, y2: number, u2: number, v2: number, c2: number,
+    x3: number, y3: number, u3: number, v3: number, c3: number, alpha: number,
+  ): void;
+  /**
+   * Shaders (GLSL ES, GameMaker conventions: in_Position/in_Colour/in_TextureCoord, gm_BaseTexture, gm_Matrices).
+   * compileShader returns a handle, or -1 if it doesn't compile; setShader(-1) restores the default.
+   * Uniform handles come from shaderUniform (-1 if the shader has none of that name), and are set while the shader is on.
+   * A renderer that can't run GLSL (the software renderer) draws without them and says so once.
+   */
+  compileShader(vertex: string, fragment: string): number;
+  setShader(shader: number): void;
+  shaderUniform(shader: number, name: string): number;
+  setUniformF(uniform: number, n: number, x: number, y: number, z: number, w: number): void;
+  /** Binds a texture to a sampler uniform (texture_set_stage). */
+  setSampler(uniform: number, tex: TextureId): void;
   /** Text in a built-in fallback font (GM's default font when none is set). */
   systemText(text: string, x: number, y: number, color: number, alpha: number): void;
 }
@@ -89,6 +106,10 @@ export interface Input {
   mouseY: number;
   /** Bit 0 left, 1 right, 2 middle. */
   mouseButtons: number;
+  /** Buttons that went down/up since the last step (same bits), and wheel notches (+ up, - down); cleared after each step. */
+  mousePressed: number;
+  mouseReleased: number;
+  wheel: number;
   /** Characters typed since the last step (keyboard_string), and the last key code pressed. */
   typed: string;
   lastKey: number;

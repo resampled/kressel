@@ -3,6 +3,7 @@
 import { define, family, n, b, str, opt } from './registry.ts';
 import { GmlError, real, type GArray, type Value } from '../value.ts';
 import { Instance } from '../runtime/instance.ts';
+import { ELEM } from '../runtime/layers.ts';
 import type { Game } from '../runtime/game.ts';
 import {
   drawSprite, drawSpriteGeneral, drawSpritePart, drawSpriteTiled, drawText, ellipse, line, mix, rect, roundrect, spriteOrThrow, textSize, triangle,
@@ -61,7 +62,13 @@ define('drw_sprite_tiled_ext', (g, s, t) => {
   drawSpriteTiled(g, spr(g, s[t]), n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), n(s, t, 7));
   return undefined;
 });
-define('drw_path', () => { throw new GmlError('draw_path: the project has no paths'); });
+/** draw_path: the followed line in the draw colour; relative paths put their first point at (x, y). */
+define('drw_path', (g, s, t) => {
+  const p = g.paths.get(n(s, t, 0), 'draw_path'), pts = p.polyline();
+  const dx = b(s, t, 3) ? 0 : n(s, t, 1) - (pts[0] ?? 0), dy = b(s, t, 3) ? 0 : n(s, t, 2) - (pts[1] ?? 0);
+  for (let k = 2; k + 1 < pts.length; k += 2) line(g, pts[k - 2] + dx, pts[k - 1] + dy, pts[k] + dx, pts[k + 1] + dy, 1, g.colour, g.colour, g.alpha);
+  return undefined;
+});
 
 // ---------------------------------------------------------------- text
 
@@ -205,13 +212,19 @@ family('drw_gpu', 'gpu_set_', {
   alphatestenable: () => undefined, alphatestref: () => undefined, ztestenable: () => undefined, zwriteenable: () => undefined, cullmode: () => undefined,
 });
 // Texture pages are a desktop concern: everything is resident in krplayer.
-family('drw_texture', 'texture_', { prefetch: () => undefined, flush: () => undefined, is_ready: () => true });
+family('drw_texture', 'texture_', {
+  prefetch: () => undefined, flush: () => undefined, is_ready: () => true,
+  get_texel_width: (g, s, t) => { const w = g.p.renderer.textureSize(n(s, t, 0))[0]; return w ? 1 / w : 0; },
+  get_texel_height: (g, s, t) => { const h = g.p.renderer.textureSize(n(s, t, 0))[1]; return h ? 1 / h : 0; },
+  get_width: () => 1, get_height: () => 1, // krplayer textures are whole frames, so the frame fills its texture
+  set_stage: (g, s, t) => { g.p.renderer.setSampler(n(s, t, 0), n(s, t, 1)); return undefined; },
+});
 family('drw_texturegroup', 'texturegroup_', { get_textures: () => [], load: () => 0, unload: () => undefined, get_status: () => 3 });
 // Vertex formats/buffers are created by Deltarune's d3d compatibility init but never submitted.
 let vertexIds = 0;
 family('drw_vertex', 'vertex_', {
   format_begin: () => undefined, format_add_position: () => undefined, format_add_position_3d: () => undefined, format_add_colour: () => undefined,
-  format_add_color: () => undefined, format_add_normal: () => undefined, format_add_textcoord: () => undefined, format_end: () => ++vertexIds,
+  format_add_color: () => undefined, format_add_normal: () => undefined, format_add_texcoord: () => undefined, format_add_textcoord: () => undefined, format_end: () => ++vertexIds,
   create_buffer: () => ++vertexIds,
 });
 
@@ -271,7 +284,80 @@ define('drw_surface_part', (g, s, t) => {
 });
 define('drw_app_surface', (g, s, t) => { if (s[t] === 'draw_enable') g.appSurfaceDraw = b(s, t, 1); return undefined; });
 define('drw_getpixel', () => 0);
-define('drw_surface_getpixel', () => 0);
+/** A surface pixel as BGR, or ABGR with alpha in the top byte (_ext). Reads the whole surface back, so it's slow. */
+const getpixel = (g: Game, s: Value[], t: number, ext: boolean) => {
+  const sf = g.surface(s[t]), x = Math.trunc(n(s, t, 1)), y = Math.trunc(n(s, t, 2));
+  if (x < 0 || y < 0 || x >= sf.w || y >= sf.h) return 0;
+  const px = g.p.renderer.readPixels(sf.tex), k = (y * px.w + x) * 4, d = px.data;
+  const bgr = d[k] | (d[k + 1] << 8) | (d[k + 2] << 16);
+  return ext ? (bgr | (d[k + 3] << 24)) >>> 0 : bgr;
+};
+define('drw_surface_getpixel', (g, s, t) => getpixel(g, s, t, false));
+define('drw_surface_getpixel_ext', (g, s, t) => getpixel(g, s, t, true));
+define('drw_surface_texture', (g, s, t) => g.surface(s[t]).tex);
+
+// ---------------------------------------------------------------- primitives
+
+// Vertices since draw_primitive_begin: x, y, u, v, colour, alpha. Grown on demand, never shrunk.
+let prim = new Float64Array(6 * 1024), primN = 0, primKind = -1, primTex = -1;
+const begin = (kind: number, tex: number) => { primKind = kind; primTex = tex; primN = 0; return undefined; };
+function vertex(x: number, y: number, u: number, v: number, c: number, al: number) {
+  if (primKind < 0) throw new GmlError('draw_vertex outside draw_primitive_begin/end');
+  if ((primN + 1) * 6 > prim.length) { const p = new Float64Array(prim.length * 2); p.set(prim); prim = p; }
+  const o = primN++ * 6;
+  prim[o] = x; prim[o + 1] = y; prim[o + 2] = u; prim[o + 3] = v; prim[o + 4] = c; prim[o + 5] = al;
+  return undefined;
+}
+define('drw_primitive_begin', (_g, s, t) => begin(n(s, t, 0), -1));
+define('drw_primitive_begin_texture', (_g, s, t) => begin(n(s, t, 0), n(s, t, 1)));
+define('drw_prim_vertex', (g, s, t) => vertex(n(s, t, 0), n(s, t, 1), 0, 0, g.colour, g.alpha));
+define('drw_prim_vertex_colour', (_g, s, t) => vertex(n(s, t, 0), n(s, t, 1), 0, 0, n(s, t, 2), n(s, t, 3)));
+define('drw_prim_vertex_texture', (g, s, t) => vertex(n(s, t, 0), n(s, t, 1), n(s, t, 2), n(s, t, 3), g.colour, g.alpha));
+define('drw_prim_vertex_texture_colour', (_g, s, t) => vertex(n(s, t, 0), n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5)));
+/** Draws the vertices: pr_pointlist 1, linelist 2, linestrip 3, trianglelist 4, trianglestrip 5, trianglefan 6. Alpha is per primitive (the first vertex's). */
+define('drw_primitive_end', (g) => {
+  const kind = primKind, P = prim, r = g.p.renderer, tri = (i: number, j: number, k: number) => {
+    const a = i * 6, b2 = j * 6, c = k * 6;
+    if (primTex >= 0) r.triangleTex(primTex, P[a], P[a + 1], P[a + 2], P[a + 3], P[a + 4], P[b2], P[b2 + 1], P[b2 + 2], P[b2 + 3], P[b2 + 4], P[c], P[c + 1], P[c + 2], P[c + 3], P[c + 4], P[a + 5]);
+    else r.triangle(P[a], P[a + 1], P[b2], P[b2 + 1], P[c], P[c + 1], P[a + 4], P[b2 + 4], P[c + 4], P[a + 5]);
+  };
+  const seg = (i: number, j: number) => line(g, P[i * 6], P[i * 6 + 1], P[j * 6], P[j * 6 + 1], 1, P[i * 6 + 4], P[j * 6 + 4], P[i * 6 + 5]);
+  primKind = -1;
+  switch (kind) {
+    case 1: for (let i = 0; i < primN; i++) rect(g, P[i * 6], P[i * 6 + 1], P[i * 6], P[i * 6 + 1], P[i * 6 + 4], P[i * 6 + 4], P[i * 6 + 4], P[i * 6 + 4], P[i * 6 + 5], false); break;
+    case 2: for (let i = 1; i < primN; i += 2) seg(i - 1, i); break;
+    case 3: for (let i = 1; i < primN; i++) seg(i - 1, i); break;
+    case 4: for (let i = 2; i < primN; i += 3) tri(i - 2, i - 1, i); break;
+    case 5: for (let i = 2; i < primN; i++) tri(i - 2, i - 1, i); break;
+    case 6: for (let i = 2; i < primN; i++) tri(0, i - 1, i); break;
+    default: throw new GmlError(`draw_primitive_begin: unknown primitive kind ${kind}`);
+  }
+  return undefined;
+});
+
+// ---------------------------------------------------------------- shaders
+
+const shader = (g: Game, v: Value, fn: string) => {
+  const sh = g.a.shaders[real(v)];
+  if (!sh) throw new GmlError(`${fn}: shader ${String(v)} does not exist`);
+  if (sh.handle < 0) throw new GmlError(`${fn}: shader ${sh.name} did not compile`);
+  return sh.handle;
+};
+define('drw_shader_set', (g, s, t) => { g.p.renderer.setShader(shader(g, s[t], 'shader_set')); return undefined; });
+define('drw_shader_reset', (g) => { g.p.renderer.setShader(-1); return undefined; });
+define('drw_shader_uniform', (g, s, t) => g.p.renderer.shaderUniform(shader(g, s[t], 'shader_get_uniform'), str(s, t, 1)));
+define('drw_shader_sampler', (g, s, t) => g.p.renderer.shaderUniform(shader(g, s[t], 'shader_get_sampler_index'), str(s, t, 1)));
+define('drw_shader_uniform_f', (g, s, t, argc) => {
+  const k = argc - 1, v = (i: number) => (i < k ? n(s, t, i + 1) : 0);
+  g.p.renderer.setUniformF(n(s, t, 0), k, v(0), v(1), v(2), v(3));
+  return undefined;
+});
+define('drw_tilemap', (g, s, t) => {
+  const e = g.layers.element(n(s, t, 0));
+  if (!e || e.kind !== ELEM.tilemap) throw new GmlError(`draw_tilemap: tilemap ${String(s[t])} does not exist`);
+  g.drawTilemap(e, n(s, t, 1), n(s, t, 2));
+  return undefined;
+});
 
 define('drw_effect', (g, s, t) => {
   g.fx.create(n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), s[t] === 'above');

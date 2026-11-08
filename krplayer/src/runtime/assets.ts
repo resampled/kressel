@@ -1,7 +1,7 @@
 // Loads a project (game.json): compiles every script, resolves names to indices and loads textures.
 // The result is what the runtime works with; the JSON tree is not touched again.
 
-import type { Hat, Krpj, Layer, Node, RoomInstance, ScriptEntry, View } from '../krpj.ts';
+import type { Hat, Krpj, Layer, Node, Path, RoomInstance, ScriptEntry, View } from '../krpj.ts';
 import type { Pixels, Platform, SoundId, TextureId } from '../platform/types.ts';
 import { EK, type Block } from '../compile/bytecode.ts';
 import { compileScript, CompileError, type CompileEnv } from '../compile/compiler.ts';
@@ -46,12 +46,20 @@ export const EV = {
 const N_EV = 24;
 /** evt_async kinds krplayer can fire. */
 export const ASYNC = ['save_load', 'dialog', 'audio_playback', 'system', 'image_loaded'];
+/** evt_mouse kinds, by index (the event key is EK.mouse + index). */
+export const MOUSE = [
+  'left_held', 'right_held', 'middle_held', 'none', 'left_pressed', 'right_pressed', 'middle_pressed', 'left_released', 'right_released', 'middle_released',
+  'enter', 'leave', 'global_left_held', 'global_right_held', 'global_middle_held', 'global_left_pressed', 'global_right_pressed', 'global_middle_pressed',
+  'global_left_released', 'global_right_released', 'global_middle_released', 'wheel_up', 'wheel_down',
+];
 
 export interface Events {
   simple: (Block[] | null)[];
   alarm: (Block[] | null)[];
   user: (Block[] | null)[];
   async: (Block[] | null)[];
+  /** MOUSE index -> blocks */
+  mouse: (Block[] | null)[];
   /** object index -> blocks */
   collision: Map<number, Block[]>;
   keyHeld: Map<number, Block[]>; keyPressed: Map<number, Block[]>; keyReleased: Map<number, Block[]>;
@@ -59,6 +67,8 @@ export interface Events {
   colObj: number[]; colBlocks: Block[][];
   /** [held, pressed, released] -> key codes / blocks. */
   keyCode: number[][]; keyBlocks: Block[][][];
+  /** Mouse kinds this object has (MOUSE indices), flattened like the keys. */
+  mouseKind: number[];
 }
 
 export interface ObjectDef {
@@ -86,6 +96,10 @@ export interface RoomDef {
 
 export interface Assets {
   sprites: SpriteDef[]; fonts: FontDef[]; objects: ObjectDef[]; rooms: RoomDef[]; sounds: SoundDef[]; tilesets: TilesetDef[];
+  /** The project's paths (path ids index this, then runtime path_add paths). */
+  paths: Path[];
+  /** Shaders: renderer handle (-1: didn't compile) and name, by index. */
+  shaders: { name: string; handle: number }[];
   functions: FuncDef[];
   /** Script asset index -> function index (-1: not a function). */
   scripts: number[];
@@ -110,13 +124,14 @@ export interface Assets {
 }
 
 export const emptyEvents = (): Events => ({
-  simple: new Array(N_EV).fill(null), alarm: new Array(12).fill(null), user: new Array(16).fill(null), async: new Array(ASYNC.length).fill(null),
+  simple: new Array(N_EV).fill(null), alarm: new Array(12).fill(null), user: new Array(16).fill(null), async: new Array(ASYNC.length).fill(null), mouse: new Array(MOUSE.length).fill(null),
   collision: new Map(), keyHeld: new Map(), keyPressed: new Map(), keyReleased: new Map(),
-  colObj: [], colBlocks: [], keyCode: [[], [], []], keyBlocks: [[], [], []],
+  colObj: [], colBlocks: [], keyCode: [[], [], []], keyBlocks: [[], [], []], mouseKind: [],
 });
 
 function flatten(ev: Events): void {
   ev.colObj = [...ev.collision.keys()]; ev.colBlocks = [...ev.collision.values()];
+  ev.mouseKind = ev.mouse.flatMap((b, i) => (b ? [i] : []));
   [ev.keyHeld, ev.keyPressed, ev.keyReleased].forEach((m, i) => { ev.keyCode[i] = [...m.keys()]; ev.keyBlocks[i] = [...m.values()]; });
 }
 
@@ -168,6 +183,11 @@ export async function loadAssets(pj: Krpj, url: (path: string) => string, platfo
   soundEntries.forEach(([k], i) => claim(k, i));
   const tsEntries = Object.entries(pj.tilesets ?? {});
   tsEntries.forEach(([k], i) => claim(k, i));
+  const pathEntries = Object.entries(pj.paths ?? {});
+  pathEntries.forEach(([k], i) => claim(k, i));
+  const shaderEntries = Object.entries(pj.shaders ?? {});
+  shaderEntries.forEach(([k], i) => claim(k, i));
+  const shaders = shaderEntries.map(([name, s]) => ({ name, handle: platform.renderer.compileShader(s.vertex, s.fragment) }));
 
   // Textures load in parallel, a bounded number at a time.
   let done = 0;
@@ -309,7 +329,7 @@ export async function loadAssets(pj: Krpj, url: (path: string) => string, platfo
   const assetIndex = new Map(index);
   scriptOf.forEach((i, n) => { if (!assetIndex.has(n)) assetIndex.set(n, i); });
   return {
-    sprites, fonts, objects, rooms, sounds, tilesets, functions, globalInit,
+    sprites, fonts, objects, rooms, sounds, tilesets, functions, globalInit, paths: pathEntries.map(([, p]) => p), shaders,
     scripts: (pj.scripts ?? []).map((f) => (f === null ? -1 : fnIndex.get(f) ?? -1)),
     objectByName: new Map(objects.map((o) => [o.name, o])), assetIndex, varNames, varSlot, initRoom, fps: d.fps,
     width: d.width === 'default' ? first.width : d.width, height: d.height === 'default' ? first.height : d.height,
@@ -366,6 +386,12 @@ function addHat(ev: Events, hat: Hat, where: string, env: CompileEnv, index: Map
       return push(ev.async, k, b);
     }
     case 'evt_outside_view': case 'evt_boundary_view': return; // views' outside events: not fired yet
+    case 'evt_mouse': {
+      const k = MOUSE.indexOf(String(arg));
+      if (k < 0) throw new CompileError(`${where}: unknown evt_mouse kind ${String(arg)}`);
+      b.ev = EK.mouse + k;
+      return push(ev.mouse, k, b);
+    }
     case 'evt_collision': {
       const o = Array.isArray(arg) && arg[0] === '_as' && typeof arg[1] === 'string' ? index.get(arg[1]) : undefined;
       if (o === undefined) throw new CompileError(`${where}: evt_collision needs an object`);
@@ -390,6 +416,7 @@ function inherit(ev: Events, from: Events): void {
   from.alarm.forEach((b, i) => { if (b && !ev.alarm[i]) ev.alarm[i] = b; });
   from.user.forEach((b, i) => { if (b && !ev.user[i]) ev.user[i] = b; });
   from.async.forEach((b, i) => { if (b && !ev.async[i]) ev.async[i] = b; });
+  from.mouse.forEach((b, i) => { if (b && !ev.mouse[i]) ev.mouse[i] = b; });
   for (const [m, f] of [[ev.collision, from.collision], [ev.keyHeld, from.keyHeld], [ev.keyPressed, from.keyPressed], [ev.keyReleased, from.keyReleased]] as const) {
     for (const [k, b] of f) if (!m.has(k)) m.set(k, b);
   }

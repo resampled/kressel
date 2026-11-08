@@ -23,7 +23,7 @@ export function createHeadless(textureSize: (url: string) => [number, number] = 
   let time = 0, nextId = 1;
   const sizes = new Map<number, [number, number]>();
   const stats = { frames: 0, draws: 0, sounds: 0, log: [] as string[] };
-  const input = { keys: new Uint8Array(256), pressed: new Uint8Array(256), released: new Uint8Array(256), mouseX: 0, mouseY: 0, mouseButtons: 0, typed: '', lastKey: 0 };
+  const input = { keys: new Uint8Array(256), pressed: new Uint8Array(256), released: new Uint8Array(256), mouseX: 0, mouseY: 0, mouseButtons: 0, mousePressed: 0, mouseReleased: 0, wheel: 0, typed: '', lastKey: 0 };
   let win: [number, number] = [640, 480];
   const counting: Renderer = {
     loadTexture: async (url) => { const id = nextId++; sizes.set(id, textureSize(url)); return id; },
@@ -36,7 +36,8 @@ export function createHeadless(textureSize: (url: string) => [number, number] = 
     createTexture: (px) => { const id = nextId++; sizes.set(id, [px.w, px.h]); return id; },
     copyTexture: (_t, _x, _y, w, h) => { const id = nextId++; sizes.set(id, [w, h]); return id; },
     setTarget() {}, setView() {}, clear() {}, setBlend() {}, setFog() {}, setColorWrite() {}, setFilter() {},
-    drawImage() { stats.draws++; }, drawQuad() { stats.draws++; }, triangle() { stats.draws++; }, systemText() {},
+    drawImage() { stats.draws++; }, drawQuad() { stats.draws++; }, triangle() { stats.draws++; }, triangleTex() { stats.draws++; }, systemText() {},
+    compileShader: () => nextId++, setShader() {}, shaderUniform: () => nextId++, setUniformF() {}, setSampler() {},
   };
   const soft = decode ? new SoftRenderer(decode) : null;
   if (soft) { const end = soft.endFrame.bind(soft); soft.endFrame = () => { stats.frames++; stats.draws += soft.draws; end(); }; }

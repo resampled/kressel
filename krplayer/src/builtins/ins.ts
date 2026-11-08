@@ -1,10 +1,11 @@
 // Instances (ins_*) and movement (mov_*).
 
-import { define, n, b } from './registry.ts';
+import { define, family, n, b } from './registry.ts';
 import { GmlError, GmStruct, real, type Value } from '../value.ts';
 import { EV } from '../runtime/assets.ts';
 import type { Game } from '../runtime/game.ts';
 import { Instance } from '../runtime/instance.ts';
+import type { PathDef } from '../runtime/paths.ts';
 
 /** instance_create_*'s optional struct: its fields are set before the create event runs. */
 function spawnWith(g: Game, obj: Value, x: number, y: number, depth: number, layer: number, vars: Value): number {
@@ -78,6 +79,7 @@ define('ins_event_user', (g, s, t) => {
   if (g.self instanceof Instance) g.userEvent(g.self, k);
   return undefined;
 });
+define('ins_event_perform', (g, s, t) => { if (g.self instanceof Instance) g.performEvent(g.self, Math.trunc(n(s, t, 0)), Math.trunc(n(s, t, 1))); return undefined; });
 define('ins_object_name', (g, s, t) => g.object(s[t]).name);
 define('ins_object_sprite', (g, s, t) => g.object(s[t]).sprite?.index ?? -1);
 define('ins_is_ancestor', (g, s, t) => { const c = g.object(s[t]); return c.isA.has(real(s[t - 1])) && c.index !== real(s[t - 1]); });
@@ -123,9 +125,37 @@ define('mov_wrap', (g, s, t) => {
   if (b(s, t, 1)) { if (i.y >= h + m) i.y -= h + 2 * m; else if (i.y < -m) i.y += h + 2 * m; }
   return undefined;
 });
-// The project has no paths (the PATH chunk is empty), so a path can never be started.
-define('mov_path_start', (_g, s, t) => { throw new GmlError(`path ${String(s[t])} does not exist`); });
+define('mov_path_start', (g, s, t) => { g.paths.start(self(g), n(s, t, 0), n(s, t, 1), n(s, t, 2), b(s, t, 3)); return undefined; });
 define('mov_path_end', (g) => { self(g).path = -1; return undefined; });
+const path = (g: Game, s: Value[], t: number, fn: string) => g.paths.get(n(s, t, 0), `path_${fn}`);
+/** Edits a path's control points or settings; its followed line is rebuilt on next use. */
+const edit = (fn: string, f: (p: PathDef, s: Value[], t: number) => void) => (g: Game, s: Value[], t: number) => { const p = path(g, s, t, fn); f(p, s, t); p.changed(); return undefined; };
+const point = (s: Value[], t: number, fn: string, p: PathDef) => {
+  const k = Math.trunc(n(s, t, 1));
+  if (k < 0 || k >= p.count) throw new GmlError(`path_${fn}: point ${k} out of range`);
+  return k * 3;
+};
+family('mov_path', 'path_', {
+  add: (g) => g.paths.add(),
+  delete: (g, s, t) => { g.paths.delete(n(s, t, 0)); return undefined; },
+  exists: (g, s, t) => g.paths.exists(n(s, t, 0)),
+  add_point: edit('add_point', (p, s, t) => { p.pts.push(n(s, t, 1), n(s, t, 2), n(s, t, 3)); }),
+  clear_points: edit('clear_points', (p) => { p.pts.length = 0; }),
+  set_closed: edit('set_closed', (p, s, t) => { p.closed = b(s, t, 1); }),
+  set_kind: edit('set_kind', (p, s, t) => { p.smooth = n(s, t, 1) === 1; }),
+  set_precision: edit('set_precision', (p, s, t) => { p.precision = Math.max(1, Math.min(8, Math.trunc(n(s, t, 1)))); }),
+  get_x: (g, s, t) => path(g, s, t, 'get_x').at(n(s, t, 1), 0),
+  get_y: (g, s, t) => path(g, s, t, 'get_y').at(n(s, t, 1), 1),
+  get_speed: (g, s, t) => path(g, s, t, 'get_speed').at(n(s, t, 1), 2),
+  get_length: (g, s, t) => path(g, s, t, 'get_length').length(),
+  get_number: (g, s, t) => path(g, s, t, 'get_number').count,
+  get_closed: (g, s, t) => path(g, s, t, 'get_closed').closed,
+  get_kind: (g, s, t) => (path(g, s, t, 'get_kind').smooth ? 1 : 0),
+  get_precision: (g, s, t) => path(g, s, t, 'get_precision').precision,
+  get_point_x: (g, s, t) => { const p = path(g, s, t, 'get_point_x'); return p.pts[point(s, t, 'get_point_x', p)]; },
+  get_point_y: (g, s, t) => { const p = path(g, s, t, 'get_point_y'); return p.pts[point(s, t, 'get_point_y', p) + 1]; },
+  get_point_speed: (g, s, t) => { const p = path(g, s, t, 'get_point_speed'); return p.pts[point(s, t, 'get_point_speed', p) + 2]; },
+});
 /** instance_id_get(n): the nth active instance, in instance order (GM's instance_id[n]). */
 define('ins_id_get', (g, s, t) => {
   let k = Math.trunc(n(s, t, 0));

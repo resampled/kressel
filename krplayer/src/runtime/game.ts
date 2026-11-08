@@ -13,6 +13,7 @@ import { newShape, overlaps, shape } from './collision.ts';
 import { Effects } from './effects.ts';
 import { Layers, ELEM, newCamera, viewFrom, type Camera, type Element, type RtLayer, type RtView } from './layers.ts';
 import { Sounds } from './sound.ts';
+import { Paths } from './paths.ts';
 import { Data, DsMap, Files, type Ini, type TextFile } from './data.ts';
 import { drawSprite, frameOf, quadC } from './draw.ts';
 
@@ -47,6 +48,7 @@ export class Game {
   readonly data = new Data();
   readonly files: Files;
   readonly layers = new Layers();
+  readonly paths: Paths;
   /** All instances in creation order (dead ones are compacted out at the end of each step). */
   instances: Instance[] = [];
   /** The global scope: global.x lives in its vars. GM 2.3 global script code runs with it as self. */
@@ -106,6 +108,7 @@ export class Game {
     this.vm = new VM(this);
     this.fx = new Effects(this.random);
     this.snd = new Sounds(p, a);
+    this.paths = new Paths(a.paths);
     this.files = new Files(p.storage, a.files);
     this.speed = a.fps;
     this.startTime = p.now();
@@ -126,18 +129,22 @@ export class Game {
   private warpRoom = -1;
   /** Debug: runs just before the warp room is entered (see runtime/debug.ts). */
   private warpInit: (() => void) | null = null;
+  /** Debug: only warp on a room change out of this room (-1: the first room change). */
+  private warpAfter = -1;
 
   /**
    * Runs global init and enters the first room. With `warp` (a room index), the first room change
    * goes there instead, so the init room still sets the game up; with `direct` the game enters it straight away.
-   * `init` runs right before the warp room is entered.
+   * `init` runs right before the warp room is entered. With `after` (a room index), the warp waits for the
+   * first room change out of that room instead, for games whose setup room isn't the first (Deltarune Ch2).
    */
-  start(warp = -1, direct = false, init: (() => void) | null = null): void {
+  start(warp = -1, direct = false, init: (() => void) | null = null, after = -1): void {
     if (warp >= 0 && !this.a.rooms[warp]) throw new GmlError(`start room ${warp} does not exist`);
     void this.snd.preload();
     for (const b of this.a.globalInit) this.vm.run(b, this.globalScope, null);
     if (direct && warp >= 0) { init?.(); return this.enterRoom(warp, true); }
     this.warpRoom = warp;
+    this.warpAfter = after;
     if (warp >= 0) this.warpInit = init;
     this.enterRoom(this.a.initRoom, true);
   }
@@ -156,7 +163,7 @@ export class Game {
     if (this.pendingRoom < 0 && !this.ended) this.draw();
     if (this.pendingRoom >= 0 && !this.ended) {
       let r = this.pendingRoom;
-      const warping = this.warpRoom >= 0;
+      const warping = this.warpRoom >= 0 && (this.warpAfter < 0 || this.roomIndex === this.warpAfter);
       this.pendingRoom = -1;
       if (warping) { r = this.warpRoom; this.warpRoom = -1; }
       this.leaveRoom(r);
@@ -453,6 +460,13 @@ export class Game {
 
   userEvent(inst: Instance, n: number): void { this.run(inst.obj.ev.user[n], inst, this.other); }
 
+  /** event_perform(type, number) with GM's ev_* numbering. Kinds krplayer has no key for fail loudly. */
+  performEvent(inst: Instance, type: number, num: number): void {
+    const key = gmEventKey(type, num);
+    if (key < 0) throw new GmlError(`event_perform(${type}, ${num}) is not supported yet`);
+    this.run(eventBlocks(inst.obj.ev, key), inst, this.other);
+  }
+
   /** event_inherited: the running event's code as defined by the nearest ancestor of the object that defined it. */
   inherited(): void {
     const b = this.vm.current;
@@ -618,6 +632,7 @@ export class Game {
         const codes = ev.keyCode[kind], state = kind === 0 ? input.keys : kind === 1 ? input.pressed : input.released;
         for (let c = 0; c < codes.length; c++) if (keyState(state, codes[c])) this.run(ev.keyBlocks[kind][c], inst, null);
       }
+      if (ev.mouseKind.length && inst.alive) this.mouseEvents(inst, ev);
     }
 
     this.phase(EV.step);
@@ -638,6 +653,7 @@ export class Game {
         inst.setHV(inst.hspeed + inst.gravity * Math.cos(d), inst.vspeed - inst.gravity * Math.sin(d));
       }
       inst.x += inst.hspeed; inst.y += inst.vspeed;
+      if (inst.path >= 0 && this.paths.step(inst)) this.event(inst, EV.path_end, null);
       const out = inst.obj.ev.simple[EV.outside_room];
       if (out) {
         const k = shape(inst, inst.x, inst.y, this.sa);
@@ -673,11 +689,40 @@ export class Game {
     this.endStep();
   }
 
+  /** An instance's mouse events. Non-global ones need the mouse over its mask (room coordinates, like mouse_x). */
+  private mouseEvents(inst: Instance, ev: Events): void {
+    const input = this.p.input, kinds = ev.mouseKind;
+    const k = shape(inst, inst.x, inst.y, this.sb);
+    let over = false;
+    if (k) {
+      const a = this.sa, x = input.mouseX, y = input.mouseY;
+      a[0] = a[6] = a[8] = x; a[1] = a[3] = a[9] = y; a[2] = a[4] = a[10] = x + 1e-6; a[5] = a[7] = a[11] = y + 1e-6;
+      over = overlaps(1, a, k, this.sb);
+    }
+    const was = inst.mouseOver;
+    inst.mouseOver = over;
+    for (let j = 0; j < kinds.length; j++) {
+      const m = kinds[j];
+      let fire: boolean;
+      if (m === 3) fire = over && input.mouseButtons === 0;
+      else if (m === 10) fire = over && !was;
+      else if (m === 11) fire = !over && was;
+      else if (m === 21) fire = input.wheel > 0;
+      else if (m === 22) fire = input.wheel < 0;
+      else {
+        const global = m >= 12, r = global ? m - 12 : m < 3 ? m : m - 1, bit = 1 << (r % 3), kind = Math.floor(r / 3);
+        const state = kind === 0 ? input.mouseButtons : kind === 1 ? input.mousePressed : input.mouseReleased;
+        fire = (state & bit) !== 0 && (global || over);
+      }
+      if (fire) this.run(ev.mouse[m], inst, null);
+    }
+  }
+
   private endStep(): void {
     this.fx.step();
     this.snd.sweep();
     const input = this.p.input;
-    input.pressed.fill(0); input.released.fill(0);
+    input.pressed.fill(0); input.released.fill(0); input.mousePressed = 0; input.mouseReleased = 0; input.wheel = 0;
     this.compact();
   }
 
@@ -843,7 +888,9 @@ export class Game {
   }
 
   private drawLayer(l: RtLayer): void {
+    if (l.scriptBegin != null) this.vm.callValue(l.scriptBegin, this.globalScope, NO_ARGS);
     for (const e of l.elements) if (e.visible) this.drawElement(e, l);
+    if (l.scriptEnd != null) this.vm.callValue(l.scriptEnd, this.globalScope, NO_ARGS);
   }
 
   private drawElement(e: Element, l: RtLayer): void {
@@ -860,7 +907,7 @@ export class Game {
         if (f >= 0) r.drawImage(s.frames[f], e.sx, e.sy, e.w, e.h, e.x + l.x, e.y + l.y, 0, 0, e.xscale, e.yscale, 0, e.colour, e.alpha);
         return;
       }
-      case ELEM.tilemap: return this.drawTilemap(e, l);
+      case ELEM.tilemap: return this.drawTilemap(e, l.x + e.x, l.y + e.y);
     }
   }
 
@@ -887,12 +934,13 @@ export class Game {
     }
   }
 
-  private drawTilemap(e: Element, l: RtLayer): void {
+  /** Draws a tile map element with its top-left at (ox, oy): the layer's offset plus the element's, or draw_tilemap's x/y. */
+  drawTilemap(e: Element, ox: number, oy: number): void {
     const ts = this.a.tilesets[e.asset], cells = e.cells;
     if (!ts || !cells) return;
     const r = this.p.renderer, [vx, vy, vw, vh] = this.vr;
-    const c0 = Math.max(0, Math.floor((vx - l.x) / ts.tw)), c1 = Math.min(e.w, Math.ceil((vx + vw - l.x) / ts.tw));
-    const r0 = Math.max(0, Math.floor((vy - l.y) / ts.th)), r1 = Math.min(e.h, Math.ceil((vy + vh - l.y) / ts.th));
+    const c0 = Math.max(0, Math.floor((vx - ox) / ts.tw)), c1 = Math.min(e.w, Math.ceil((vx + vw - ox) / ts.tw));
+    const r0 = Math.max(0, Math.floor((vy - oy) / ts.th)), r1 = Math.min(e.h, Math.ceil((vy + vh - oy) / ts.th));
     const frame = ts.frames > 1 && ts.frameTime > 0 ? Math.floor(((this.p.now() - this.startTime) * 1000) / ts.frameTime) % ts.frames : 0;
     for (let row = r0; row < r1; row++) for (let col = c0; col < c1; col++) {
       const cell = cells[row * e.w + col], t0 = cell & 0x7ffff;
@@ -900,11 +948,13 @@ export class Game {
       const t = ts.ids && ts.frames > 1 ? ts.ids[t0 * ts.frames + frame] ?? t0 : t0;
       const sx = (t % ts.columns) * (ts.tw + 2 * ts.bx) + ts.bx, sy = Math.floor(t / ts.columns) * (ts.th + 2 * ts.by) + ts.by;
       const mirror = (cell >> 28) & 1, flip = (cell >> 29) & 1;
-      const x = l.x + col * ts.tw + (mirror ? ts.tw : 0), y = l.y + row * ts.th + (flip ? ts.th : 0);
+      const x = ox + col * ts.tw + (mirror ? ts.tw : 0), y = oy + row * ts.th + (flip ? ts.th : 0);
       r.drawImage(ts.tex, sx, sy, ts.tw, ts.th, x, y, 0, 0, mirror ? -1 : 1, flip ? -1 : 1, 0, 0xffffff, 1);
     }
   }
 }
+
+const NO_ARGS: Value[] = [];
 
 /** Deepest first; at equal depth the newest instance draws first (GM adds new layer elements at the front). */
 const byDepth = (a: Instance, b: Instance) => b.depth - a.depth || b.order - a.order;
@@ -940,10 +990,39 @@ function eventBlocks(ev: Events, key: number): Block[] | null {
   if (key < EK.alarm) return ev.simple[key];
   if (key < EK.user) return ev.alarm[key - EK.alarm];
   if (key < EK.async) return ev.user[key - EK.user];
-  if (key < EK.collision) return ev.async[key - EK.async];
+  if (key < EK.mouse) return ev.async[key - EK.async];
+  if (key < EK.collision) return ev.mouse[key - EK.mouse] ?? null;
   if (key < EK.key) return ev.collision.get(key - EK.collision) ?? null;
   const k = key - EK.key, m = [ev.keyHeld, ev.keyPressed, ev.keyReleased][k % 3];
   return m.get(Math.floor(k / 3)) ?? null;
+}
+
+/** An event key for GM's (event type, number), or -1. */
+function gmEventKey(type: number, num: number): number {
+  switch (type) {
+    case 0: return EV.create;
+    case 1: return EV.destroy;
+    case 2: return num >= 0 && num < 12 ? EK.alarm + num : -1;
+    case 3: return [EV.step, EV.step_begin, EV.step_end][num] ?? -1;
+    case 4: return num >= 0 ? EK.collision + num : -1;
+    case 5: case 9: case 10: return num >= 0 && num < 256 ? EK.key + num * 3 + (type === 5 ? 0 : type === 9 ? 1 : 2) : -1;
+    case 7:
+      if (num >= 10 && num <= 25) return EK.user + num - 10;
+      switch (num) {
+        case 0: return EV.outside_room; case 1: return EV.intersect_boundary; case 2: return EV.game_start; case 3: return EV.game_end;
+        case 4: return EV.room_start; case 5: return EV.room_end; case 7: return EV.animation_end; case 8: return EV.path_end;
+      }
+      return -1;
+    case 8:
+      switch (num) {
+        case 0: return EV.draw; case 64: return EV.drawgui; case 65: return EV.resize; case 72: return EV.draw_begin; case 73: return EV.draw_end;
+        case 74: return EV.drawgui_begin; case 75: return EV.drawgui_end; case 76: return EV.draw_pre; case 77: return EV.draw_post;
+      }
+      return -1;
+    case 12: return EV.cleanup;
+    case 14: return EV.pre_create;
+  }
+  return -1;
 }
 
 /** GM's event_type for an event key (ev_create 0 ... ev_draw 8). */
@@ -954,6 +1033,7 @@ function gmEventType(key: number): number {
     return t[key] ?? (key >= EV.draw_begin && key <= EV.draw_post ? 8 : 7);
   }
   if (key < EK.user) return 2;
+  if (key >= EK.mouse && key < EK.collision) return 6;
   if (key < EK.collision) return 7;
   if (key < EK.key) return 4;
   return [5, 9, 10][(key - EK.key) % 3];

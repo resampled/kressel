@@ -3,7 +3,7 @@
 
 import type { Layer, View } from '../krpj.ts';
 import type { Assets } from './assets.ts';
-import { GmlError } from '../value.ts';
+import { GmlError, type Value } from '../value.ts';
 
 export const ELEM = { background: 1, instance: 2, sprite: 4, tilemap: 5, tile: 7 } as const;
 
@@ -12,6 +12,8 @@ export interface Element {
   /** Sprite (backgrounds, sprites, tiles) or tileset (tile maps) index; -1 none. */
   asset: number;
   x: number; y: number; xscale: number; yscale: number; angle: number;
+  /** Asset layer sprites: their room editor name (layer_sprite_get_id). */
+  name?: string;
   colour: number; alpha: number; visible: boolean;
   index: number; speed: number;
   /** Backgrounds. */
@@ -29,6 +31,8 @@ export interface RtLayer {
   elements: Element[];
   /** Created by the room editor as an instance layer. */
   instances: boolean;
+  /** layer_script_begin/end: a function value run before/after the layer draws. */
+  scriptBegin?: Value | null; scriptEnd?: Value | null;
 }
 
 export interface Camera {
@@ -76,12 +80,12 @@ export class Layers {
           }
           for (const s of d.sprites ?? []) {
             const e = this.add(l, ELEM.sprite);
-            e.asset = spr(s.sprite); e.x = s.x; e.y = s.y; e.xscale = s.scale_x ?? 1; e.yscale = s.scale_y ?? 1; e.angle = s.angle ?? 0;
+            e.asset = spr(s.sprite); e.name = s.name; e.x = s.x; e.y = s.y; e.xscale = s.scale_x ?? 1; e.yscale = s.scale_y ?? 1; e.angle = s.angle ?? 0;
             e.colour = s.colour ?? 0xffffff; e.alpha = s.alpha ?? 1; e.index = s.image_index ?? 0; e.speed = s.image_speed ?? 1;
           }
           break;
         case 'tiles': {
-          const e = this.add(l, ELEM.tilemap), ts = a.assetIndex.get(d.tileset);
+          const e = this.add(l, ELEM.tilemap), ts = d.tileset === null ? -1 : a.assetIndex.get(d.tileset);
           if (ts === undefined) throw new GmlError(`unknown tileset ${d.tileset}`);
           e.asset = ts; e.w = d.cols; e.h = d.rows; e.cells = Int32Array.from(d.data);
           break;

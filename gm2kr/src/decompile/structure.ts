@@ -34,7 +34,7 @@ export class DecompileError extends Error {
 }
 
 interface Item { e: Kr; size: number; marker?: boolean; dup?: boolean }
-interface Ctx { kind: 'loop' | 'with' | 'switch'; brk: number; cont: number; sw?: Switch }
+interface Ctx { kind: 'loop' | 'with' | 'switch'; brk: number; cont: number; sw?: Switch; repeat?: boolean }
 /**
  * A switch body being parsed: labels (instruction index -> case values, undefined = default), and its
  * end (the popz of the switch value), found either from a break (a `b` to a popz.v past the last label)
@@ -81,8 +81,10 @@ export class Decompiler {
   /** Decompiles instructions [from, to) (a whole entry by default), with `var` declarations first. */
   run(from = 0, to = this.ins.length): Kr[] {
     const stack: Item[] = [];
-    const last = this.ins[to - 1];
-    const body = this.block(from, last && last.op === Op.exit ? to - 1 : to, stack, []);
+    // A trailing exit is the implicit end of the entry, unless something branches past it (`if (c) exit;` last).
+    const last = this.ins[to - 1], end = this.addr(to);
+    const implicit = last && last.op === Op.exit && !this.ins.some((x, k) => k >= from && k < to && x.target === end && (x.op === Op.b || x.op === Op.bt || x.op === Op.bf));
+    const body = this.block(from, implicit ? to - 1 : to, stack, []);
     if (stack.length) this.fail(to - 1, `${stack.length} values left on the stack`);
     return [...[...this.locals].map((n) => ['var_local', n]), ...body];
   }
@@ -142,6 +144,8 @@ export class Decompiler {
     switch (ins.vkind) {
       case VarKind.normal: return this.varRef(this.instOf(ins.i16, i, stack), ins);
       case VarKind.stacktop: return this.varRef(this.popInst(stack, i), ins);
+      // A room instance by id: the operand is the id minus 100000 (gm_gotchas.md).
+      case VarKind.instance: return this.varRef(100000 + ins.i16, ins);
       case VarKind.array: case VarKind.pushaf: case VarKind.popaf: {
         // [inst, index] -> var[index]; pushaf/popaf push the row for a following [j] access.
         const index = this.pop(stack, i).e, arr = this.varRef(this.popInst(stack, i), ins);
@@ -241,6 +245,12 @@ export class Decompiler {
           const v = (value ?? this.pop(stack, i)).e;
           // `{...}` literals cache their constructor in a static (___struct___N); that's an implementation detail.
           if (ins.i16 === -16 && ins.v!.name.startsWith('___struct___')) break;
+          // ++x / x++ as an expression: `x; 1; add; dup; pop x` leaves the new value, `x; dup; 1; add; pop x` the old.
+          const top = stack.at(-1);
+          if (top?.dup && (isOp(v, 'opr_add') || isOp(v, 'opr_sub')) && v[2] === 1 && sameTarget(v[1], tgt) && (top.e === v || top.e === v[1])) {
+            stack[stack.length - 1] = { e: [v[0] === 'opr_add' ? 'var_inc' : 'var_dec', tgt, ...(top.e === v ? [] : [true])], size: top.size };
+            break;
+          }
           out.push(this.assign(tgt, v));
           break;
         }
@@ -250,12 +260,15 @@ export class Decompiler {
             if (sw && sw.end < 0 && i >= sw.minEnd && next !== Op.exit && next !== Op.ret) { sw.end = i; return out; }
             // A switch value popped before leaving the switch early (exit / continue): bookkeeping only.
             if (ctx.some((c) => c.kind === 'switch')) break;
+            // Likewise a repeat counter popped before exit/return inside the repeat (gm_gotchas.md).
+            if (ins.t1 === T.Int32 && (next === Op.exit || next === Op.ret || next === Op.push) && ctx.some((c) => c.repeat)) break;
           }
           const v = this.pop(stack, i);
           if (!v.dup && isOp(v.e) && !v.e[0].startsWith('_')) out.push(v.e);
           break;
         }
         case Op.call: {
+          if (ins.fn === '@@try_hook@@') { i = this.tryStmt(i, to, stack, out, ctx); continue; }
           const args: Kr[] = [];
           for (let k = 0; k < ins.i16; k++) args.push(this.pop(stack, i).e);
           stack.push({ e: this.call(ins.fn!, args, i), size: 16 });
@@ -287,6 +300,10 @@ export class Decompiler {
           break;
         }
         case Op.pushenv: { i = this.with(i, stack, out, ctx); continue; }
+        // `return`/`exit` inside `with` leaves the with first (popenv's exit form); ctr_return/ctr_exit do that.
+        case Op.popenv:
+          if (ins.target !== -1 || !ctx.some((c) => c.kind === 'with')) this.fail(i, 'popenv outside its with');
+          break;
         default: this.fail(i, `instruction 0x${ins.op.toString(16)} not supported here`);
       }
       i++;
@@ -452,7 +469,7 @@ export class Decompiler {
     const dec = back - 4;
     if (!pushesInt(this.ins[dec], 1) || this.ins[dec + 1].op !== Op.sub) this.fail(i, 'unrecognised repeat loop');
     const n = this.pop(stack, i).e;
-    out.push(['ctr_repeat', n, this.block(i + 4, dec, [], [...ctx, { kind: 'loop', brk: this.addr(e), cont: this.addr(dec) }])]);
+    out.push(['ctr_repeat', n, this.block(i + 4, dec, [], [...ctx, { kind: 'loop', brk: this.addr(e), cont: this.addr(dec), repeat: true }])]);
     return e + 1;
   }
 
@@ -489,6 +506,32 @@ export class Decompiler {
     for (const v of labels.get(sw.end) ?? []) body.push(v === undefined ? ['ctr_default'] : ['ctr_case', v]);
     out.push(['ctr_switch', value, body]);
     return sw.end + 1;
+  }
+
+  /**
+   * finally_off; catch_off; call @@try_hook@@; popz; body; b U;
+   * C: pop local.e; call @@try_unhook@@; popz; catch body; call @@finish_catch@@; popz; b F;
+   * U: call @@try_unhook@@; popz; F:
+   * (gm_gotchas.md). Returns the next index. finally blocks fail until one is seen.
+   */
+  private tryStmt(i: number, to: number, stack: Item[], out: Kr[], ctx: Ctx[]): number {
+    const isCall = (k: number, fn: string) => this.ins[k]?.op === Op.call && this.ins[k].fn === fn && this.ins[k + 1]?.op === Op.popz;
+    this.pop(stack, i); this.pop(stack, i); // handler offsets: the layout below gives the same addresses
+    if (this.ins[i + 1]?.op !== Op.popz) this.fail(i, 'try_hook result not popped');
+    let c = i + 2;
+    while (c < to && !(this.ins[c].op === Op.pop && this.ins[c].i16 === -7 && isCall(c + 1, '@@try_unhook@@'))) c++;
+    const skip = this.ins[c - 1];
+    if (c >= to || skip?.op !== Op.b) this.fail(i, 'try without a recognisable catch (try/finally is not supported yet)');
+    const u = this.idx(skip.target, c - 1);
+    if (!isCall(u, '@@try_unhook@@') || u > to) this.fail(c - 1, 'try body does not end at its unhook');
+    const fin = u - 3; // call @@finish_catch@@; popz; b F
+    if (!isCall(fin, '@@finish_catch@@') || this.ins[fin + 2].op !== Op.b || this.ins[fin + 2].target !== this.addr(u + 2)) {
+      this.fail(fin, 'catch does not end at finish_catch (try/finally is not supported yet)');
+    }
+    const name = this.ins[c].v!.name;
+    this.locals.add(name);
+    out.push(['ctr_try', this.block(i + 2, c - 1, [], ctx), name, this.block(c + 3, fin, [], ctx)]);
+    return u + 2;
   }
 
   /** inst; pushenv P; body; P: popenv body */

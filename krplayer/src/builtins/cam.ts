@@ -1,7 +1,7 @@
 // Camera, views and window (cam_*), control functions (ctr_*) and system (sys_*).
 
 import { define, family, n, b, str } from './registry.ts';
-import { GmlError, real } from '../value.ts';
+import { GmlError, NotImplemented, real } from '../value.ts';
 import { newCamera, type Camera } from '../runtime/layers.ts';
 import type { Game } from '../runtime/game.ts';
 import { gstr } from './opr.ts';
@@ -60,8 +60,8 @@ define('cam_cursor_set', () => undefined);
 define('cam_window_mouse', (g, s, t) => (s[t] === 'x' ? g.p.input.mouseX : g.p.input.mouseY));
 define('cam_window_center', () => undefined);
 define('cam_window_borderless', () => undefined);
-define('cam_legacy_view_get', () => { throw new GmlError('__view_get is not implemented in krplayer yet'); });
-define('cam_legacy_view_set', () => { throw new GmlError('__view_set is not implemented in krplayer yet'); });
+define('cam_legacy_view_get', () => { throw new NotImplemented('__view_get is not implemented in krplayer yet'); });
+define('cam_legacy_view_set', () => { throw new NotImplemented('__view_set is not implemented in krplayer yet'); });
 
 // ---------------------------------------------------------------- control
 

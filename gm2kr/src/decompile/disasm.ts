@@ -57,7 +57,7 @@ export function disassemble(buf: ArrayBuffer, code: GmCode, refs: GmRefs, string
     };
     switch (op) {
       case Op.b: case Op.bt: case Op.bf: case Op.pushenv: case Op.popenv:
-        ins.target = op === Op.popenv && (w & 0x7fffff) === 0xf00000 ? -1 : at + ((w << 9) >> 9) * 4;
+        ins.target = op === Op.popenv && (w & 0xffffff) === 0xf00000 ? -1 : at + ((w << 9) >> 9) * 4;
         break;
       case Op.pop:
         if (t1 !== T.Int16) varRef(); // pop.e.v is the 2.3 "swap" form with no operand

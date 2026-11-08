@@ -29,6 +29,7 @@ export type GmLayer = {
   | { type: 'assets'; tiles: GmLegacyTile[]; sprites: GmLayerSprite[] }
   | { type: 'tiles'; tileset: number; cols: number; rows: number; data: Uint32Array }
   | { type: 'effect' }
+  | { type: 'path' }
 );
 export interface GmRoom {
   name: string; caption: string; width: number; height: number; speed: number; persistent: boolean;
@@ -36,7 +37,7 @@ export interface GmRoom {
   views: GmView[]; instances: GmRoomInstance[]; layers: GmLayer[];
 }
 
-const LAYER_KIND: Record<number, string> = { 1: 'background', 2: 'instances', 3: 'assets', 4: 'tiles', 6: 'effect' };
+const LAYER_KIND: Record<number, string> = { 0: 'path', 1: 'background', 2: 'instances', 3: 'assets', 4: 'tiles', 6: 'effect' };
 
 /** A list whose pointers are read in place: count, then pointers to fixed-layout entries. */
 function list<T>(r: Reader, p: number, max: number, read: (e: Reader) => T): T[] {
@@ -89,6 +90,7 @@ function readLayer(r: Reader, p: number, fmt: GmFormat, room: string): GmLayer {
       return { ...base, type: 'tiles', tileset, cols, rows, data };
     }
     case 6: return { ...base, type: 'effect' };
+    case 0: return { ...base, type: 'path' }; // editor-only: a path layer holds no runtime data
   }
   throw new FormatError(`room ${room}: layer "${name}" has unsupported type ${LAYER_KIND[type] ?? type}`, p);
 }

@@ -65,6 +65,23 @@ GEN8 says 2.0.0.0 and there is no SEQN/FEAT/TGIN chunk. `fmt.gms23` is false.
 * **Real division by zero doesn't error**: `/` gives inf, -inf or NaN (0/0), which then flows on, and drawing at a NaN position draws nothing. `obj_crackintro` Draw sets `b = sin((30 * i + a2) / 480)`, which is exactly 0 at `i = 0, a2 = 0`, then draws at `sin(a2 / b)`. That's 0/0 on the first frame, and the original runner shows the screen fine. `div` and `mod` by zero still fail in krplayer, which is assumed rather than observed.
 * **Font sizes are points at 96 DPI**: every TTF-based font in FONT has a glyph height of 4/3 × its size (`fnt_main` 12 → 16 px). `font_add` sizes are rasterized the same way.
 
+## Bytecode / data.win (observed, Deltarune Chapter 2, bytecode 17, GMS2.3+ compiler)
+* **`popenv`'s exit form is the 24-bit operand `0xf00000`.** `return`/`exit` inside `with` leaves the with first: `pop local.$$$$temp$$$$; popenv <exit>; push local.$$$$temp$$$$; ret`. The branch offset field is 23 bits, so testing `w & 0x7fffff` never matches it.
+  * Repro: `scr_findactor`: `with (903) { ...; return __foundactor; }`.
+* **Access kind 0xe0 reads a room instance by id**: the instance-type operand is the id minus 100000. `push.v 2269.y [instance]` is `(102269).y` (`gml_RoomCC_room_dw_cyber_teacup_final_0_PreCreate`, which also stores `jumpToRide = 102269`).
+* **`++x` / `x++` as values**: prefix is `x; push 1; add; dup.v 0; pop x` (the copy left is the new value), postfix is `x; dup.v 0; push 1; add; pop x` (the old value).
+  * Repro: `obj_gms_debug_failsafe` Step: `if (!debug_mode || ++x > xstart + 3)`.
+* **`exit` inside `repeat` pops the repeat counter first** (`popz.i; exit`), like a switch value (`obj_fakespare` Draw).
+* **An entry can end with `if (c) exit;`**: the `bf` targets the end of the code, so that last `exit` isn't the implicit one (`obj_sneo_heartattack` Step ends `if (heart_health < 1) exit;`).
+* **try / catch** is `push finally_off; push catch_off; call @@try_hook@@; popz; body; b U; C: pop local.e; call @@try_unhook@@; popz; catch body; call @@finish_catch@@; popz; b F; U: call @@try_unhook@@; popz; F:`. The offsets are byte offsets gm2kr doesn't need: the layout gives the same addresses (`obj_tensionbar` Draw, which catches a failing `global.tensionselect` read).
+* **PATH entries** are name, smooth, closed, precision, then an inline list (not pointers) of `(x, y, speed)` floats. 14 paths in Ch2, e.g. `path_tasquePaintings_tasque` with speed 4 at every point.
+* **SHDR keeps GLSL ES sources** (with GameMaker's prelude: `gm_Matrices`, `gm_BaseTexture`, `DoAlphaTest`...), even in the Windows build. The type field has its top bit set (`0x80000001`).
+* **Path layers (type 0) have no runtime data**, and **a tile layer can have no tile set** (-1, `room_debug_battle` layer `TILES`): GM draws nothing, but code can still look the layer up.
+* **Mouse events are event type 6**: subtypes 0-2 held (left/right/middle), 3 none, 4-6 pressed, 7-9 released, 10/11 enter/leave, 50-58 global held/pressed/released, 60/61 wheel up/down (`obj_poppup_ad` uses 4).
+* **The game's setup room isn't the first room.** `room_gms_debug_failsafe` goes to `ROOM_INITIALIZE`, whose `obj_initializer2` runs `scr_gamestart`. A debug warp on the first room change skips it (`global.darkzone not set`); warp with `after=ROOM_INITIALIZE`.
+* **`layer_tile_*` setters on a missing element do nothing.** Ch2's GMS1 compat script `tile_get_ids_at_depth` starts its result as `[-1]` and returns that when no tiles are at the depth; `obj_battlealphaer` and others then call `tile_set_alpha(-1, ...)` every frame in normal play (`room_dw_cyber_music_bullet`).
+* **`vertex_format_add_textcoord`** (Ch1) and **`vertex_format_add_texcoord`** (Ch2) are both real names.
+
 ## Runtime (observed in Deltarune)
 * **At equal depth, the newest instance draws first.** GM adds new layer elements at the front, so a later-created instance draws *before* (under) older ones at the same depth. Deltarune Ch1 relies on it: in `room_town_krisyard`, `obj_carcutscene`'s alarm 5 creates an `obj_writer` at depth 0, and carcutscene's draw (also depth 0) reads `myd.stringmax`, which only the writer's draw sets. Drawing oldest-first crashes with "variable stringmax not set before reading it".
 * **All of a room's instances exist before any create event runs.** `obj_mainchara` is first in `room_krishallway`'s creation order, yet its create event reads `obj_markerA.x` (placed later). The create events (then creation code) run in the room's creation order, which is the room's instance list, not layer order.
@@ -85,6 +102,10 @@ GEN8 says 2.0.0.0 and there is no SEQN/FEAT/TGIN chunk. `fmt.gms23` is false.
 * `sprite_add`/`sprite_replace`/`background_replace` with removeback make every pixel of the bottom-left pixel's colour (RGB) fully transparent. smooth (with removeback) is not implemented and fails loudly (ch1_ribbit_mod `PROCESS_LOGO` uses removeback without smooth).
 * `get_string` / `get_integer` return the default when cancelled (or, for integers, when the input isn't a number).
 
+* Paths: positions advance by `path_speed * point speed% / (length * path_scale)` each step after built-in motion; relative paths put their first point at the instance; `path_end` fires at every end, and end action 0 stops the path. `direction` isn't changed. Smooth paths use quadratic pieces between segment midpoints, subdivided `precision` times; GM's exact curve is unverified.
+* `ds_priority` ties go to the earliest added value.
+* GML `catch` gets `{message, longMessage, script, stacktrace}` for runtime errors; GM's message text differs from krplayer's.
+
 ## Known krplayer divergences (not fixes, gaps)
 * Asset references are plain indices, not GM 2023.8+ typed refs (`typeof(spr_x)` gives `"number"`, not `"ref"`).
 * `random()` is deterministic per run like GM (fixed seed), but not GM's sequence.
@@ -92,7 +113,10 @@ GEN8 says 2.0.0.0 and there is no SEQN/FEAT/TGIN chunk. `fmt.gms23` is false.
 * int64 literals become reals (exact up to 2^53); `typeof` never says `"int64"`.
 * Precise masks are tested per pixel (at pixel centres) by place_*/instance_place/collision events/collision_point/collision_rectangle, but `collision_circle`/`collision_line` still test the other instance's bounding box; `collision_ellipse` tests its own bounding box.
 * Deltarune's diagonal walls (`obj_sul`/`obj_sur`/`obj_sdl`/`obj_sdr`, children of `obj_solidblock`) are precise triangles. Their bbox is the whole square, so treating them as boxes blocks movement near slopes (repro: Ch1 `?room=room_torbathroom`, hold left; with box masks Kris doesn't move).
-* Paths and timelines aren't implemented (Deltarune Chapter 1 has none: its PATH and TMLN chunks are empty).
+* Timelines aren't implemented (Deltarune Chapters 1 and 2 have none: their TMLN chunks are empty).
+* The software renderer (headless screenshots) can't run GLSL: shaders compile to handles and drawing ignores them (it warns once). Only WebGL runs them.
+* Primitives take their alpha from the first vertex of each triangle/line (GM interpolates per vertex). `surface_getpixel*` reads the whole surface back each call.
+* `try` with a `finally` block, and `throw`, aren't implemented (refused at load). Layer scripts only work on non-instance layers.
 * krplayer reports `os_type` = `os_windows`, so games take their PC code paths.
 * `ds_list_write` / `ds_map_find_first` order use krplayer's own formats/insertion order, not GM's hash order.
 * Pre-2.3 arrays alias 1D and 2D access (`a[j]` is `a[0, j]`), but imports read `a[i, j]` as `a[i][j]`, so code that mixes the two forms on one array diverges.

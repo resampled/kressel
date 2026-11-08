@@ -86,13 +86,15 @@ async function run(source: ProjectSource, ui: Shell): Promise<void> {
 ${(e as Error).message}`, true); console.error(e); };
   try {
     const q = params(), debug = q.has('debug');
-    if (!debug && ['room', 'direct', 'set', 'call'].some((k) => q.has(k))) console.warn('kressel: ?room/direct/set/call are ignored without ?debug');
+    if (!debug && ['room', 'direct', 'after', 'set', 'call'].some((k) => q.has(k))) console.warn('kressel: ?room/direct/after/set/call are ignored without ?debug');
     const want = debug ? q.get('room') : null, warp = want ? game.findRoom(want) : -1;
     if (want && warp < 0) throw new Error(`?room=${want}: no such room`);
+    const afterQ = debug ? q.get('after') : null, after = afterQ ? game.findRoom(afterQ) : -1;
+    if (afterQ && after < 0) throw new Error(`?after=${afterQ}: no such room`);
     const init = debug ? warpSetup(game, q) : null;
     if (init && warp < 0) throw new Error('?set= / ?call= need ?room=');
     if (debug) (globalThis as { kr?: unknown }).kr = game; // console access: kr.room.name, kr.roomIndex
-    game.start(warp, debug && q.has('direct'), init);
+    game.start(warp, debug && q.has('direct'), init, after);
   } catch (e) { return fail(e); }
   let acc = 0, last = performance.now(), w = 0, h = 0;
   const tick = (now: number) => {

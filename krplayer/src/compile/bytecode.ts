@@ -32,6 +32,8 @@ export const Op = {
   AGET: 29,      //                stack: arr index -> arr[index]
   ASET: 30,      // own            stack: value row index -> (row[index] = value)
   ARRAY: 31,     // n              n items (first element deepest) -> array
+  TRY_BEGIN: 32, // catch          pushes a handler; an error jumps to catch with the exception pushed
+  TRY_END: 33,   //                pops the handler
 } as const;
 
 /** Variable scopes for GET/SET/GETI/SETI. */
@@ -67,4 +69,4 @@ export interface Block {
 }
 
 /** Event keys: simple events by EV slot; alarms, user, async, collision and key events offset. */
-export const EK = { alarm: 100, user: 200, async: 300, collision: 1000, key: 100000 } as const;
+export const EK = { alarm: 100, user: 200, async: 300, mouse: 500, collision: 1000, key: 100000 } as const;

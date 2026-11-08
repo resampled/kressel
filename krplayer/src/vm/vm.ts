@@ -4,18 +4,23 @@
 import { BinOp, Op, S, UnOp, type Block } from '../compile/bytecode.ts';
 import { IMPL } from '../builtins/registry.ts';
 import {
-  add, bits, compare, equals, fits32, fromBits, GmlError, GmMethod, GmStruct, idiv, mod, real, Scope, truthy, typeName,
+  add, bits, compare, equals, fits32, fromBits, GmlError, GmMethod, GmStruct, idiv, mod, NotImplemented, real, Scope, truthy, typeName,
   type GArray, type Value,
 } from '../value.ts';
 import { Instance, NOI } from '../runtime/instance.ts';
 import type { Game } from '../runtime/game.ts';
 
-const STACK = 1 << 14, LOCALS = 1 << 16, ARGS = 1 << 14, WITH_DEPTH = 256, CALL_DEPTH = 512;
+const STACK = 1 << 14, LOCALS = 1 << 16, ARGS = 1 << 14, WITH_DEPTH = 256, CALL_DEPTH = 512, TRY_DEPTH = 256;
 /** Backward jumps allowed per frame before the watchdog stops the game (runaway loops). */
 const BUDGET = 50_000_000;
 
 /** A runtime error already annotated with its script location. */
 export class RuntimeError extends Error {}
+/** The infinite-loop watchdog: never caught by GML try/catch. */
+class Watchdog extends Error {}
+const rootOf = (e: unknown): unknown => { while (e instanceof RuntimeError && e.cause) e = e.cause; return e; };
+/** Whether a GML catch may handle e: GML errors only, not krplayer gaps, the watchdog or krplayer bugs. */
+const catchable = (e: unknown): boolean => { const r = rootOf(e); return r instanceof GmlError && !(r instanceof NotImplemented); };
 
 export class VM {
   readonly stack: Value[] = new Array(STACK).fill(undefined);
@@ -29,6 +34,11 @@ export class VM {
   private readonly wSelf: (Scope | null)[] = new Array(WITH_DEPTH).fill(null);
   private readonly wOther: (Scope | null)[] = new Array(WITH_DEPTH).fill(null);
   private wsp = 0;
+  /** try handlers: catch pc, and the value stack / with depth to unwind to. */
+  private readonly tryPc = new Int32Array(TRY_DEPTH);
+  private readonly trySp = new Int32Array(TRY_DEPTH);
+  private readonly tryW = new Int32Array(TRY_DEPTH);
+  private tp = 0;
   private depth = 0;
   budget = BUDGET;
   /** The block running right now (event_inherited needs its object and event). */
@@ -40,13 +50,14 @@ export class VM {
   /** Runs a block as self (with other) and an argument frame. Returns its ctr_return value. */
   run(b: Block, self: Scope, other: Scope | null, argBase = this.ap, argc = 0): Value {
     const g = this.g, code = b.code, consts = b.consts as Value[], s = this.stack, L = this.locals, A = this.args;
-    const savedSelf = g.self, savedOther = g.other, sp0 = this.sp, lp = this.lp, w0 = this.wsp, savedBlock = this.current;
+    const savedSelf = g.self, savedOther = g.other, sp0 = this.sp, lp = this.lp, w0 = this.wsp, t0 = this.tp, savedBlock = this.current;
     if (lp + b.nLocals > LOCALS || ++this.depth > CALL_DEPTH) { this.depth--; throw new RuntimeError(`${b.name}: call stack too deep (runaway recursion?)`); }
     for (let i = 0; i < b.nLocals; i++) L[lp + i] = undefined;
     this.lp += b.nLocals;
     g.self = self; g.other = other; this.current = b;
     let sp = sp0, pc = 0;
     try {
+      for (;;) try {
       for (;;) {
         if (sp > STACK - 64) throw new GmlError('value stack overflow');
         switch (code[pc]) {
@@ -188,8 +199,23 @@ export class VM {
           case Op.BOOL: s[sp - 1] = truthy(s[sp - 1]); pc++; break;
           case Op.SELFID: s[sp++] = scopeValue(g.self); pc++; break;
           case Op.OTHERID: s[sp++] = g.other ? scopeValue(g.other) : -4; pc++; break;
+          case Op.TRY_BEGIN: {
+            if (this.tp >= TRY_DEPTH) throw new GmlError('try nested too deeply');
+            const h = this.tp++;
+            this.tryPc[h] = code[pc + 1]; this.trySp[h] = sp; this.tryW[h] = this.wsp;
+            pc += 2; break;
+          }
+          case Op.TRY_END: this.tp--; pc++; break;
           default: throw new GmlError(`bad bytecode ${code[pc]} at ${pc}`);
         }
+      }
+      } catch (e) {
+        // A GML error inside a try of this frame: unwind to its handler and run the catch.
+        if (this.tp <= t0 || !catchable(e)) throw e;
+        const h = --this.tp;
+        while (this.wsp > this.tryW[h]) this.popWith();
+        sp = this.trySp[h]; pc = this.tryPc[h];
+        s[sp++] = this.exception(e, b);
       }
     } catch (e) {
       let k = 0;
@@ -201,7 +227,7 @@ export class VM {
       throw new RuntimeError(`${where}: ${(e as Error).message}`, { cause: e });
     } finally {
       while (this.wsp > w0) this.popWith();
-      this.sp = sp0; this.lp = lp; this.depth--; this.current = savedBlock;
+      this.tp = t0; this.sp = sp0; this.lp = lp; this.depth--; this.current = savedBlock;
       g.self = savedSelf; g.other = savedOther;
     }
   }
@@ -226,7 +252,17 @@ export class VM {
   }
 
   private runaway(): never {
-    throw new GmlError('too many loop iterations in one frame (infinite loop?)');
+    throw new Watchdog('too many loop iterations in one frame (infinite loop?)');
+  }
+
+  /** The value a catch receives for a runtime error: GM's error struct. */
+  private exception(e: unknown, b: Block): Value {
+    const st = new GmStruct(), a = this.g.a, msg = (rootOf(e) as Error).message;
+    st.vars.set(a.varSlot('message'), msg);
+    st.vars.set(a.varSlot('longMessage'), (e as Error).message);
+    st.vars.set(a.varSlot('script'), b.name);
+    st.vars.set(a.varSlot('stacktrace'), [b.name]);
+    return st;
   }
 
   private popWith(): void {

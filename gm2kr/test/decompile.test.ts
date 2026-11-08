@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Op, T, VarKind, Ext, type Instr } from '../src/decompile/disasm.ts';
+import { Op, T, VarKind, Ext, disassemble, type Instr } from '../src/decompile/disasm.ts';
 import { Decompiler } from '../src/decompile/structure.ts';
 import { decompileAll } from '../src/decompile/program.ts';
 import type { GmModel } from '../src/model.ts';
@@ -176,4 +176,56 @@ test('pre-2.3: an empty script (zero-length entry at the next script\'s address)
   } as unknown as GmModel;
   const out = decompileAll(m);
   assert.deepEqual([out.get('gml_Script_empty')?.body, out.get('gml_Script_real')?.body], [[], [['ins_destroy']]]);
+});
+
+test('++x / x++ used as values become var_inc reporters (prefix: dup after add; postfix: dup before)', () => {
+  // y = ++x
+  assert.deepEqual(decompile([pushv('x'), pushi(1), { op: Op.add, t2: T.Var }, { op: Op.dup, t1: T.Var, i16: 0 }, pop('x'), pop('y')]), [
+    ['var_set', ['_lv', 'y'], ['var_inc', ['_lv', 'x']]],
+  ]);
+  // y = x--
+  assert.deepEqual(decompile([pushv('x'), { op: Op.dup, t1: T.Var, i16: 0 }, pushi(1), { op: Op.sub, t2: T.Var }, pop('x'), pop('y')]), [
+    ['var_set', ['_lv', 'y'], ['var_dec', ['_lv', 'x'], true]],
+  ]);
+});
+
+test('instance access kind 0xe0 names a room instance by id - 100000 (Ch2 room_dw_cyber_teacup_final)', () => {
+  assert.deepEqual(decompile([pushv('y', 2269, VarKind.instance), pop('endY')]), [['var_set', ['_lv', 'endY'], ['_iv', 102269, 'y']]]);
+});
+
+test('return inside with: the popenv exit form before ret is bookkeeping', () => {
+  // with (obj_b) { return 5 }  ->  pushi 1; pushenv E; pushi 5; popenv <exit>; ret; E: popenv body
+  assert.deepEqual(decompile([pushi(1), { op: Op.pushenv, target: 5 }, pushi(5), { op: Op.popenv, target: -1 }, { op: Op.ret }, { op: Op.popenv, target: 2 }]), [
+    ['ctr_with', ['_as', 'obj_b'], [['ctr_return', 5]]],
+  ]);
+});
+
+test('exit inside repeat pops the repeat counter first', () => {
+  // repeat (3) { if (a) exit; }
+  assert.deepEqual(decompile([
+    pushi(3), { op: Op.dup, t1: T.Int32, i16: 0 }, pushi(0), cmp(2), { op: Op.bt, target: 14 },
+    pushv('a'), { op: Op.bf, target: 9 }, { op: Op.popz, t1: T.Int32 }, { op: Op.exit },
+    pushi(1), { op: Op.sub }, { op: Op.dup, t1: T.Int32, i16: 0 }, { op: Op.conv, t2: T.Bool }, { op: Op.bt, target: 5 }, { op: Op.popz, t1: T.Int32 },
+  ]), [['ctr_repeat', 3, [['ctr_if', ['_lv', 'a'], [['ctr_exit']]]]]]);
+});
+
+test('a last `if (c) exit;` keeps its exit (the branch targets the end of the entry)', () => {
+  assert.deepEqual(decompile([pushv('a'), { op: Op.bf, target: 3 }, { op: Op.exit }]), [['ctr_if', ['_lv', 'a'], [['ctr_exit']]]]);
+});
+
+test('try / catch (Ch2 obj_tensionbar Draw)', () => {
+  // try { x = 1 } catch (_ex) { x = 2 }
+  assert.deepEqual(decompile([
+    pushi(40), pushi(16), call('@@try_hook@@', 2), { op: Op.popz },
+    pushi(1), pop('x'), { op: Op.b, target: 15 },
+    pop('_ex', -7), call('@@try_unhook@@', 0), { op: Op.popz }, pushi(2), pop('x'), call('@@finish_catch@@', 0), { op: Op.popz }, { op: Op.b, target: 17 },
+    call('@@try_unhook@@', 0), { op: Op.popz },
+  ]), [['var_local', '_ex'], ['ctr_try', [['var_set', ['_lv', 'x'], 1]], '_ex', [['var_set', ['_lv', 'x'], 2]]]]);
+});
+
+test('popenv\'s exit form is operand 0xf00000 (24 bits)', () => {
+  const buf = new ArrayBuffer(4);
+  new DataView(buf).setUint32(0, ((Op.popenv << 24) | 0xf00000) >>> 0, true);
+  const [i] = disassemble(buf, { name: 't', start: 0, length: 4, offset: 0, locals: 0, args: 0 }, { vars: new Map(), funcs: new Map() }, []);
+  assert.equal(i.target, -1);
 });

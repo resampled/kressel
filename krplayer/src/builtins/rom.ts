@@ -1,7 +1,7 @@
 // Rooms (rom_*) and layers. Room changes take effect at the end of the step.
 
-import { define, family, n, b, str } from './registry.ts';
-import { GmlError, real, type GArray, type Value } from '../value.ts';
+import { define, family, n, b, str, type BuiltinFn } from './registry.ts';
+import { GmlError, NotImplemented, real, type GArray, type Value } from '../value.ts';
 import { ELEM, type Element } from '../runtime/layers.ts';
 import type { Game } from '../runtime/game.ts';
 
@@ -128,15 +128,21 @@ family('rom_bg', 'layer_background_', {
 });
 
 const tile = (g: Game, v: Value) => el(g, v, ELEM.tile, 'layer_tile');
+/** Setters on a missing tile do nothing, as GM: Ch2's tile_get_ids_at_depth returns [-1] for no tiles and callers set it (gm_gotchas.md). */
+const setTile = (f: (e: Element, s: Value[], t: number) => void): BuiltinFn => (g, s, t) => {
+  const e = g.layers.element(real(s[t]));
+  if (e?.kind === ELEM.tile) f(e, s, t);
+  return undefined;
+};
 family('rom_tile', 'layer_tile_', {
   exists: (g, s, t, argc) => { const e = g.layers.element(real(s[t - (argc > 1 ? 1 : 0)])); return !!e && e.kind === ELEM.tile; },
-  visible: (g, s, t) => { tile(g, s[t]).visible = b(s, t, 1); return undefined; },
-  x: (g, s, t) => { tile(g, s[t]).x = n(s, t, 1); return undefined; },
-  y: (g, s, t) => { tile(g, s[t]).y = n(s, t, 1); return undefined; },
-  alpha: (g, s, t) => { tile(g, s[t]).alpha = n(s, t, 1); return undefined; },
-  blend: (g, s, t) => { tile(g, s[t]).colour = n(s, t, 1); return undefined; },
-  xscale: (g, s, t) => { tile(g, s[t]).xscale = n(s, t, 1); return undefined; },
-  yscale: (g, s, t) => { tile(g, s[t]).yscale = n(s, t, 1); return undefined; },
+  visible: setTile((e, s, t) => { e.visible = b(s, t, 1); }),
+  x: setTile((e, s, t) => { e.x = n(s, t, 1); }),
+  y: setTile((e, s, t) => { e.y = n(s, t, 1); }),
+  alpha: setTile((e, s, t) => { e.alpha = n(s, t, 1); }),
+  blend: setTile((e, s, t) => { e.colour = n(s, t, 1); }),
+  xscale: setTile((e, s, t) => { e.xscale = n(s, t, 1); }),
+  yscale: setTile((e, s, t) => { e.yscale = n(s, t, 1); }),
   get_visible: (g, s, t) => tile(g, s[t]).visible,
   get_x: (g, s, t) => tile(g, s[t]).x,
   get_y: (g, s, t) => tile(g, s[t]).y,
@@ -158,4 +164,35 @@ family('rom_sprite', 'layer_sprite_', {
   speed: (g, s, t) => { lsprite(g, s[t]).speed = n(s, t, 1); return undefined; },
   get_x: (g, s, t) => lsprite(g, s[t]).x,
   get_y: (g, s, t) => lsprite(g, s[t]).y,
+  xscale: (g, s, t) => { lsprite(g, s[t]).xscale = n(s, t, 1); return undefined; },
+  yscale: (g, s, t) => { lsprite(g, s[t]).yscale = n(s, t, 1); return undefined; },
+  get_xscale: (g, s, t) => lsprite(g, s[t]).xscale,
+  get_yscale: (g, s, t) => lsprite(g, s[t]).yscale,
+  get_index: (g, s, t) => lsprite(g, s[t]).index,
+  get_speed: (g, s, t) => lsprite(g, s[t]).speed,
+  /** layer_sprite_get_id(layer, name): asset layer sprites keep their room editor names. */
+  get_id: (g, s, t) => layer(g, s[t]).elements.find((e) => e.kind === ELEM.sprite && e.name === str(s, t, 1))?.id ?? -1,
+});
+
+const tmap = (g: Game, v: Value) => el(g, v, ELEM.tilemap, 'tilemap');
+family('rom_tilemap', 'tilemap_', {
+  x: (g, s, t) => { tmap(g, s[t]).x = n(s, t, 1); return undefined; },
+  y: (g, s, t) => { tmap(g, s[t]).y = n(s, t, 1); return undefined; },
+  get_x: (g, s, t) => tmap(g, s[t]).x,
+  get_y: (g, s, t) => tmap(g, s[t]).y,
+  get_width: (g, s, t) => tmap(g, s[t]).w,
+  get_height: (g, s, t) => tmap(g, s[t]).h,
+  get_tileset: (g, s, t) => tmap(g, s[t]).asset,
+  tileset: (g, s, t) => { tmap(g, s[t]).asset = n(s, t, 1); return undefined; },
+});
+define('rom_layer_tilemap', (g, s, t) => layer(g, s[t]).elements.find((e) => e.kind === ELEM.tilemap)?.id ?? -1);
+define('rom_layer_at_depth', (g, s, t) => {
+  const d = n(s, t, 0), out: GArray = g.layers.list.filter((l) => l.depth === d).map((l) => l.id);
+  return out.length ? out : [-1];
+});
+define('rom_layer_script', (g, s, t) => {
+  const l = layer(g, s[t - 1]), f = s[t - 2], none = typeof f === 'number' && f < 0;
+  if (l.instances && !none) throw new NotImplemented('layer_script_begin/end on instance layers is not implemented in krplayer yet');
+  if (s[t] === 'begin') l.scriptBegin = none ? null : f; else l.scriptEnd = none ? null : f;
+  return undefined;
 });

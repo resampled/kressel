@@ -1,7 +1,7 @@
 // Looks (lks_*) and sound (snd_*).
 
 import { define, family, n, b, str, opt } from './registry.ts';
-import { GmlError, real } from '../value.ts';
+import { GmlError, NotImplemented, real } from '../value.ts';
 import { spriteOrThrow } from '../runtime/draw.ts';
 import type { SpriteDef } from '../runtime/assets.ts';
 import { Files } from '../runtime/data.ts';
@@ -48,7 +48,7 @@ define('lks_font_from_sprite', (g, s, t) => {
 function imageFile(g: Game, fn: string, path: string, removeback: boolean, smooth: boolean): Pixels | null {
   if (!g.p.decodeImage) throw new GmlError(`${fn}: this platform can't decode image files`);
   // smooth only does anything with removeback (it softens the cut-out edges).
-  if (removeback && smooth) throw new GmlError(`${fn}: smooth is not implemented in krplayer yet`);
+  if (removeback && smooth) throw new NotImplemented(`${fn}: smooth is not implemented in krplayer yet`);
   const img = g.a.images.get(Files.norm(path)) ?? null;
   if (!img) g.p.log(`${fn}: ${path} is not an included image file`);
   return img && removeback ? removeBack(img) : img;
@@ -117,6 +117,17 @@ define('lks_sprite_assign', (g, s, t) => {
   return undefined;
 });
 define('lks_sprite_set_offset', (g, s, t) => { const sp = spriteOrThrow(g, n(s, t, 0)); sp.ox = n(s, t, 1); sp.oy = n(s, t, 2); return undefined; });
+const BBOX: Record<string, number> = { left: 0, top: 1, right: 2, bottom: 3 };
+define('lks_sprite_bbox', (g, s, t) => spriteOrThrow(g, n(s, t, 1)).bbox[BBOX[String(s[t])]]);
+define('lks_sprite_set_bbox', (g, s, t) => { spriteOrThrow(g, n(s, t, 0)).bbox = [n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4)]; return undefined; });
+/** sprite_duplicate: a new sprite sharing the frames (textures are never changed in place). */
+define('lks_sprite_duplicate', (g, s, t) => {
+  const sp = spriteOrThrow(g, n(s, t, 0)), i = g.a.sprites.length;
+  g.a.sprites.push({ ...sp, index: i, name: `__newsprite${i}`, frames: [...sp.frames], bbox: [...sp.bbox] });
+  return i;
+});
+/** Every frame is a whole texture of its own, so its UVs cover the texture (untrimmed: no offsets). */
+define('lks_sprite_uvs', (g, s, t) => { spriteOrThrow(g, n(s, t, 0)); return [0, 0, 1, 1, 0, 0, 1, 1]; });
 /** sprite_collision_mask(spr, sepmasks, bboxmode, l, t, r, b, kind, tolerance). kind: 0 precise, 1 rectangle, 2 ellipse, 3 diamond. */
 define('lks_sprite_collision_mask', (g, s, t) => {
   const sp = spriteOrThrow(g, n(s, t, 0)), sep = b(s, t, 1), mode = n(s, t, 2), kind = n(s, t, 7), tol = n(s, t, 8);

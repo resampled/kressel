@@ -13,7 +13,7 @@ import { readObjt, type GmObject } from './chunks/objt.ts';
 import { readRoom, type GmRoom } from './chunks/room.ts';
 import { readCode, readRefs, type GmCode, type GmRefs } from './chunks/code.ts';
 import { readAgrp, readAudo, readSond, type GmSound } from './chunks/audio.ts';
-import { readBgnd, readGlob, readScpt, type GmScript, type GmTileset } from './chunks/misc.ts';
+import { readBgnd, readGlob, readPath, readScpt, readShdr, type GmPath, type GmScript, type GmShader, type GmTileset } from './chunks/misc.ts';
 
 export interface GmModel {
   buf: ArrayBuffer;
@@ -36,10 +36,12 @@ export interface GmModel {
   /** Audio group 0's embedded audio (data.win AUDO). */
   audio: Uint8Array[];
   tilesets: GmTileset[];
+  paths: GmPath[];
+  shaders: GmShader[];
 }
 
 /** Chunks gm2kr doesn't convert yet. Present-and-non-empty means the game uses a missing feature. */
-const UNSUPPORTED = ['PATH', 'TMLN', 'SHDR'];
+const UNSUPPORTED = ['TMLN'];
 
 export function readModel(buf: ArrayBuffer): GmModel {
   const chunks = readChunks(buf);
@@ -78,5 +80,7 @@ export function readModel(buf: ArrayBuffer): GmModel {
     audioGroups: opt('AGRP', readAgrp),
     audio: opt('AUDO', readAudo),
     tilesets: opt('BGND', readBgnd),
+    paths: opt('PATH', readPath),
+    shaders: opt('SHDR', readShdr),
   };
 }

@@ -81,6 +81,10 @@ export class Data {
   readonly lists = new Handles<DsList>();
   readonly grids = new Handles<{ w: number; h: number; a: Value[] }>();
   readonly buffers = new Handles<Buffer>();
+  readonly stacks = new Handles<DsList>();
+  readonly queues = new Handles<DsList>();
+  /** Priority queues: values and their priorities, in insertion order. */
+  readonly priorities = new Handles<{ v: Value[]; p: number[] }>();
   /** Values in maps/lists that json_decode created as nested maps/lists (by container). */
   private readonly nested = new WeakMap<object, Map<Value, 'map' | 'list'>>();
 
@@ -89,6 +93,9 @@ export class Data {
       case DS.map: return this.maps.has(id);
       case DS.list: return this.lists.has(id);
       case DS.grid: return this.grids.has(id);
+      case DS.stack: return this.stacks.has(id);
+      case DS.queue: return this.queues.has(id);
+      case DS.priority: return this.priorities.has(id);
     }
     return false;
   }
@@ -133,6 +140,13 @@ export class Data {
     const o: Record<string, unknown> = {};
     for (const [k, x] of c.m) o[String(k)] = conv(x);
     return o;
+  }
+
+  /** ds_map_add_list/_map: marks a map value as a nested list/map (json_encode, ds_map_destroy). */
+  nest(c: DsMap, child: Value, kind: 'map' | 'list'): void {
+    let kids = this.nested.get(c);
+    if (!kids) { kids = new Map(); this.nested.set(c, kids); }
+    kids.set(child, kind);
   }
 
   /** ds_map_destroy also frees maps/lists json_decode nested inside it. */

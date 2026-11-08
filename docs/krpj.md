@@ -178,7 +178,7 @@ Fields beyond the example above. All are optional unless noted; the types live i
 * `cfg_gm_compat.imported_from`: `null`, or `{ "tool": "gm2kr", "game": <GM project name>, "bytecode": <15-17>, "gm_version": [major, minor, release, build] }`.
 * `cfg_defaults.width` / `height`: `"default"` means the size of `init_room`.
 * `room_order`: room keys in game order (`room_goto_next` etc.). Defaults to the key order of `rooms`.
-* Asset keys (`sprites`, `fonts`, `objects`, `rooms`, `sounds`, `tilesets`...) share one namespace, since `["_as", name]` names any of them. gm2kr uses the GameMaker asset names as keys, in GameMaker's order, so an asset's index within its kind is GM's index (imported code that uses raw asset numbers keeps working).
+* Asset keys (`sprites`, `fonts`, `objects`, `rooms`, `sounds`, `tilesets`, `paths`, `shaders`...) share one namespace, since `["_as", name]` names any of them. gm2kr uses the GameMaker asset names as keys, in GameMaker's order, so an asset's index within its kind is GM's index (imported code that uses raw asset numbers keeps working).
 * `global_init`: scripts (bare or placed, see Script layout) run once at game start, in order, before the first room, with `self` = the global scope (GameMaker 2.3+ script files' top-level code, which also defines their functions as global variables).
 * `scripts`: script asset index → function key (or `null`), for code that names scripts by number (`script_execute(n)`, `asset_get_index`). A function reference (`["_fn", key]`) evaluates to its script index when it has one, and to a method otherwise.
 * `audio_groups`: audio group names by index (`sounds[k].group` indexes it).
@@ -203,6 +203,10 @@ A hat with an empty block list (`["evt_step", []]`) is a real, empty event: like
 
 **Fonts**: `size`, `bold`, `italic`, `antialias`, `line_height`, `ranges` and `glyphs` (`"code": [x, y, w, h, shift, offset]` in the atlas) as in the example; `kerning` is optional.
 
+**Paths** (`paths`): `points` is a list of `[x, y, speed]` (speed is a percentage of the path speed, 100 = normal); `smooth` (curved instead of straight segments), `closed` (the last point joins the first) and `precision` (curve subdivision, 1-8, default 4) are optional. Like other assets, a path's index within `paths` is its id.
+
+**Shaders** (`shaders`): `vertex` and `fragment` are GLSL ES 1.00 sources written for GameMaker's conventions: attributes `in_Position`, `in_Colour`, `in_TextureCoord`; uniforms `gm_BaseTexture` and `gm_Matrices[5]` (index 4 is world-view-projection). gm2kr keeps GameMaker's own prelude in the source.
+
 **Tile sets** (`tilesets`): `image` is cut into a grid of `tile_w` × `tile_h` tiles, each padded by `border_x` / `border_y` on every side, `columns` per row. Animated sets add `frames`, `frame_time` (microseconds) and `ids` (tile → its frames' source tiles, `tile_count * frames` entries).
 
 **Objects**
@@ -218,7 +222,7 @@ A hat with an empty block list (`["evt_step", []]`) is a real, empty event: like
   * `background`: `sprite` (or `null` for a plain `color`), `htiled`, `vtiled`, `stretch`, `foreground`, `alpha`, `image_index`, `image_speed`; `color` is BGR.
   * `instances`: `instances`, each with `object`, `x`, `y`, plus optional `scale_x`, `scale_y`, `angle`, `colour` (BGR), `alpha`, `image_index`, `image_speed`, `creation` (a script run right after that instance's create event) and `id` (the GM instance id, which code may refer to).
   * `assets`: `tiles` (GMS1-style tiles: `[x, y, sprite, left, top, width, height, scale_x, scale_y, colour]` with colour ABGR) and `sprites` (`sprite`, `x`, `y`, optional `scale_x`, `scale_y`, `angle`, `colour`, `alpha`, `image_index`, `image_speed`, `name`).
-  * `tiles`: `tileset`, `cols`, `rows` and `data` (rows × cols tile indices; 0 is empty, bits 28-30 mirror/flip/rotate).
+  * `tiles`: `tileset` (`null`: no tile set, draws nothing), `cols`, `rows` and `data` (rows × cols tile indices; 0 is empty, bits 28-30 mirror/flip/rotate).
 * `instance_order`: instance ids in creation order (imports keep GameMaker's); without it, instances are created layer by layer, in list order.
 * Every instance of the room exists (position, sprite and other built-ins set) before the first create event runs. Then, in creation order, each runs its create event, then its creation code. So a create event can read another room instance's `x`, but not variables that instance's own create event sets.
 

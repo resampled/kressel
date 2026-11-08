@@ -323,3 +323,51 @@ test('placed scripts run; loose stacks, hat-less entries and hats with nothing a
   g.frame();
   assert.equal(g.globalScope.vars.get(g.a.varSlot('log')), 'gcrs');
 });
+
+test('try / catch: GML errors are caught with GM\'s error struct; krplayer gaps are not', async () => {
+  const v = await exec([
+    ['ctr_try', [['var_set', ['_lv', 'a'], ['var_arr_get', ['var_arr_create', 1], 5]], ['var_set', ['_lv', 'after'], 1]], 'e',
+      [['var_set', ['_lv', 'msg'], ['_iv', ['_lv', 'e'], 'message']]]],
+    ['ctr_while', true, [['ctr_try', [['ctr_break']], 'e2', []]]], // break out of a try inside a loop drops its handler
+    ['ctr_try', [['var_set', ['_lv', 'ok'], 1]], 'e3', [['var_set', ['_lv', 'ok'], 2]]],
+  ]);
+  assert.match(String(v.msg), /array_get: index 5 out of range/);
+  assert.equal(v.after, undefined);
+  assert.equal(v.ok, 1);
+  await assert.rejects(exec([['ctr_try', [['drw_texturegroup', 'no_such_member']], 'e', []]]), /not implemented in krplayer/);
+});
+
+test('paths: path_start follows the path (absolute and relative), fires the path end event and stops', async () => {
+  const pj = project({
+    o: obj([
+      ['evt_create', [['var_set', ['_lv', 'ends'], 0], ['ctr_if', ['opr_eq', ['_lv', 'x'], 0], [['mov_path_start', ['_as', 'p'], 5, 0, true]], [['mov_path_start', ['_as', 'p'], 5, 0, false]]]]],
+      ['evt_path_end', [['var_change', '+', ['_lv', 'ends'], 1]]],
+    ]),
+  }, [{ object: 'o', x: 0, y: 0 }, { object: 'o', x: 50, y: 50 }]);
+  pj.paths = { p: { points: [[10, 10, 100], [30, 10, 100], [30, 20, 100]] } };
+  const g = await load({ krpj: pj, url: (x) => x }, createHeadless(() => [10, 10]));
+  const [a, r] = g.instances;
+  assert.deepEqual([a.x, a.y, r.x, r.y], [10, 10, 50, 50]);
+  g.frame(); // 5 px along: 30 px long path
+  assert.deepEqual([a.x, a.y, r.x, r.y], [15, 10, 55, 50]);
+  for (let i = 0; i < 6; i++) g.frame();
+  assert.deepEqual([a.x, a.y, a.path, a.vars.get(g.a.varSlot('ends'))], [30, 20, -1, 1]);
+  assert.equal(g.paths.get(0, 't').length(), 30);
+});
+
+test('event_perform(ev_other, ev_user0) runs user event 0 (Ch2 obj_teacup)', async () => {
+  const pj = project({ o: obj([['evt_create', [['ins_event_perform', 7, 10]]], ['evt_user', 0, [['var_set', ['_lv', 'ran'], 1]]]]) }, [{ object: 'o', x: 0, y: 0 }]);
+  const g = await load({ krpj: pj, url: (x) => x }, createHeadless(() => [10, 10]));
+  assert.equal(g.instances[0].vars.get(g.a.varSlot('ran')), 1);
+});
+
+test('ds_queue and ds_priority', async () => {
+  const v = await exec([
+    ['var_set', ['_lv', 'q'], ['dat_queue', 'create']], ['dat_queue', 'enqueue', ['_lv', 'q'], 1, 2],
+    ['var_set', ['_lv', 'h'], ['dat_queue', 'dequeue', ['_lv', 'q']]],
+    ['var_set', ['_lv', 'p'], ['dat_priority', 'create']],
+    ['dat_priority', 'add', ['_lv', 'p'], 'b', 5], ['dat_priority', 'add', ['_lv', 'p'], 'a', 1], ['dat_priority', 'add', ['_lv', 'p'], 'c', 9],
+    ['var_set', ['_lv', 'min'], ['dat_priority', 'delete_min', ['_lv', 'p']]], ['var_set', ['_lv', 'max'], ['dat_priority', 'find_max', ['_lv', 'p']]],
+  ]);
+  assert.deepEqual([v.h, v.min, v.max], [1, 'a', 'c']);
+});

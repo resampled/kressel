@@ -356,7 +356,8 @@ Bodies are script arrays (lists of statements). Opcodes marked "cap" end a scrip
 > * script arg1 = try body
 > * ref arg2 = name of the local that receives the exception (null when there is no catch)
 > * script arg3 = catch body (null when there is no catch)
-> * script arg4 (optional) = finally body
+> * script arg4 (optional) = finally body (krplayer doesn't run finally blocks yet and refuses them at load)
+> * The catch gets a thrown value as is, or for a runtime error a struct with `message`, `longMessage`, `script` and `stacktrace`. krplayer's own gaps ("not implemented") are never caught.
 > * KRPJ: ["ctr_try",[...],"e",[["sys_log",["_iv",["_lv","e"],"message"]]]]
 > * GML: try {...} catch (e) { show_debug_message(e.message); }
 
@@ -444,8 +445,9 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `mov_is_snapped` (hidden) | num hsnap, num vsnap | `place_snapped` | |
 | `mov_mp_linear_step` (hidden) | num x, num y, num speed, bool checkall | `mp_linear_step` | Returns whether the goal was reached. |
 | `mov_mp_potential_step` (hidden) | num x, num y, num speed, bool checkall | `mp_potential_step` | Same. |
-| `mov_path_start` | path path, num speed, num end_action, bool absolute | `path_start` | end_action: 0 stop, 1 restart, 2 continue, 3 reverse. |
+| `mov_path_start` | path path, num speed, num end_action, bool absolute | `path_start` | end_action: 0 stop, 1 restart, 2 continue, 3 reverse. Absolute follows the path's own coordinates; relative moves its first point to the instance. Paths are followed after built-in motion, and `evt_path_end` fires at each end. |
 | `mov_path_end` | - | `path_end` | |
+| `mov_path` (hidden, family) | ref fn, ... | `path_*` (`add`, `add_point`, `delete`, `exists`, `get_x`, `get_y`, `get_length`, `set_closed`, `set_kind`, `set_precision`...) | ref drops `path_`. Paths made with `path_add` get ids after the project's paths. |
 
 ## Sensing
 | Opcode | Arguments | GML | Notes |
@@ -504,7 +506,7 @@ Math, randomness, strings and type checks. GML's `+` doesn't turn numbers into t
 | `opr_dtrig` | ref fn, num degrees | `dsin` `dcos` `dtan` `darcsin` `darccos` `darctan` | ref is written without the `d` (`["opr_dtrig","sin",90]`). Listed first in the editor, since GM directions are degrees. |
 | `opr_atan2` | ref `rad`/`deg`, num y, num x | `arctan2` / `darctan2` | |
 | `opr_convert_angle` | ref `deg_to_rad`/`rad_to_deg`, num n | `degtorad` / `radtodeg` | |
-| `opr_power` | ref `power`/`logn`, num a, num b | `power(base, n)` / `logn(base, n)` | |
+| `opr_power` | ref `power`/`logn`, num a, num b | `power` / `logn` | |
 | `opr_aggregate` | ref `min`/`max`/`mean`/`median`, num... | `min` `max` `mean` `median` | Variadic: +/- buttons add or remove inputs. |
 | `opr_clamp` | num n, num lo, num hi | `clamp` | |
 | `opr_lerp` | num a, num b, num t | `lerp` | |
@@ -548,6 +550,8 @@ Arrays are 0-based (unlike Scratch lists), and block labels say so. Array functi
 | Opcode | Arguments | GML | Notes |
 |---|---|---|---|
 | `var_arr_length` | arr a | `array_length` / `array_length_1d` | |
+| `var_arr_get` (hidden) | arr a, num index | `array_get` | |
+| `var_arr_2d` (compat) | ref `height`/`length`, arr a, num? row | `array_height_2d` / `array_length_2d` | Height is the outer length; length is row `row`'s length (0 if it isn't an array). |
 | `var_arr_create` | num n, any? value | `array_create` | |
 | `var_arr_push` | arr a, any... | `array_push` | Scratch 'add (thing) to [list]'. |
 | `var_arr_take` | ref `last`/`first`, arr a | `array_pop` / `array_shift` | Returns the removed item. |
@@ -569,6 +573,7 @@ Arrays are 0-based (unlike Scratch lists), and block labels say so. Array functi
 | `var_inst_get` (hidden) | inst i, str name | `variable_instance_get` | Scratch '(x position of [Sprite])'. |
 | `var_inst_set` (hidden) | inst i, str name, any value | `variable_instance_set` | |
 | `var_inst_exists` (hidden) | inst i, str name | `variable_instance_exists` | |
+| `var_inst_names` (hidden) | inst i | `variable_instance_get_names` | Array of the instance's own (non built-in) variable names. |
 | `var_global_get` (hidden) | str name | `variable_global_get` | |
 | `var_global_set` (hidden) | str name, any value | `variable_global_set` | |
 | `var_global_exists` (hidden) | str name | `variable_global_exists` | |
@@ -590,6 +595,10 @@ Arrays are 0-based (unlike Scratch lists), and block labels say so. Array functi
 | `lks_tileset_replace` (compat) | num ts, str file, bool removeback, bool smooth | `background_replace` | GMS1 backgrounds are tilesets in GMS2 builds: replaces the tileset's image, keeping its tile layout. |
 | `lks_sprite_assign` (hidden) | spr dest, spr src | `sprite_assign` | |
 | `lks_sprite_set_offset` (hidden) | spr s, num x, num y | `sprite_set_offset` | |
+| `lks_sprite_bbox` (hidden) | ref `left`/`top`/`right`/`bottom`, spr s | `sprite_get_bbox_left` / `sprite_get_bbox_top` / `sprite_get_bbox_right` / `sprite_get_bbox_bottom` | |
+| `lks_sprite_set_bbox` (hidden) | spr s, num left, num top, num right, num bottom | `sprite_set_bbox` | |
+| `lks_sprite_duplicate` (hidden) | spr s | `sprite_duplicate` | A new sprite sharing the frames; returns its index. |
+| `lks_sprite_uvs` (hidden) | spr s, num frame | `sprite_get_uvs` | `[left, top, right, bottom, x offset, y offset, width ratio, height ratio]` of the frame on its texture. krplayer frames are untrimmed textures of their own, so this is `[0, 0, 1, 1, 0, 0, 1, 1]`. |
 | `lks_sprite_collision_mask` (hidden) | spr s, bool sepmasks, num bboxmode, num left, num top, num right, num bottom, num kind, num tolerance | `sprite_collision_mask` | bboxmode 0 automatic, 1 full image, 2 manual; kind 0 precise, 1 rectangle, 2 ellipse, 3 diamond. Precise masks need the pixels, which krplayer only has for `sprite_add` sprites. |
 | `lks_sprite_texture` (hidden) | spr s, num frame | `sprite_get_texture` | A texture handle, only useful to `vertex_submit`. |
 | `lks_font_add` (hidden) | str file, num size, bool bold, bool italic, num first, num last | `font_add` | An included TTF/OTF, rasterized (antialiased) when called. Sizes are points at 96 DPI. Returns -1 (and logs) if the file isn't included. |
@@ -691,8 +700,19 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_shader_reset` (hidden) | - | `shader_reset` | |
 | `drw_shader_uniform` (hidden) | shd s, str name | `shader_get_uniform` | |
 | `drw_shader_uniform_f` (hidden) | num uniform, num... | `shader_set_uniform_f` | |
+| `drw_shader_sampler` (hidden) | shd s, str name | `shader_get_sampler_index` | |
 | `drw_getpixel` (compat) | num x, num y | `draw_getpixel` | Stubbed. |
-| `drw_surface_getpixel` (compat) | num surf, num x, num y | `surface_getpixel` | Stubbed. |
+| `drw_surface_getpixel` (compat) | num surf, num x, num y | `surface_getpixel` | BGR. Reads the surface back, so it's slow. |
+| `drw_surface_getpixel_ext` (compat) | num surf, num x, num y | `surface_getpixel_ext` | Same as `drw_surface_getpixel`, with alpha in the top byte (ABGR). |
+| `drw_surface_texture` (hidden) | num surf | `surface_get_texture` | A texture handle, only useful to primitives and shaders. |
+| `drw_primitive_begin` (hidden) | num kind | `draw_primitive_begin` | kind: `pr_pointlist` 1, `pr_linelist` 2, `pr_linestrip` 3, `pr_trianglelist` 4, `pr_trianglestrip` 5, `pr_trianglefan` 6. |
+| `drw_primitive_begin_texture` (hidden) | num kind, num texture | `draw_primitive_begin_texture` | texture from `lks_sprite_texture` / `drw_surface_texture`. |
+| `drw_prim_vertex` (hidden) | num x, num y | `draw_vertex` | Uses the draw colour and alpha. |
+| `drw_prim_vertex_colour` (hidden) | num x, num y, col c, num alpha | `draw_vertex_colour` | |
+| `drw_prim_vertex_texture` (hidden) | num x, num y, num u, num v | `draw_vertex_texture` | |
+| `drw_prim_vertex_texture_colour` (hidden) | num x, num y, num u, num v, col c, num alpha | `draw_vertex_texture_colour` | |
+| `drw_primitive_end` (hidden) | - | `draw_primitive_end` | Draws the vertices since `drw_primitive_begin`. |
+| `drw_tilemap` (hidden) | num tilemap, num x, num y | `draw_tilemap` | |
 | `drw_effect` | ref `above`/`below`, num kind, num x, num y, num size, col colour | `effect_create_above` / `effect_create_below` | Built-in one-shot effects. kind: `ef_explosion` = 0, `ef_ring` 1, `ef_ellipse` 2, `ef_firework` 3, `ef_smoke` 4, `ef_smokeup` 5, `ef_star` 6, `ef_spark` 7, `ef_flare` 8, `ef_cloud` 9, `ef_rain` 10, `ef_snow` 11; size 0-2 (small/medium/large). Drawn by krplayer as an approximation, not GM's exact particles. |
 | `drw_part` (hidden, family) | ref fn, ... | `part_*` | ref drops `part_` (`["drw_part","particles_create",ps,x,y,pt,10]`). Only `system_create`, `particles_create` and `system_destroy` get custom labels. |
 | `drw_texture` (compat, family) | ref fn, ... | `texture_*` | Texture paging hints (`prefetch`, `is_ready`...); ref drops `texture_`. |
@@ -719,6 +739,9 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `rom_layer_destroy` (hidden) | layer l | `layer_destroy` | |
 | `rom_layer_name` (hidden) | layer l | `layer_get_name` | |
 | `rom_layer_all` (hidden) | - | `layer_get_all` | Array of layer ids. |
+| `rom_layer_at_depth` (hidden) | num depth | `layer_get_id_at_depth` | Array of the ids of layers at that depth (`[-1]` if none). |
+| `rom_layer_script` (hidden) | ref `begin`/`end`, layer l, fn script | `layer_script_begin` / `layer_script_end` | Called before / after the layer draws, with self = the calling instance at the time (-1 clears). |
+| `rom_layer_tilemap` (hidden) | layer l | `layer_tilemap_get_id` | The layer's tile map element, or -1. |
 | `rom_layer_elements` (hidden) | layer l | `layer_get_all_elements` | Array of element ids. |
 | `rom_element_type` (hidden) | num element | `layer_get_element_type` | |
 | `rom_layer_instance` (hidden) | num element | `layer_instance_get_instance` | The instance of an instance element, or `noone`. |
@@ -726,7 +749,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `rom_bg` (hidden, family) | ref fn, ... | `layer_background_*` | ref drops `layer_background_` (`["rom_bg","blend",bg,255]`). |
 | `rom_tile` (hidden, family) | ref fn, ... | `layer_tile_*` | GMS1-style tiles in asset layers; ref drops `layer_tile_`. |
 | `rom_sprite` (hidden, family) | ref fn, ... | `layer_sprite_*` | Sprites in asset layers; ref drops `layer_sprite_`. |
-| `rom_tilemap` (hidden, family) | ref fn, ... | `tilemap_*`, `layer_tilemap_get_id` | ref drops `tilemap_`; `layer_tilemap_get_id` is `layer_get_id`. |
+| `rom_tilemap` (hidden, family) | ref fn, ... | `tilemap_*` | ref drops `tilemap_`. |
 | `rom_sequence` (hidden, family) | ref fn, ... | `layer_sequence_*` | ref drops `layer_sequence_`. |
 | `rom_animcurve` (hidden, family) | ref fn, ... | `animcurve_*` | ref drops `animcurve_`. |
 
@@ -802,6 +825,8 @@ Arrays and structs (Variables) are better for visual scripts; `ds_*` mainly exis
 | `dat_map_add` (hidden) | ds m, any key, any value | `ds_map_add` | Does nothing if the key exists. |
 | `dat_map_delete` (hidden) | ds m, any key | `ds_map_delete` | |
 | `dat_map_size` (hidden) | ds m | `ds_map_size` | |
+| `dat_map_clear` (hidden) | ds m | `ds_map_clear` | |
+| `dat_map_add_kind` (hidden) | ref `list`/`map`, ds m, any key, any value | `ds_map_add_list` / `ds_map_add_map` | Like `dat_map_add`; also marks the value as a nested list/map for `dat_json_encode`. |
 | `dat_map_first` (hidden) | ds m | `ds_map_find_first` | |
 | `dat_map_next` (hidden) | ds m, any key | `ds_map_find_next` | |
 | `dat_map_keys` (hidden) | ds m | `ds_map_keys_to_array` | |

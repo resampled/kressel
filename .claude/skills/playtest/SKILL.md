@@ -18,6 +18,7 @@ current converter. `samples/*.krpj*` files may be stale or in an old layout. Pre
 ## Options
 - `--out <dir>`: where screenshots go (default `playtest-out/`, gitignored). Keep it inside the repo.
 - `--room <name|index>` [`--direct`]: debug warp (same as the player's `?room=`; `--direct` skips the init room).
+- `--after <room>`: with `--room`, warp on the first room change out of that room (games whose setup room isn't the first, e.g. Deltarune Ch2: `--after ROOM_INITIALIZE`).
 - `--shared <dir>`: local folder for `/sa/` shared assets.
 - `--render-all`: rasterize every frame. By default only the last frame of each run is drawn (~250 ms/frame
   at 1000x1000 otherwise). Use it if a game accumulates drawing on a persistent surface.

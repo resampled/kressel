@@ -42,6 +42,10 @@ class GLRenderer implements Renderer {
   /** world -> target pixels */
   private m = [1, 0, 0, 1, 0, 0];
   private filter = false;
+  /** GameMaker shaders (compileShader handles index this), the one in use (-1: default), and uniform handles. */
+  private readonly shaders: { p: WebGLProgram; wvp: WebGLUniformLocation | null; units: number }[] = [];
+  private shader = -1;
+  private readonly uniforms: { sh: number; loc: WebGLUniformLocation; unit: number }[] = [];
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -173,8 +177,64 @@ class GLRenderer implements Renderer {
   }
   /** Uploads pixel -> clip; surfaces are drawn upside down so their textures read back upright. */
   private project(): void {
-    const ys = this.target === WINDOW ? -2 / this.th : 2 / this.th;
-    this.gl.uniform4f(this.uProj, 2 / this.tw, ys, -1, this.target === WINDOW ? 1 : -1);
+    const ys = this.target === WINDOW ? -2 / this.th : 2 / this.th, ty = this.target === WINDOW ? 1 : -1, sh = this.shaders[this.shader];
+    if (!sh) { this.gl.uniform4f(this.uProj, 2 / this.tw, ys, -1, ty); return; }
+    // GM shaders: gm_Matrices[MATRIX_WORLD_VIEW_PROJECTION] maps the (already world -> pixel) vertices to clip space.
+    if (sh.wvp) this.gl.uniformMatrix4fv(sh.wvp, false, [2 / this.tw, 0, 0, 0, 0, ys, 0, 0, 0, 0, 1, 0, -1, ty, 0, 1]);
+  }
+
+  compileShader(vertex: string, fragment: string): number {
+    const gl = this.gl, mk = (type: number, src: string) => {
+      const s = gl.createShader(type)!;
+      gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.warn(`shader compile: ${gl.getShaderInfoLog(s)}`); return null; }
+      return s;
+    };
+    const vs = mk(gl.VERTEX_SHADER, vertex), fs = mk(gl.FRAGMENT_SHADER, fragment);
+    if (!vs || !fs) return -1;
+    const p = gl.createProgram()!;
+    gl.attachShader(p, vs); gl.attachShader(p, fs);
+    gl.bindAttribLocation(p, 0, 'in_Position'); gl.bindAttribLocation(p, 1, 'in_TextureCoord'); gl.bindAttribLocation(p, 2, 'in_Colour');
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) { console.warn(`shader link: ${gl.getProgramInfoLog(p)}`); return -1; }
+    gl.useProgram(p);
+    const base = gl.getUniformLocation(p, 'gm_BaseTexture');
+    if (base) gl.uniform1i(base, 0);
+    for (let k = 0; k < 5; k++) { const m = gl.getUniformLocation(p, `gm_Matrices[${k}]`); if (m) gl.uniformMatrix4fv(m, false, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); }
+    gl.useProgram(this.shaders[this.shader]?.p ?? this.prog);
+    this.shaders.push({ p, wvp: gl.getUniformLocation(p, 'gm_Matrices[4]'), units: 1 });
+    return this.shaders.length - 1;
+  }
+  setShader(sh: number): void {
+    if (sh === this.shader || (sh >= 0 && !this.shaders[sh])) return;
+    this.flush();
+    this.shader = this.shaders[sh] ? sh : -1;
+    this.gl.useProgram(this.shaders[this.shader]?.p ?? this.prog);
+    this.project();
+  }
+  shaderUniform(sh: number, name: string): number {
+    const s = this.shaders[sh], loc = s && this.gl.getUniformLocation(s.p, name);
+    if (!loc) return -1;
+    this.uniforms.push({ sh, loc, unit: -1 });
+    return this.uniforms.length - 1;
+  }
+  setUniformF(u: number, n: number, x: number, y: number, z: number, w: number): void {
+    const un = this.uniforms[u];
+    if (!un || un.sh !== this.shader) return; // GM: uniforms only apply to the shader that's set
+    this.flush();
+    const gl = this.gl;
+    if (n === 1) gl.uniform1f(un.loc, x); else if (n === 2) gl.uniform2f(un.loc, x, y); else if (n === 3) gl.uniform3f(un.loc, x, y, z); else gl.uniform4f(un.loc, x, y, z, w);
+  }
+  setSampler(u: number, t: TextureId): void {
+    const un = this.uniforms[u], x = this.tex[t];
+    if (!un || !x || un.sh !== this.shader) return;
+    this.flush();
+    const gl = this.gl;
+    if (un.unit < 0) un.unit = this.shaders[un.sh].units++;
+    gl.activeTexture(gl.TEXTURE0 + un.unit);
+    gl.bindTexture(gl.TEXTURE_2D, x.t); this.params();
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1i(un.loc, un.unit);
   }
   setView(x: number, y: number, w: number, h: number, angle: number, px: number, py: number, pw: number, ph: number): void {
     this.flush();
@@ -202,7 +262,11 @@ class GLRenderer implements Renderer {
   }
   setFog(on: boolean, color: number): void {
     this.flush();
-    this.gl.uniform4f(this.uFog, (color & 255) / 255, ((color >> 8) & 255) / 255, ((color >> 16) & 255) / 255, on ? 1 : 0);
+    // The default program's fog; a GM shader does its own (gm_PS_FogEnabled), which krplayer leaves off.
+    const gl = this.gl, sh = this.shaders[this.shader];
+    if (sh) gl.useProgram(this.prog);
+    gl.uniform4f(this.uFog, (color & 255) / 255, ((color >> 8) & 255) / 255, ((color >> 16) & 255) / 255, on ? 1 : 0);
+    if (sh) gl.useProgram(sh.p);
   }
   setColorWrite(r: boolean, g: boolean, b: boolean, a: boolean): void { this.flush(); this.gl.colorMask(r, g, b, a); }
   setFilter(on: boolean): void { if (on !== this.filter) { this.flush(); this.filter = on; this.cur = -2; } }
@@ -255,6 +319,11 @@ class GLRenderer implements Renderer {
   triangle(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, c1: number, c2: number, c3: number, alpha: number): void {
     if (alpha <= 0 || !this.use(this.white)) return;
     this.vert(x1, y1, 0.5, 0.5, rgba(c1, alpha)); this.vert(x2, y2, 0.5, 0.5, rgba(c2, alpha)); this.vert(x3, y3, 0.5, 0.5, rgba(c3, alpha));
+  }
+  triangleTex(t: TextureId, x1: number, y1: number, u1: number, v1: number, c1: number, x2: number, y2: number, u2: number, v2: number, c2: number,
+    x3: number, y3: number, u3: number, v3: number, c3: number, alpha: number): void {
+    if (alpha <= 0 || !this.use(t)) return;
+    this.vert(x1, y1, u1, v1, rgba(c1, alpha)); this.vert(x2, y2, u2, v2, rgba(c2, alpha)); this.vert(x3, y3, u3, v3, rgba(c3, alpha));
   }
 
   private flush(): void {
@@ -405,7 +474,7 @@ class CanvasFonts implements FontRasterizer {
 const SWALLOW = new Set([8, 9, 13, 32, 33, 34, 35, 36, 37, 38, 39, 40, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122]);
 
 export function createWebPlatform(canvas: HTMLCanvasElement): Platform & { audioContext: AudioContext } {
-  const input = { keys: new Uint8Array(256), pressed: new Uint8Array(256), released: new Uint8Array(256), mouseX: 0, mouseY: 0, mouseButtons: 0, typed: '', lastKey: 0 };
+  const input = { keys: new Uint8Array(256), pressed: new Uint8Array(256), released: new Uint8Array(256), mouseX: 0, mouseY: 0, mouseButtons: 0, mousePressed: 0, mouseReleased: 0, wheel: 0, typed: '', lastKey: 0 };
   // GM key codes are Windows virtual-key codes, which KeyboardEvent.keyCode still reports.
   addEventListener('keydown', (e) => {
     const k = e.keyCode & 255;
@@ -425,8 +494,10 @@ export function createWebPlatform(canvas: HTMLCanvasElement): Platform & { audio
     const r = canvas.getBoundingClientRect();
     input.mouseX = ((e.clientX - r.left) / r.width) * canvas.width; input.mouseY = ((e.clientY - r.top) / r.height) * canvas.height;
   });
-  canvas.addEventListener('mousedown', (e) => { input.mouseButtons |= 1 << [0, 2, 1][e.button]; });
-  addEventListener('mouseup', (e) => { input.mouseButtons &= ~(1 << [0, 2, 1][e.button]); });
+  const bit = (e: MouseEvent) => 1 << ([0, 2, 1][e.button] ?? 0);
+  canvas.addEventListener('mousedown', (e) => { input.mouseButtons |= bit(e); input.mousePressed |= bit(e); });
+  addEventListener('mouseup', (e) => { if (input.mouseButtons & bit(e)) input.mouseReleased |= bit(e); input.mouseButtons &= ~bit(e); });
+  canvas.addEventListener('wheel', (e) => { if (e.deltaY) input.wheel += e.deltaY < 0 ? 1 : -1; }, { passive: true });
   const audio = new WebAudio();
   return {
     renderer: new GLRenderer(canvas),
