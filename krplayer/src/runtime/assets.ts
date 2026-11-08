@@ -91,6 +91,8 @@ export interface RoomDef {
   order: { def: RoomInstance; layer: Layer }[];
   /** Instance definition -> compiled creation code. */
   creation: Map<object, Block>;
+  /** Instance definition -> compiled pre-create code (variable overrides). */
+  preCreate: Map<object, Block>;
   create: Block[];
 }
 
@@ -290,11 +292,12 @@ export async function loadAssets(pj: Krpj, url: (path: string) => string, platfo
   }
 
   roomEntries.forEach(([name, r], i) => {
-    const creation = new Map<object, Block>();
+    const creation = new Map<object, Block>(), preCreate = new Map<object, Block>();
     r.layers.forEach((l, li) => {
       if (l.type !== 'instances') return;
       l.instances.forEach((inst, ii) => {
         if (!index.has(inst.object) || objects[index.get(inst.object)!]?.name !== inst.object) throw new CompileError(`${name}: unknown object "${inst.object}"`);
+        if (inst.pre_create) preCreate.set(inst, compileScript(inst.pre_create, `${name}/layers/${li}/instances/${ii}/pre_create`, env));
         if (inst.creation) creation.set(inst, compileScript(inst.creation, `${name}/layers/${li}/instances/${ii}`, env));
       });
     });
@@ -311,7 +314,7 @@ export async function loadAssets(pj: Krpj, url: (path: string) => string, platfo
       order.sort((x, y) => (at.get(x.def.id ?? -1) ?? Infinity) - (at.get(y.def.id ?? -1) ?? Infinity));
     }
     rooms[i] = {
-      index: i, name, width: r.width, height: r.height, persistent: r.persistent ?? false, layers: r.layers, creation, create, order,
+      index: i, name, width: r.width, height: r.height, persistent: r.persistent ?? false, layers: r.layers, creation, preCreate, create, order,
       colour: r.colour ?? 0, showColour: r.show_colour ?? true, speed: r.speed ?? 0, viewsEnabled: r.views_enabled ?? false, views: r.views ?? [],
     };
   });

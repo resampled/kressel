@@ -16,7 +16,7 @@ ID,Section,Category,Applies to,Status,Included In…,Notes,Build progress
 2.02,Project resources,Tile sets and backgrounds,Both,Supported,Early,,Started: tile sets (BGND) as images; tile layers drawn with mirror/flip; GMS1-style tiles in asset layers; sprite backgrounds tiled/stretched/scrolling
 2.03,Project resources,"Objects, events, parenting",Both,Supported,Early,"Create, Destroy, Step, Begin/End Step, Alarm 0-11, Draw variants, Collision, Keyboard, Other.","Started: create, destroy, cleanup, step x3, alarm, collision, keyboard, other (outside room, room/game start/end, animation end, user), draw x9; parent inheritance"
 2.04,Project resources,"Rooms, layers, instances, views",Both,Supported,Early,Up to 8 views.,"Started: rooms, all layer kinds except effects/sequences, up to 8 views with cameras and following, persistent rooms"
-2.05,Project resources,Room instance creation code,Both,Supported,Early,,Started: instance creation code after the create event; room creation code
+2.05,Project resources,Room instance creation code,Both,Supported,Early,,Started: instance pre-create code (room editor variable overrides) before the create event; instance creation code after it; room creation code
 2.06,Project resources,Scripts / functions,Both,Supported,Early,,"Started: GMS2.3+ scripts (global init + functions), SCPT indices kept"
 2.07,Project resources,Fonts (sprite and TTF),Both,Partial,Early,TTF rasterisation differs from GM. Prefer pre-baked glyph sheets.,"Started: sprite fonts (glyph atlas, draw_text with align); TTF/SDF not yet"
 2.08,Project resources,Sounds,Both,Partial,Early,See Audio section.,"Started: sounds converted (embedded AUDO, audiogroupN.dat, external files); see Audio"

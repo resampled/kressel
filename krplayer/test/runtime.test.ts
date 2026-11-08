@@ -253,10 +253,12 @@ test('debug warp setup: ?set= and ?call= run in URL order just before the warp r
   assert.deepEqual([gv('arr'), gv('s')], [[0, 0, 5], 'a,b']);
 });
 
-test('pre-create runs before create (GMS2 event 14)', async () => {
-  const pj = project({ o: obj([['evt_create', [['var_change', '+', ['_lv', 'log'], 'c']]], ['evt_pre_create', [['var_set', ['_lv', 'log'], 'p']]]]) }, [{ object: 'o', x: 0, y: 0 }]);
+test('room instance order: pre-create event, instance pre_create (var overrides), create, creation code (DR ch2 doors)', async () => {
+  const add = (s: string) => [['var_change', '+', ['_lv', 'log'], s]];
+  const pj = project({ o: obj([['evt_create', add('c')], ['evt_pre_create', [['var_set', ['_lv', 'log'], 'p']]]]) },
+    [{ object: 'o', x: 0, y: 0, pre_create: add('v'), creation: add('i') } as never]);
   const g = await load({ krpj: pj, url: (x) => x }, createHeadless(() => [10, 10]));
-  assert.equal(g.instances[0].vars.get(g.a.varSlot('log')), 'pc');
+  assert.equal(g.instances[0].vars.get(g.a.varSlot('log')), 'pvci');
 });
 
 test('sprite_add: an included image as a strip, with sprite_collision_mask building a precise mask', async () => {

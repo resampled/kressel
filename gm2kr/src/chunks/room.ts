@@ -9,6 +9,8 @@ export interface GmView {
 }
 export interface GmRoomInstance {
   x: number; y: number; object: number; id: number; creationCode: number;
+  /** Bytecode 16+: per-instance variable overrides from the room editor (-1: none). */
+  preCreateCode: number;
   scaleX: number; scaleY: number; imageSpeed: number; imageIndex: number; color: number; rotation: number;
 }
 /** A GMS1-style tile kept in a GMS2 asset layer; `sprite` is a sprite index. */
@@ -126,7 +128,8 @@ export function readRoom(r: Reader, fmt: GmFormat): GmRoom[] {
       const i = o.at(ip);
       const x = i.i32(), y = i.i32(), object = i.i32(), id = i.u32(), cc = i.i32(), scaleX = i.f32(), scaleY = i.f32();
       const imageSpeed = withImage ? i.f32() : 1, imageIndex = withImage ? i.i32() : 0;
-      return { x, y, object, id, creationCode: cc, scaleX, scaleY, imageSpeed, imageIndex, color: i.u32(), rotation: i.f32() };
+      const color = i.u32(), rotation = i.f32(), preCreateCode = fmt.bytecode >= 16 ? i.i32() : -1;
+      return { x, y, object, id, creationCode: cc, preCreateCode, scaleX, scaleY, imageSpeed, imageIndex, color, rotation };
     });
     const layers = layersPtr ? o.at(layersPtr).ptrList(1024).map((lp) => readLayer(o, lp, fmt, name)) : [];
     return { name, caption, width, height, speed, persistent, bgColor, drawBgColor, creationCode, flags, views, instances, layers };

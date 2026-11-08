@@ -84,6 +84,8 @@ export interface RoomInstance {
   /** BGR colour blend. */
   colour?: number; alpha?: number;
   image_index?: number; image_speed?: number;
+  /** Variable overrides (GM room editor), run after the object's pre-create event and before its create event. */
+  pre_create?: Script;
   /** Instance creation code, run after the instance's create event. */
   creation?: Script;
   /** GameMaker instance id (imports keep them, since code can refer to room instances by id). */

@@ -267,6 +267,7 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
           ...(i.scaleX !== 1 ? { scale_x: i.scaleX } : {}), ...(i.scaleY !== 1 ? { scale_y: i.scaleY } : {}),
           ...(i.rotation ? { angle: i.rotation } : {}), ...(colour !== 0xffffff ? { colour } : {}), ...(alpha !== 1 ? { alpha } : {}),
           ...(i.imageIndex ? { image_index: i.imageIndex } : {}), ...(i.imageSpeed !== 1 ? { image_speed: i.imageSpeed } : {}),
+          ...(i.preCreateCode >= 0 ? { pre_create: script(i.preCreateCode, `room ${r.name} instance ${id} pre-create`) } : {}),
           ...(i.creationCode >= 0 ? { creation: script(i.creationCode, `room ${r.name} instance ${id}`) } : {}),
         };
       }) }];

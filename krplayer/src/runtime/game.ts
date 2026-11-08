@@ -195,9 +195,10 @@ export class Game {
     return inst;
   }
 
-  /** The create event, preceded by GMS2's pre-create event. */
-  runCreate(inst: Instance): void {
+  /** The create event, preceded by GMS2's pre-create event and (room instances) the instance's variable overrides. */
+  runCreate(inst: Instance, pre?: Block): void {
     this.event(inst, EV.pre_create, null);
+    if (pre && inst.alive) this.vm.run(pre, inst, null);
     if (inst.alive) this.event(inst, EV.create, null);
   }
 
@@ -547,7 +548,7 @@ export class Game {
     }
     for (const [inst, def] of created) {
       if (!inst.alive) continue;
-      this.runCreate(inst);
+      this.runCreate(inst, room.preCreate.get(def));
       const cc = room.creation.get(def);
       if (cc && inst.alive) this.vm.run(cc, inst, null);
     }

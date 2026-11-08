@@ -15,6 +15,7 @@ import { join, relative, resolve } from 'node:path';
 import { createHeadless } from '../krplayer/src/platform/headless.ts';
 import { readZip } from '../krplayer/src/loader/zip.ts';
 import { prepare } from '../krplayer/src/play.ts';
+import { warpSetup } from '../krplayer/src/runtime/debug.ts';
 import type { Krpj } from '../krplayer/src/krpj.ts';
 import { convert, type GameFiles } from '../gm2kr/src/convert.ts';
 import { decodePng, encodePng } from '../gm2kr/src/emit/textures.ts';
@@ -22,6 +23,9 @@ import { decodePng, encodePng } from '../gm2kr/src/emit/textures.ts';
 const args = process.argv.slice(2), opt = (k: string) => { const i = args.indexOf(k); return i < 0 ? undefined : args.splice(i, 2)[1]; };
 const flag = (k: string) => { const i = args.indexOf(k); return i >= 0 && !!args.splice(i, 1); };
 const outDir = resolve(opt('--out') ?? 'playtest-out'), room = opt('--room'), after = opt('--after'), shared = opt('--shared'), direct = flag('--direct'), renderAll = flag('--render-all');
+const warpQ = new URLSearchParams(), setQ = opt('--set'), callQ = opt('--call');
+if (setQ) warpQ.set('set', setQ);
+if (callQ) warpQ.set('call', callQ);
 const [input, ...rest] = args;
 if (!input) { console.error('usage: node scripts/playtest.ts <project.krpj | game folder> [--out dir] [--room r] "<cmds>"'); process.exit(2); }
 
@@ -59,7 +63,9 @@ const boxFonts = {
 const p = createHeadless(() => [1, 1], async (u) => png(await bytes(u)), bytes, { decodeImage: png, fonts: boxFonts });
 const g = await prepare({ krpj, url: (x) => x }, p);
 if (after && g.findRoom(after) < 0) throw new Error(`--after ${after}: no such room`);
-g.start(room ? g.findRoom(room) : -1, direct, null, after ? g.findRoom(after) : -1);
+const init = warpSetup(g, warpQ);
+if (init && !room) throw new Error('--set / --call need --room');
+g.start(room ? g.findRoom(room) : -1, direct, init, after ? g.findRoom(after) : -1);
 
 const KEYS: Record<string, number> = { left: 37, up: 38, right: 39, down: 40, enter: 13, space: 32, shift: 16, ctrl: 17, alt: 18, esc: 27, escape: 27, tab: 9, backspace: 8 };
 function key(k: string): number {
