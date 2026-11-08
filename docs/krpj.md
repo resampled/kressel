@@ -24,7 +24,7 @@ This is to allow expensive per-room assets to be loaded in during room transitio
 {
     "krpj_v": "0.2", // format version (0.2: script layout moved from `editor` onto the scripts)
     "cfg_db_relay": { // for double checking information about the project from the DB
-        "slug": "coin-collector",
+        "slug": "coin-collector", // never starts with "_": the player saves local projects under "_<slug>"
         "title": "Coin Collector",
         "author": "admin",
         "revision": 1,

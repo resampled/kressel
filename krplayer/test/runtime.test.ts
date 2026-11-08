@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Krpj, Script } from '../src/krpj.ts';
 import { createHeadless } from '../src/platform/headless.ts';
-import { load, prepare } from '../src/play.ts';
+import { load, partition, prepare } from '../src/play.ts';
 import { equals, str, add } from '../src/value.ts';
 import { follow } from '../src/runtime/game.ts';
 import { warpSetup } from '../src/runtime/debug.ts';
@@ -370,4 +370,11 @@ test('ds_queue and ds_priority', async () => {
     ['var_set', ['_lv', 'min'], ['dat_priority', 'delete_min', ['_lv', 'p']]], ['var_set', ['_lv', 'max'], ['dat_priority', 'find_max', ['_lv', 'p']]],
   ]);
   assert.deepEqual([v.h, v.min, v.max], [1, 'a', 'c']);
+});
+
+test('local projects save to a "_"-prefixed partition', () => {
+  const src = (slug: string, local?: boolean) => ({ krpj: { cfg_db_relay: { slug } } as never, url: (x: string) => x, local });
+  assert.equal(partition(src('demo')), 'demo');
+  assert.equal(partition(src('demo', true)), '_demo');
+  assert.equal(partition(src('', true)), '_unpublished');
 });

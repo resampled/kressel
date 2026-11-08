@@ -10,6 +10,9 @@ export interface ProjectSource {
   krpj: Krpj;
   /** Asset path from game.json ("./x" or "/sa/~alias/x") -> URL. */
   url(path: string): string;
+  /** From the user's machine (a picked .krpj, gm2kr handoff, a blob: URL) rather than the server. Its saved
+   *  files go in a "_"-prefixed partition so a local project can't touch a published game's saves. */
+  local?: boolean;
 }
 
 const MAIN = 'game.json';
@@ -30,9 +33,10 @@ export async function fromUrl(src: string, cfg?: Partial<KrConfig>): Promise<Pro
   const res = await fetch(url);
   if (!res.ok) throw new Error(`failed to load ${url} (${res.status})`);
   const bytes = new Uint8Array(await res.arrayBuffer());
-  if (isKrpj(bytes)) return fromKrpj(bytes, cfg?.sharedAssetBase);
+  const local = url.protocol === 'blob:' || url.protocol === 'data:';
+  if (isKrpj(bytes)) return { ...await fromKrpj(bytes, cfg?.sharedAssetBase), local };
   const full: KrConfig = { projectBase: cfg?.projectBase ?? new URL('.', url).href, sharedAssetBase: cfg?.sharedAssetBase ?? '/kr/sa/' };
-  return { krpj: parse(new TextDecoder().decode(bytes), url.href), url: (p) => resolveAsset(full, p) };
+  return { krpj: parse(new TextDecoder().decode(bytes), url.href), url: (p) => resolveAsset(full, p), local };
 }
 
 /** In-memory project files keyed by path ("game.json", "sprites/x/0.png"...). Makes blob URLs. */
@@ -41,6 +45,7 @@ export function fromFiles(files: Map<string, Uint8Array>, sharedAssetBase = '/kr
   if (!main) throw new Error(`no ${MAIN} in the project files`);
   const blobs = new Map<string, string>();
   return {
+    local: true,
     krpj: parse(new TextDecoder().decode(main), MAIN),
     url: (p) => {
       if (p.startsWith('/sa/')) return resolveAsset({ projectBase: '', sharedAssetBase }, p);
