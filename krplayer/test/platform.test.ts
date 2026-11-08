@@ -54,3 +54,20 @@ test('file store partitions by project and enforces quotas', async () => {
   assert.equal(st.read('more'), null);
   assert.equal(be.data.has('a\0more'), false);
 });
+
+test('GM GLSL ES 1.00 shaders are rewritten as 3.00 for WebGL2', async () => {
+  const { glslTo300 } = await import('../src/platform/glsl.ts');
+  const fs = glslTo300(`precision mediump float;
+varying vec2 v_vTexcoord;
+uniform sampler2D gm_BaseTexture; uniform sampler2D texture; uniform vec4 u_Uvs;
+void main() { vec4 c; for (float i = u_Uvs.y; i < u_Uvs.w; i += 0.1) c = texture2D(texture, v_vTexcoord); gl_FragColor = c * texture2D(gm_BaseTexture, v_vTexcoord); }`, true);
+  assert.match(fs, /^#version 300 es\n/);
+  assert.match(fs, /out vec4 gm_FragColor;/);
+  assert.match(fs, /in vec2 v_vTexcoord;/);
+  assert.match(fs, /uniform sampler2D texture_;/);
+  assert.match(fs, /c = texture\(texture_, v_vTexcoord\); gm_FragColor = c \* texture\(gm_BaseTexture,/);
+  const vs = glslTo300('attribute vec3 in_Position;\nvarying vec4 v_vColour;\nvoid main() { gl_Position = vec4(in_Position, 1.0); }', false);
+  assert.equal(vs, '#version 300 es\nin vec3 in_Position;\nout vec4 v_vColour;\nvoid main() { gl_Position = vec4(in_Position, 1.0); }');
+  const v3 = '#version 300 es\nvoid main() {}';
+  assert.equal(glslTo300(v3, true), v3);
+});

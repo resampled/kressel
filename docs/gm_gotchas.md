@@ -115,6 +115,7 @@ GEN8 says 2.0.0.0 and there is no SEQN/FEAT/TGIN chunk. `fmt.gms23` is false.
 * Deltarune's diagonal walls (`obj_sul`/`obj_sur`/`obj_sdl`/`obj_sdr`, children of `obj_solidblock`) are precise triangles. Their bbox is the whole square, so treating them as boxes blocks movement near slopes (repro: Ch1 `?room=room_torbathroom`, hold left; with box masks Kris doesn't move).
 * Timelines aren't implemented (Deltarune Chapters 1 and 2 have none: their TMLN chunks are empty).
 * The software renderer (headless screenshots) can't run GLSL: shaders compile to handles and drawing ignores them (it warns once). Only WebGL runs them.
+* **GM's GLSL ES shaders don't have to be valid GLSL ES 1.00.** Desktop GM runs them through HLSL, so Appendix A limits don't apply: Ch2 `shd_pal_swapper` has `for(float i = corner.y; i < u_Uvs.w; i += u_pixelSize.y)`, which WebGL rejects as 1.00 ("Loop index cannot be initialized with non-constant expression"). Repro: compile that fragment shader in WebGL as 1.00, then with `#version 300 es` (plus the in/out/texture renames). krplayer compiles as 3.00. Headless runs never compile GLSL, so only the browser catches these.
 * Primitives take their alpha from the first vertex of each triangle/line (GM interpolates per vertex). `surface_getpixel*` reads the whole surface back each call.
 * `try` with a `finally` block, and `throw`, aren't implemented (refused at load). Layer scripts only work on non-instance layers.
 * krplayer reports `os_type` = `os_windows`, so games take their PC code paths.

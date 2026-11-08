@@ -2,6 +2,7 @@
 
 import { WINDOW, type Audio, type FontRasterizer, type Pixels, type Platform, type Renderer, type TextureId, type VoiceId } from './types.ts';
 import { FileStore, idbBackend } from './filestore.ts';
+import { glslTo300 } from './glsl.ts';
 
 const D2R = Math.PI / 180;
 const MAX_QUADS = 8192, FLOATS = 5; // x y u v colour(rgba8 as one float slot)
@@ -184,11 +185,17 @@ class GLRenderer implements Renderer {
   }
 
   compileShader(vertex: string, fragment: string): number {
+    // GM's GLSL ES 1.00 runs as 3.00 (see glsl.ts); the untranslated source is the fallback, and both logs are kept.
     const gl = this.gl, mk = (type: number, src: string) => {
-      const s = gl.createShader(type)!;
-      gl.shaderSource(s, src); gl.compileShader(s);
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.warn(`shader compile: ${gl.getShaderInfoLog(s)}`); return null; }
-      return s;
+      let log = '';
+      for (const s of [glslTo300(src, type === gl.FRAGMENT_SHADER), src]) {
+        const sh = gl.createShader(type)!;
+        gl.shaderSource(sh, s); gl.compileShader(sh);
+        if (gl.getShaderParameter(sh, gl.COMPILE_STATUS)) return sh;
+        log += gl.getShaderInfoLog(sh) ?? ''; gl.deleteShader(sh);
+      }
+      console.warn(`shader compile: ${log}`);
+      return null;
     };
     const vs = mk(gl.VERTEX_SHADER, vertex), fs = mk(gl.FRAGMENT_SHADER, fragment);
     if (!vs || !fs) return -1;

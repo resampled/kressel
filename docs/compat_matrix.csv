@@ -43,7 +43,7 @@ ID,Section,Category,Applies to,Status,Included In…,Notes,Build progress
 4.05,Rendering,"Surfaces (surface_*, application_surface)",Both,Partial,Early,Framebuffer-backed. Lost WebGL context needs handling.,"Started: surfaces as framebuffers, surface_set/reset_target stack, application surface (sized to the first view port, letterboxed to the window)"
 4.06,Rendering,"Cameras and views (camera_*, view_*)",Both,Supported,Early,,"Started: camera_get/set_view_*, view_* arrays (incl. GMS1 view_xview/yview/wview/hview/angle/object) and view_get/set_*, camera_create"
 4.07,Rendering,Pixel-perfect and integer scaling,Both,Partial,Early,Must be tuned to match Deltarune's look.,Not started
-4.08,Rendering,Shaders (GLSL ES),Both,Partial,Later,Compiles on WebGL. Test per GPU.,"Started: shader_set/reset, uniforms (float), sampler stages on WebGL2 (GM's GLSL ES 1.00 sources, gm_Matrices WVP); the software renderer draws without them"
+4.08,Rendering,Shaders (GLSL ES),Both,Partial,Later,Compiles on WebGL. Test per GPU.,"Started: shader_set/reset, uniforms (float), sampler stages on WebGL2 (GM's GLSL ES 1.00 sources compiled as 3.00 so desktop-only loops work, gm_Matrices WVP); the software renderer draws without them"
 4.09,Rendering,Shaders (HLSL only),Both,Unsupported,None,Reject on import.,Not started
 4.1,Rendering,"Vertex buffers, vertex_*, d3d_*, matrix_*",Both,Partial,Later,3D is unneeded for most fangames.,Started: matrix_build/build_identity/multiply/get; matrix_set accepts the identity only; vertex buffers created but vertex_submit not yet
 4.11,Rendering,"draw_getpixel, surface_getpixel, draw_save, screen_save",Both,Stubbed,Later,GPU readback is slow. Screenshot could map to a download.,Not started
