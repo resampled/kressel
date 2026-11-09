@@ -16,6 +16,7 @@ import { createHeadless } from '../krplayer/src/platform/headless.ts';
 import { readZip } from '../krplayer/src/loader/zip.ts';
 import { prepare } from '../krplayer/src/play.ts';
 import { warpSetup } from '../krplayer/src/runtime/debug.ts';
+import { errorKind } from '../krplayer/src/vm/vm.ts';
 import type { Krpj } from '../krplayer/src/krpj.ts';
 import { convert, type GameFiles } from '../gm2kr/src/convert.ts';
 import { decodePng, encodePng } from '../gm2kr/src/emit/textures.ts';
@@ -134,7 +135,7 @@ try {
     if (g.ended) break;
   }
 } catch (e) {
-  console.log(`ERROR at frame ${g.frameCount} (room ${g.room?.name}): ${(e as Error).stack ?? e}`);
+  console.log(`ERROR (${errorKind(e)}) at frame ${g.frameCount} (room ${g.room?.name}): ${(e as Error).stack ?? e}`);
   flush();
   if (p.soft) await shot('error').catch(() => {});
   process.exit(1);

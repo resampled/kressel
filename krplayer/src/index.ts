@@ -14,6 +14,7 @@ import { fromFiles, fromKrpj, fromUrl, type ProjectSource } from './loader/sourc
 import { receiveFromOpener } from './loader/handoff.ts';
 import { createWebPlatform } from './platform/web.ts';
 import { prepare } from './play.ts';
+import { errorKind } from './vm/vm.ts';
 
 /** The page provides the shell (see index.html): .kr-root containing a <canvas> and a .kr-msg. Styling is up to the page. */
 function shell() {
@@ -82,7 +83,7 @@ async function run(source: ProjectSource, ui: Shell): Promise<void> {
     ui.canvas.style.height = `${Math.floor(ui.canvas.height * s)}px`;
   };
   new ResizeObserver(fit).observe(ui.root); // .kr-root's size is set by the page, not just the window
-  const fail = (e: unknown) => { ui.say(`krplayer FATAL CRASH:
+  const fail = (e: unknown) => { ui.say(`krplayer FATAL CRASH (${errorKind(e)}):
 ${(e as Error).message}`, true); console.error(e); };
   try {
     const q = params(), debug = q.has('debug');

@@ -3,7 +3,7 @@
 
 import type { Game } from './game.ts';
 import type { FontDef, SpriteDef } from './assets.ts';
-import { GmlError } from '../value.ts';
+import { Unverified } from '../value.ts';
 
 const D2R = Math.PI / 180;
 
@@ -190,6 +190,6 @@ export function mix(a: number, b: number, t: number): number {
 
 export function spriteOrThrow(g: Game, v: number): SpriteDef {
   const s = g.a.sprites[v];
-  if (!s) throw new GmlError(`sprite ${v} does not exist`);
+  if (!s) throw new Unverified(`sprite ${v} does not exist`);
   return s;
 }

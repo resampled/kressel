@@ -4,7 +4,6 @@
 
 import type { Platform, SoundId, VoiceId } from '../platform/types.ts';
 import type { Assets } from './assets.ts';
-import { GmlError } from '../value.ts';
 
 export const VOICE_BASE = 200000;
 
@@ -49,10 +48,10 @@ export class Sounds {
   }
 
   exists(i: number): boolean { return !!this.sounds[i] && !this.sounds[i].destroyed; }
-  private snd(i: number): Snd {
+  /** A live sound asset. GM ignores a missing or destroyed one: play gives -1, setters do nothing, gain reads 0 and pitch 1 (error_audit.md). */
+  private snd(i: number): Snd | undefined {
     const s = this.sounds[i];
-    if (!s || s.destroyed) throw new GmlError(`sound ${i} does not exist`);
-    return s;
+    return s && !s.destroyed ? s : undefined;
   }
 
   private effective(v: Voice): number {
@@ -61,7 +60,9 @@ export class Sounds {
   }
 
   play(i: number, loop: boolean, gain = 1, offset = 0, pitch = 1): number {
-    const s = this.snd(i), id = this.nextVoice++;
+    const s = this.snd(i);
+    if (!s) return -1;
+    const id = this.nextVoice++;
     const v: Voice = { id, snd: i, handle: null, gain, pitch: pitch * s.pitch, loop, paused: false, stopped: false, offset };
     this.voices.set(id, v);
     const start = () => {
@@ -110,22 +111,22 @@ export class Sounds {
 
   /** audio_sound_gain: a voice ramps; a sound sets the gain of all its voices (and future ones). */
   setGain(target: number, gain: number, ms: number): void {
-    if (target < VOICE_BASE) this.snd(target).gain = gain;
+    if (target < VOICE_BASE) { const s = this.snd(target); if (!s) return; s.gain = gain; }
     this.each(target, (v) => {
       if (target >= VOICE_BASE) v.gain = gain;
       if (v.handle !== null) this.p.audio.setGain(v.handle, this.effective(v), ms);
     });
   }
   getGain(target: number): number {
-    if (target < VOICE_BASE) return this.snd(target).gain;
+    if (target < VOICE_BASE) return this.snd(target)?.gain ?? 0;
     return this.voices.get(target)?.gain ?? 0;
   }
   setPitch(target: number, pitch: number): void {
-    if (target < VOICE_BASE) this.snd(target).pitch = pitch;
+    if (target < VOICE_BASE) { const s = this.snd(target); if (!s) return; s.pitch = pitch; }
     this.each(target, (v) => { v.pitch = pitch; if (v.handle !== null) this.p.audio.setPitch(v.handle, pitch); });
   }
   getPitch(target: number): number {
-    if (target < VOICE_BASE) return this.snd(target).pitch;
+    if (target < VOICE_BASE) return this.snd(target)?.pitch ?? 1;
     return this.voices.get(target)?.pitch ?? 1;
   }
   position(target: number): number {

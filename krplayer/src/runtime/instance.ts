@@ -2,7 +2,7 @@
 // the way GameMaker does: setting either pair recomputes the other.
 
 import { IV } from '../compile/names.ts';
-import { GmlError, real, Scope, truthy, type Value } from '../value.ts';
+import { real, Scope, truthy, Unverified, type Value } from '../value.ts';
 import type { ObjectDef, SpriteDef } from './assets.ts';
 
 const D2R = Math.PI / 180;
@@ -82,7 +82,7 @@ export class Instance extends Scope {
       case IV.path_speed: return this.path_speed; case IV.path_scale: return this.path_scale;
       case IV.path_orientation: return this.path_orientation; case IV.path_endaction: return this.path_endaction;
     }
-    throw new GmlError(`built-in variable ${id} can't be read here`);
+    throw new Unverified(`built-in variable ${id} can't be read here`);
   }
 
   /** Assigns a built-in. Returns false for depth/layer, which the game handles (they move the instance). */
@@ -113,6 +113,6 @@ export class Instance extends Scope {
       case IV.path_speed: this.path_speed = real(v); return; case IV.path_scale: this.path_scale = real(v); return;
       case IV.path_orientation: this.path_orientation = real(v); return; case IV.path_endaction: this.path_endaction = real(v); return;
     }
-    throw new GmlError(`built-in variable ${id} can't be assigned`);
+    throw new Unverified(`built-in variable ${id} can't be assigned`);
   }
 }

@@ -2,7 +2,7 @@
 // the compiler rejects opcodes with no implementation (named, with their location).
 
 import { opcodeId } from '../opcodes.ts';
-import { GmlError, NotImplemented, real, str as toStr, truthy, type Value } from '../value.ts';
+import { argBool, argReal, GmlError, NotImplemented, real, str as toStr, truthy, type Value } from '../value.ts';
 import type { Game } from '../runtime/game.ts';
 
 /**
@@ -29,8 +29,8 @@ export function family(name: string, prefix: string, members: Record<string, Bui
 }
 
 /** Argument helpers: argument k of a call whose first argument is s[t]. */
-export const n = (s: Value[], t: number, k: number): number => real(s[t - k]);
-export const b = (s: Value[], t: number, k: number): boolean => truthy(s[t - k]);
+export const n = (s: Value[], t: number, k: number): number => argReal(s[t - k]);
+export const b = (s: Value[], t: number, k: number): boolean => argBool(s[t - k]);
 export const str = (s: Value[], t: number, k: number): string => toStr(s[t - k]);
 /** An optional argument, or its default when not passed. */
-export const opt = (s: Value[], t: number, k: number, argc: number, def: number): number => (k < argc ? real(s[t - k]) : def);
+export const opt = (s: Value[], t: number, k: number, argc: number, def: number): number => (k < argc ? argReal(s[t - k]) : def);

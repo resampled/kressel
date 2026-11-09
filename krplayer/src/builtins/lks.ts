@@ -1,20 +1,22 @@
 // Looks (lks_*) and sound (snd_*).
 
 import { define, family, n, b, str, opt } from './registry.ts';
-import { GmlError, NotImplemented, real } from '../value.ts';
+import { NotImplemented, real, Unverified } from '../value.ts';
 import { spriteOrThrow } from '../runtime/draw.ts';
 import type { SpriteDef } from '../runtime/assets.ts';
 import { Files } from '../runtime/data.ts';
 import type { Game } from '../runtime/game.ts';
 import type { Pixels } from '../platform/types.ts';
 
+const SPRITE_INFO: Record<string, true> = { width: true, height: true, number: true, xoffset: true, yoffset: true };
 define('lks_sprite_info', (g, s, t) => {
-  const sp = spriteOrThrow(g, n(s, t, 1));
-  switch (s[t]) {
+  const sp = g.a.sprites[n(s, t, 1)];
+  if (!sp) { if (String(s[t]) in SPRITE_INFO) return 0; } // GM: 0 for a missing sprite (error_audit.md)
+  else switch (s[t]) {
     case 'width': return sp.width; case 'height': return sp.height; case 'number': return sp.frames.length;
     case 'xoffset': return sp.ox; case 'yoffset': return sp.oy;
   }
-  throw new GmlError(`sprite_get_${String(s[t])} unknown`);
+  throw new NotImplemented(`sprite_get_${String(s[t])} unknown`);
 });
 define('lks_sprite_name', (g, s, t) => g.a.sprites[n(s, t, 0)]?.name ?? '<undefined>');
 define('lks_sprite_exists', (g, s, t) => typeof s[t] === 'number' && !!g.a.sprites[s[t] as number]);
@@ -46,7 +48,7 @@ define('lks_font_from_sprite', (g, s, t) => {
 
 /** An included image file (decoded at load), or null if the game doesn't ship it. */
 function imageFile(g: Game, fn: string, path: string, removeback: boolean, smooth: boolean): Pixels | null {
-  if (!g.p.decodeImage) throw new GmlError(`${fn}: this platform can't decode image files`);
+  if (!g.p.decodeImage) throw new NotImplemented(`${fn}: this platform can't decode image files`);
   // smooth only does anything with removeback (it softens the cut-out edges).
   if (removeback && smooth) throw new NotImplemented(`${fn}: smooth is not implemented in krplayer yet`);
   const img = g.a.images.get(Files.norm(path)) ?? null;
@@ -106,7 +108,7 @@ define('lks_sprite_replace', (g, s, t) => {
 /** GMS1 backgrounds are tilesets in GMS2 builds: the tileset's image is replaced, its tile layout kept. */
 define('lks_tileset_replace', (g, s, t) => {
   const ts = g.a.tilesets[n(s, t, 0)];
-  if (!ts) throw new GmlError(`background_replace: background ${n(s, t, 0)} does not exist`);
+  if (!ts) throw new Unverified(`background_replace: background ${n(s, t, 0)} does not exist`);
   const img = imageFile(g, 'background_replace', str(s, t, 1), b(s, t, 2), b(s, t, 3));
   if (img) ts.tex = g.p.renderer.createTexture(img);
   return undefined;
@@ -116,9 +118,9 @@ define('lks_sprite_assign', (g, s, t) => {
   Object.assign(dst, { ...src, index: dst.index, name: dst.name, frames: [...src.frames], bbox: [...src.bbox] });
   return undefined;
 });
-define('lks_sprite_set_offset', (g, s, t) => { const sp = spriteOrThrow(g, n(s, t, 0)); sp.ox = n(s, t, 1); sp.oy = n(s, t, 2); return undefined; });
+define('lks_sprite_set_offset', (g, s, t) => { const sp = g.a.sprites[n(s, t, 0)]; if (!sp) return undefined; sp.ox = n(s, t, 1); sp.oy = n(s, t, 2); return undefined; });
 const BBOX: Record<string, number> = { left: 0, top: 1, right: 2, bottom: 3 };
-define('lks_sprite_bbox', (g, s, t) => spriteOrThrow(g, n(s, t, 1)).bbox[BBOX[String(s[t])]]);
+define('lks_sprite_bbox', (g, s, t) => g.a.sprites[n(s, t, 1)]?.bbox[BBOX[String(s[t])]] ?? 0);
 define('lks_sprite_set_bbox', (g, s, t) => { spriteOrThrow(g, n(s, t, 0)).bbox = [n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4)]; return undefined; });
 /** sprite_duplicate: a new sprite sharing the frames (textures are never changed in place). */
 define('lks_sprite_duplicate', (g, s, t) => {
@@ -132,10 +134,10 @@ define('lks_sprite_uvs', (g, s, t) => { spriteOrThrow(g, n(s, t, 0)); return [0,
 define('lks_sprite_collision_mask', (g, s, t) => {
   const sp = spriteOrThrow(g, n(s, t, 0)), sep = b(s, t, 1), mode = n(s, t, 2), kind = n(s, t, 7), tol = n(s, t, 8);
   const w = sp.width, h = sp.height, px = sp.pixels;
-  if (kind === 0 && !px) throw new GmlError(`sprite_collision_mask: precise masks need pixels, which krplayer only keeps for sprite_add sprites (${sp.name})`);
+  if (kind === 0 && !px) throw new NotImplemented(`sprite_collision_mask: precise masks need pixels, which krplayer only keeps for sprite_add sprites (${sp.name})`);
   sp.bbox = mode === 0 ? (px ? autoBBox(px, tol) : sp.bbox) : mode === 1 ? [0, 0, w - 1, h - 1] : [n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6)];
   if (kind === 1) { Object.assign(sp, { maskKind: 0, bits: null, nBits: 0, stride: 0 }); return undefined; }
-  if (kind < 0 || kind > 3) throw new GmlError(`sprite_collision_mask: unknown mask kind ${kind}`);
+  if (kind < 0 || kind > 3) throw new Unverified(`sprite_collision_mask: unknown mask kind ${kind}`);
   const [l, tp, r, bt] = sp.bbox, cx = (l + r) / 2, cy = (tp + bt) / 2, rx = (r - l + 1) / 2, ry = (bt - tp + 1) / 2;
   const stride = (w + 7) >> 3, masks = kind === 0 && sep ? sp.frames.length : 1, bits = new Uint8Array(stride * h * masks);
   for (let m = 0; m < masks; m++) for (let y = Math.max(0, tp); y <= Math.min(h - 1, bt); y++) for (let x = Math.max(0, l); x <= Math.min(w - 1, r); x++) {
@@ -151,7 +153,7 @@ define('lks_sprite_collision_mask', (g, s, t) => {
 define('lks_sprite_texture', (g, s, t) => spriteOrThrow(g, n(s, t, 0)).frames[Math.trunc(n(s, t, 1))] ?? -1);
 /** font_add from an included TTF/OTF. GM sizes are points at 96 DPI (a 12pt font has 16px glyph cells). */
 define('lks_font_add', (g, s, t) => {
-  if (!g.p.fonts) throw new GmlError("font_add: this platform can't rasterize fonts");
+  if (!g.p.fonts) throw new NotImplemented("font_add: this platform can't rasterize fonts");
   const path = str(s, t, 0), id = g.a.fontFiles.get(Files.norm(path));
   if (id === undefined || id < 0) { g.p.log(`font_add: ${path} is not an included font file`); return -1; }
   const { atlas, glyphs, lineHeight } = g.p.fonts.raster(id, (n(s, t, 1) * 96) / 72, b(s, t, 2), b(s, t, 3), Math.trunc(n(s, t, 4)), Math.trunc(n(s, t, 5)), true);

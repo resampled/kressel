@@ -1,49 +1,47 @@
 // Camera, views and window (cam_*), control functions (ctr_*) and system (sys_*).
 
 import { define, family, n, b, str } from './registry.ts';
-import { GmlError, NotImplemented, real } from '../value.ts';
+import { GmlError, NotImplemented, real, Unverified } from '../value.ts';
 import { newCamera, type Camera } from '../runtime/layers.ts';
 import type { Game } from '../runtime/game.ts';
 import { gstr } from './opr.ts';
 import { DsMap } from '../runtime/data.ts';
 
-function cam(g: Game, v: unknown): Camera {
-  const c = g.cameras[real(v as number)];
-  if (!c) throw new GmlError(`camera ${String(v)} does not exist`);
-  return c;
-}
+/** A camera, or undefined. GM never errors on a missing one: getters give -1, setters do nothing (HTML5 CameraManager; error_audit.md). */
+const cam = (g: Game, v: unknown): Camera | undefined => g.cameras[real(v as number)] ?? undefined;
+const CAM_GET: Record<string, true> = { x: true, y: true, width: true, height: true, angle: true, border_x: true, border_y: true, speed_x: true, speed_y: true, target: true };
 define('cam_get', (g, s, t) => {
   const c = cam(g, s[t - 1]);
-  switch (s[t]) {
+  if (!c) { if (String(s[t]) in CAM_GET) return -1; } else switch (s[t]) {
     case 'x': return c.x; case 'y': return c.y; case 'width': return c.w; case 'height': return c.h; case 'angle': return c.angle;
     case 'border_x': return c.bx; case 'border_y': return c.by; case 'speed_x': return c.sx; case 'speed_y': return c.sy; case 'target': return c.target;
   }
-  throw new GmlError(`camera_get_view_${String(s[t])} unknown`);
+  throw new NotImplemented(`camera_get_view_${String(s[t])} unknown`);
 });
-define('cam_set_pos', (g, s, t) => { const c = cam(g, s[t]); c.x = n(s, t, 1); c.y = n(s, t, 2); return undefined; });
-define('cam_set_size', (g, s, t) => { const c = cam(g, s[t]); c.w = n(s, t, 1); c.h = n(s, t, 2); return undefined; });
-define('cam_set_target', (g, s, t) => { cam(g, s[t]).target = n(s, t, 1); return undefined; });
-define('cam_set_border', (g, s, t) => { const c = cam(g, s[t]); c.bx = n(s, t, 1); c.by = n(s, t, 2); return undefined; });
-define('cam_set_speed', (g, s, t) => { const c = cam(g, s[t]); c.sx = n(s, t, 1); c.sy = n(s, t, 2); return undefined; });
-define('cam_set_angle', (g, s, t) => { cam(g, s[t]).angle = n(s, t, 1); return undefined; });
+define('cam_set_pos', (g, s, t) => { const c = cam(g, s[t]); if (c) { c.x = n(s, t, 1); c.y = n(s, t, 2); } return undefined; });
+define('cam_set_size', (g, s, t) => { const c = cam(g, s[t]); if (c) { c.w = n(s, t, 1); c.h = n(s, t, 2); } return undefined; });
+define('cam_set_target', (g, s, t) => { const c = cam(g, s[t]); if (c) c.target = n(s, t, 1); return undefined; });
+define('cam_set_border', (g, s, t) => { const c = cam(g, s[t]); if (c) { c.bx = n(s, t, 1); c.by = n(s, t, 2); } return undefined; });
+define('cam_set_speed', (g, s, t) => { const c = cam(g, s[t]); if (c) { c.sx = n(s, t, 1); c.sy = n(s, t, 2); } return undefined; });
+define('cam_set_angle', (g, s, t) => { const c = cam(g, s[t]); if (c) c.angle = n(s, t, 1); return undefined; });
 define('cam_create', (g) => { const id = g.cameras.length; g.cameras.push(newCamera(id)); return id; });
 define('cam_view_get', (g, s, t) => {
   const v = g.views[n(s, t, 1)];
-  if (!v) throw new GmlError(`view ${String(s[t - 1])} out of range`);
+  if (!v) throw new Unverified(`view ${String(s[t - 1])} out of range`);
   switch (s[t]) {
     case 'visible': return v.visible; case 'camera': return v.camera; case 'xport': return v.px; case 'yport': return v.py;
     case 'wport': return v.pw; case 'hport': return v.ph; case 'surface_id': return v.surface;
   }
-  throw new GmlError(`view_get_${String(s[t])} unknown`);
+  throw new NotImplemented(`view_get_${String(s[t])} unknown`);
 });
 define('cam_view_set', (g, s, t) => {
   const v = g.views[n(s, t, 1)], x = s[t - 2];
-  if (!v) throw new GmlError(`view ${String(s[t - 1])} out of range`);
+  if (!v) throw new Unverified(`view ${String(s[t - 1])} out of range`);
   switch (s[t]) {
     case 'visible': v.visible = b(s, t, 2); break; case 'camera': v.camera = real(x); break;
     case 'xport': v.px = real(x); break; case 'yport': v.py = real(x); break; case 'wport': v.pw = real(x); break; case 'hport': v.ph = real(x); break;
     case 'surface_id': v.surface = real(x); break;
-    default: throw new GmlError(`view_set_${String(s[t])} unknown`);
+    default: throw new NotImplemented(`view_set_${String(s[t])} unknown`);
   }
   return undefined;
 });
@@ -90,7 +88,7 @@ define('sys_date', (_g, s, t, argc) => {
     case 'year': return d.getFullYear(); case 'month': return d.getMonth() + 1; case 'day': return d.getDate();
     case 'hour': return d.getHours(); case 'minute': return d.getMinutes(); case 'second': return d.getSeconds(); case 'weekday': return d.getDay();
   }
-  throw new GmlError(`date_get_${String(s[t])} unknown`);
+  throw new NotImplemented(`date_get_${String(s[t])} unknown`);
 });
 define('sys_url_open', (g, s, t) => { g.p.log(`url_open: ${str(s, t, 0)}`); return undefined; });
 define('sys_param', (_g, s, t) => (s[t] === 'count' ? 0 : ''));
@@ -104,4 +102,4 @@ family('sys_switch', 'switch_', {});
 const EPOCH = Date.UTC(1899, 11, 30);
 function dateTime(d: Date): number { return (d.getTime() - d.getTimezoneOffset() * 60000 - EPOCH) / 86400000; }
 function fromDateTime(v: number): Date { const d = new Date(EPOCH + v * 86400000); return new Date(d.getTime() + d.getTimezoneOffset() * 60000); }
-define('cam_screen_save', () => { throw new GmlError('screen_save is not supported in krplayer (no file to write a PNG to)'); });
+define('cam_screen_save', () => { throw new NotImplemented('screen_save is not supported in krplayer (no file to write a PNG to)'); });

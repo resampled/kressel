@@ -4,7 +4,7 @@
 import { BinOp, Op, S, UnOp, type Block } from '../compile/bytecode.ts';
 import { IMPL } from '../builtins/registry.ts';
 import {
-  add, bits, compare, equals, fits32, fromBits, GmlError, GmMethod, GmStruct, idiv, mod, NotImplemented, real, Scope, truthy, typeName,
+  add, bits, compare, equals, fits32, fromBits, GmlError, GmMethod, GmStruct, idiv, mod, NotImplemented, real, Scope, truthy, typeName, Unverified,
   type GArray, type Value,
 } from '../value.ts';
 import { Instance, NOI } from '../runtime/instance.ts';
@@ -21,6 +21,15 @@ class Watchdog extends Error {}
 const rootOf = (e: unknown): unknown => { while (e instanceof RuntimeError && e.cause) e = e.cause; return e; };
 /** Whether a GML catch may handle e: GML errors only, not krplayer gaps, the watchdog or krplayer bugs. */
 const catchable = (e: unknown): boolean => { const r = rootOf(e); return r instanceof GmlError && !(r instanceof NotImplemented); };
+
+/** Crash triage label: whose fault an uncaught error most likely is (docs/error_audit.md). */
+export function errorKind(e: unknown): string {
+  const r = rootOf(e);
+  return r instanceof NotImplemented ? 'not implemented in krplayer'
+    : r instanceof Unverified ? 'unverified GML error (GameMaker may not raise this; likely a krplayer bug)'
+    : r instanceof GmlError ? 'GML error (GameMaker raises this too)'
+    : r instanceof Watchdog ? 'infinite loop' : 'krplayer internal error';
+}
 
 export class VM {
   readonly stack: Value[] = new Array(STACK).fill(undefined);
@@ -59,7 +68,7 @@ export class VM {
     try {
       for (;;) try {
       for (;;) {
-        if (sp > STACK - 64) throw new GmlError('value stack overflow');
+        if (sp > STACK - 64) throw new NotImplemented('value stack overflow');
         switch (code[pc]) {
           case Op.CONST: s[sp++] = consts[code[pc + 1]]; pc += 2; break;
           case Op.GET: {
@@ -73,7 +82,7 @@ export class VM {
           case Op.SET: {
             const scope = code[pc + 1], id = code[pc + 2], own = code[pc + 3];
             if (scope === S.LOCAL) L[lp + id] = owned(s[--sp], own);
-            else if (scope === S.ARG) { if (id < 0) throw new GmlError('argument is read-only'); A[argBase + id] = owned(s[--sp], own); }
+            else if (scope === S.ARG) { if (id < 0) throw new Unverified('argument is read-only'); A[argBase + id] = owned(s[--sp], own); }
             else if (scope === S.FIELD || scope === S.BFIELD) { const t = s[--sp]; this.setField(t, scope, id, owned(s[--sp], own), NOI, own); }
             else this.setVar(scope, id, g.self, owned(s[--sp], own), NOI, own);
             pc += 4; break;
@@ -83,7 +92,7 @@ export class VM {
             if (scope === S.LOCAL) s[sp++] = elem(L[lp + id], index);
             else if (scope === S.ARG) {
               const i = Math.trunc(real(index));
-              if (i < 0 || i >= argc) throw new GmlError(`argument index ${i} out of range (${argc} arguments)`);
+              if (i < 0 || i >= argc) throw new Unverified(`argument index ${i} out of range (${argc} arguments)`);
               s[sp++] = A[argBase + i];
             } else if (scope === S.FIELD || scope === S.BFIELD) s[sp - 1] = this.getField(s[sp - 1], scope, id, index);
             else s[sp++] = this.getVar(scope, id, g.self, index);
@@ -94,7 +103,7 @@ export class VM {
             if (scope === S.LOCAL) L[lp + id] = setElem(L[lp + id], index, s[--sp], own);
             else if (scope === S.ARG) {
               const i = Math.trunc(real(index));
-              if (i < 0 || i >= 16) throw new GmlError(`argument index ${i} out of range`);
+              if (i < 0 || i >= 16) throw new Unverified(`argument index ${i} out of range`);
               A[argBase + i] = s[--sp];
             } else if (scope === S.FIELD || scope === S.BFIELD) { const t = s[--sp]; this.setField(t, scope, id, s[--sp], index, own); }
             else this.setVar(scope, id, g.self, s[--sp], index, own);
@@ -106,7 +115,7 @@ export class VM {
             if (scope === S.LOCAL) L[lp + id] = arr = ownArray(L[lp + id], own);
             else if (scope === S.FIELD) { const t = s[--sp]; arr = this.rowOf(this.scopeOf(t), id, own); }
             else if (scope === S.SELF || scope === S.GLOBAL) arr = this.rowOf(scope === S.SELF ? g.self : g.globalScope, id, own);
-            else throw new GmlError('built-in variables are not 2D arrays');
+            else throw new Unverified('built-in variables are not 2D arrays');
             s[sp++] = row(arr, index, own);
             pc += 4; break;
           }
@@ -177,7 +186,7 @@ export class VM {
             s[sp - 1 - n] = top; pc += 2; break;
           }
           case Op.WITH_BEGIN: {
-            if (this.wsp >= WITH_DEPTH) throw new GmlError('with nested too deeply');
+            if (this.wsp >= WITH_DEPTH) throw new NotImplemented('with nested too deeply');
             const list = this.wList[this.wsp];
             g.collect(s[--sp], list);
             if (!list.length) { pc = code[pc + 1]; break; }
@@ -200,13 +209,13 @@ export class VM {
           case Op.SELFID: s[sp++] = scopeValue(g.self); pc++; break;
           case Op.OTHERID: s[sp++] = g.other ? scopeValue(g.other) : -4; pc++; break;
           case Op.TRY_BEGIN: {
-            if (this.tp >= TRY_DEPTH) throw new GmlError('try nested too deeply');
+            if (this.tp >= TRY_DEPTH) throw new NotImplemented('try nested too deeply');
             const h = this.tp++;
             this.tryPc[h] = code[pc + 1]; this.trySp[h] = sp; this.tryW[h] = this.wsp;
             pc += 2; break;
           }
           case Op.TRY_END: this.tp--; pc++; break;
-          default: throw new GmlError(`bad bytecode ${code[pc]} at ${pc}`);
+          default: throw new Error(`bad bytecode ${code[pc]} at ${pc}`);
         }
       }
       } catch (e) {
@@ -235,7 +244,7 @@ export class VM {
   /** Calls user function fn; its n arguments are on top of the value stack (first argument on top). */
   invoke(fn: number, self: Scope, other: Scope | null, n: number): Value {
     const f = this.g.a.functions[fn], s = this.stack, A = this.args, base = this.ap, top = this.sp - 1;
-    if (base + 16 + n > ARGS) throw new GmlError('argument stack overflow');
+    if (base + 16 + n > ARGS) throw new NotImplemented('argument stack overflow');
     for (let k = 0; k < n; k++) A[base + k] = s[top - k];
     for (let k = n; k < 16; k++) A[base + k] = undefined;
     this.ap = base + Math.max(n, 16);
@@ -289,9 +298,9 @@ export class VM {
     switch (scope) {
       case S.SELF: v = self.vars.get(id); if (v === undefined && !self.vars.has(id)) this.unset(self, id); break;
       case S.GLOBAL: v = g.globalScope.vars.get(id); if (v === undefined && !g.globalScope.vars.has(id)) this.unset(g.globalScope, id); break;
-      case S.BSELF: if (!(self instanceof Instance)) throw new GmlError(`built-in variable ${g.ivName(id)} on a struct`); return g.getIV(self, id, index);
+      case S.BSELF: if (!(self instanceof Instance)) throw new Unverified(`built-in variable ${g.ivName(id)} on a struct`); return g.getIV(self, id, index);
       case S.BGLOBAL: return g.getGV(id, index);
-      default: throw new GmlError(`bad scope ${scope}`);
+      default: throw new Error(`bad scope ${scope}`);
     }
     return index === NOI ? v : elem(v, index);
   }
@@ -307,10 +316,10 @@ export class VM {
     switch (scope) {
       case S.SELF: self.vars.set(id, index === NOI ? v : setElem(self.vars.get(id), index, v, own)); return;
       case S.GLOBAL: { const m = g.globalScope.vars; m.set(id, index === NOI ? v : setElem(m.get(id), index, v, own)); return; }
-      case S.BSELF: if (!(self instanceof Instance)) throw new GmlError(`built-in variable ${g.ivName(id)} on a struct`); g.setIV(self, id, v, index); return;
+      case S.BSELF: if (!(self instanceof Instance)) throw new Unverified(`built-in variable ${g.ivName(id)} on a struct`); g.setIV(self, id, v, index); return;
       case S.BGLOBAL: g.setGV(id, v, index); return;
     }
-    throw new GmlError(`bad scope ${scope}`);
+    throw new Error(`bad scope ${scope}`);
   }
 
   /** inst.var / struct.var read: an instance id, an object (its first instance), a struct, or a keyword. */
@@ -391,7 +400,7 @@ function elem(arr: Value, index: Value): Value {
 function put(arr: GArray, index: Value, v: Value): void {
   const i = Math.trunc(real(index));
   if (i < 0) throw new GmlError(`negative array index ${i}`);
-  if (i > 1 << 26) throw new GmlError(`array index ${i} too large`);
+  if (i > 1 << 26) throw new Unverified(`array index ${i} too large`);
   while (arr.length < i) arr.push(0);
   arr[i] = v;
 }
@@ -436,7 +445,7 @@ function binary(op: number, a: Value, b: Value): Value {
     case BinOp.shl: return fromBits(bits(a) << bits(b));
     case BinOp.shr: return fromBits(bits(a) >> bits(b));
   }
-  throw new GmlError(`bad operator ${op}`);
+  throw new Error(`bad operator ${op}`);
 }
 
 function unary(op: number, a: Value): Value {
@@ -445,5 +454,5 @@ function unary(op: number, a: Value): Value {
     case UnOp.not: return !truthy(a);
     case UnOp.bnot: { const x = Math.trunc(real(a)); return fits32(x) ? ~x : fromBits(~bits(a)); }
   }
-  throw new GmlError(`bad operator ${op}`);
+  throw new Error(`bad operator ${op}`);
 }

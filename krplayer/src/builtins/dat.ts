@@ -1,7 +1,7 @@
 // Files & data (dat_*): ds_*, JSON, ini, text files and buffers.
 
 import { define, family, n, str, opt } from './registry.ts';
-import { compare, equals, GmlError, NotImplemented, GmStruct, real, type GArray, type Value } from '../value.ts';
+import { compare, equals, GmlError, NotImplemented, GmStruct, real, Unverified, type GArray, type Value } from '../value.ts';
 import { Buffer, DS, DsList, DsMap, Ini, iniReal, listRead, listWrite, readLn, readReal, readString } from '../runtime/data.ts';
 import type { Game } from '../runtime/game.ts';
 import { md5 } from '../runtime/md5.ts';
@@ -146,7 +146,8 @@ function ini(g: Game) {
   return g.ini;
 }
 define('dat_ini_open', (g, s, t) => {
-  if (g.ini) throw new GmlError('ini_open: an ini file is already open');
+  // GM closes (and saves) an ini that's still open instead of failing (HTML5 ini_open; error_audit.md).
+  if (g.ini) { if (g.ini.dirty && g.ini.path) g.files.writeText(g.ini.path, g.ini.ini.toString()); g.ini = null; }
   const path = str(s, t, 0);
   g.ini = { path, ini: new Ini(g.files.readText(path) ?? ''), dirty: false };
   return undefined;
@@ -228,12 +229,13 @@ family('dat_buffer', 'buffer_', {
   delete: (g, s, t) => { g.data.buffers.free(s[t]); return undefined; },
   exists: (g, s, t) => g.data.buffers.has(s[t]),
   write: (g, s, t) => { buf(g, s[t]).write(n(s, t, 1), s[t - 2]); return 0; },
-  read: (g, s, t) => buf(g, s[t]).read(n(s, t, 1)),
+  // A missing buffer reads 0 (HTML5 buffer_read; error_audit.md).
+  read: (g, s, t) => (g.data.buffers.has(s[t]) ? buf(g, s[t]).read(n(s, t, 1)) : 0),
   peek: (g, s, t) => buf(g, s[t]).peek(n(s, t, 1), n(s, t, 2)),
   /** RGBA bytes, top row first. GMS2.3 takes (buffer, surface, offset); older (buffer, surface, mode, offset, modulo). */
   get_surface: (g, s, t, argc) => {
     const bf = buf(g, s[t]), px = g.p.renderer.readPixels(g.surface(s[t - 1]).tex), off = n(s, t, argc >= 5 ? 3 : 2);
-    if (off < 0 || off + px.data.length > bf.data.length) throw new GmlError('buffer_get_surface: buffer too small for the surface');
+    if (off < 0 || off + px.data.length > bf.data.length) throw new Unverified('buffer_get_surface: buffer too small for the surface');
     bf.data.set(px.data, off);
     return undefined;
   },

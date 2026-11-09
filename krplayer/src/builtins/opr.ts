@@ -1,7 +1,7 @@
 // Operators (functions): math, randomness, strings and type checks (opr_*).
 
 import { define, n, str } from './registry.ts';
-import { GmlError, GmMethod, GmStruct, real, str as toStr, typeName, type Value } from '../value.ts';
+import { GmlError, GmMethod, GmStruct, real, str as toStr, typeName, NotImplemented, Unverified, type Value } from '../value.ts';
 import type { Game } from '../runtime/game.ts';
 
 const D2R = Math.PI / 180;
@@ -19,7 +19,7 @@ const MATH: Record<string, (x: number) => number> = {
 };
 define('opr_mathop', (_g, s, t) => {
   const f = MATH[s[t] as string];
-  if (!f) throw new GmlError(`unknown math function ${String(s[t])}`);
+  if (!f) throw new NotImplemented(`unknown math function ${String(s[t])}`);
   return f(n(s, t, 1));
 });
 const TRIG: Record<string, (x: number) => number> = { sin: Math.sin, cos: Math.cos, tan: Math.tan, arcsin: Math.asin, arccos: Math.acos, arctan: Math.atan };
@@ -46,7 +46,7 @@ define('opr_aggregate', (_g, s, t, argc) => {
     case 'mean': return xs.reduce((a, b) => a + b, 0) / xs.length;
     case 'median': { xs.sort((a, b) => a - b); return xs[Math.floor(xs.length / 2)]; }
   }
-  throw new GmlError(`unknown aggregate ${String(s[t])}`);
+  throw new NotImplemented(`unknown aggregate ${String(s[t])}`);
 });
 define('opr_clamp', (_g, s, t) => Math.min(Math.max(n(s, t, 0), n(s, t, 1)), n(s, t, 2)));
 define('opr_lerp', (_g, s, t) => { const a = n(s, t, 0); return a + (n(s, t, 1) - a) * n(s, t, 2); });
@@ -129,7 +129,7 @@ define('opr_str_split', (_g, s, t, argc) => {
   return parts;
 });
 define('opr_str_join', (g, s, t, argc) => { const xs: string[] = []; for (let k = 1; k < argc; k++) xs.push(gstr(g, s[t - k])); return xs.join(str(s, t, 0)); });
-define('opr_str_join_ext', (g, s, t) => { const a = s[t - 1]; if (!Array.isArray(a)) throw new GmlError('string_join_ext needs an array'); return a.map((v) => gstr(g, v)).join(str(s, t, 0)); });
+define('opr_str_join_ext', (g, s, t) => { const a = s[t - 1]; if (!Array.isArray(a)) throw new Unverified('string_join_ext needs an array'); return a.map((v) => gstr(g, v)).join(str(s, t, 0)); });
 define('opr_str_format', (_g, s, t) => {
   const v = n(s, t, 0), tot = Math.trunc(n(s, t, 1)), dec = Math.max(0, Math.trunc(n(s, t, 2)));
   const x = v.toFixed(dec);
@@ -153,7 +153,7 @@ const IS: Record<string, (v: Value) => boolean> = {
 };
 define('opr_is_type', (_g, s, t) => {
   const f = IS[s[t] as string];
-  if (!f) throw new GmlError(`unknown type check is_${String(s[t])}`);
+  if (!f) throw new NotImplemented(`unknown type check is_${String(s[t])}`);
   return f(s[t - 1]);
 });
 define('opr_typeof', (_g, s, t) => typeName(s[t]));

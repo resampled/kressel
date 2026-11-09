@@ -2,7 +2,7 @@
 // system behind them. Saved files go to Storage (the project's partition); included files are read-only.
 
 import type { Storage } from '../platform/types.ts';
-import { GmlError, GmStruct, num, real, str, type GArray, type Value } from '../value.ts';
+import { GmlError, GmStruct, num, real, str, NotImplemented, Unverified, type GArray, type Value } from '../value.ts';
 
 export const DS = { map: 1, list: 2, stack: 3, grid: 4, queue: 5, priority: 6 } as const;
 
@@ -20,7 +20,8 @@ export class Handles<T> {
   }
   get(id: Value, what: string): T {
     const v = typeof id === 'number' ? this.items[id] : undefined;
-    if (!v) throw new GmlError(`${what} ${String(id)} does not exist`);
+    // Missing ds_* is a GM error; HTML5's buffer functions return 0/nothing instead (VM unchecked).
+    if (!v) throw new (what.startsWith('ds_') ? GmlError : Unverified)(`${what} ${String(id)} does not exist`);
     return v;
   }
   has(id: Value): boolean { return typeof id === 'number' && !!this.items[id]; }
@@ -166,7 +167,7 @@ function plain(v: Value): unknown {
 /** ds_list_write / ds_map_write style serialisation (not GM's hex format; round-trips within krplayer). */
 export function listWrite(l: DsList): string { return JSON.stringify(l.a.map(plain)); }
 export function listRead(l: DsList, s: string): void {
-  try { const a = JSON.parse(s); if (Array.isArray(a)) l.a = a as Value[]; } catch { throw new GmlError('ds_list_read: data is not from ds_list_write'); }
+  try { const a = JSON.parse(s); if (Array.isArray(a)) l.a = a as Value[]; } catch { throw new Unverified('ds_list_read: data is not from ds_list_write'); }
 }
 
 // ---------------------------------------------------------------- ini
@@ -255,7 +256,7 @@ export class Buffer {
   static from(bytes: Uint8Array): Buffer { const b = new Buffer(bytes.length, 1, 1); b.data.set(bytes); return b; }
   private ensure(n: number): void {
     if (this.pos + n <= this.data.length) return;
-    if (this.type !== 1) throw new GmlError('buffer overflow');
+    if (this.type !== 1) throw new Unverified('buffer overflow');
     const d = new Uint8Array(Math.max(this.pos + n, this.data.length * 2));
     d.set(this.data); this.data = d; this.view = new DataView(d.buffer);
   }
@@ -270,7 +271,7 @@ export class Buffer {
       return;
     }
     const n = num(v), size = [0, 1, 1, 2, 2, 4, 4, 2, 4, 8, 1, 0, 8][type];
-    if (!size) throw new GmlError(`buffer type ${type} not supported`);
+    if (!size) throw new NotImplemented(`buffer type ${type} not supported`);
     this.ensure(size);
     const d = this.view, p = this.pos;
     switch (type) {
@@ -279,7 +280,7 @@ export class Buffer {
       case BUF.u32: d.setUint32(p, n, true); break; case BUF.s32: d.setInt32(p, n, true); break;
       case BUF.f32: d.setFloat32(p, n, true); break; case BUF.f64: d.setFloat64(p, n, true); break;
       case BUF.u64: d.setBigUint64(p, BigInt(Math.trunc(n)), true); break;
-      default: throw new GmlError(`buffer type ${type} not supported`);
+      default: throw new NotImplemented(`buffer type ${type} not supported`);
     }
     this.pos += size;
   }
@@ -291,6 +292,9 @@ export class Buffer {
   }
   read(type: number, align = true): Value {
     if (align) this.alignPos();
+    if (this.type === 2 && this.data.length && this.pos >= this.data.length) this.pos %= this.data.length; // buffer_wrap
+    // At or past the end GM reads "" for strings and -3 (eBuffer_OutOfBounds) otherwise (HTML5 yyb_read; error_audit.md).
+    if (this.pos >= this.data.length) return type === BUF.string || type === BUF.text ? '' : -3;
     if (type === BUF.string || type === BUF.text) {
       let e = this.pos;
       while (e < this.data.length && this.data[e] !== 0) e++;
@@ -299,8 +303,8 @@ export class Buffer {
       return s;
     }
     const size = [0, 1, 1, 2, 2, 4, 4, 2, 4, 8, 1, 0, 8][type];
-    if (!size) throw new GmlError(`buffer type ${type} not supported`);
-    if (this.pos + size > this.data.length) throw new GmlError('buffer read past the end');
+    if (!size) throw new NotImplemented(`buffer type ${type} not supported`);
+    if (this.pos + size > this.data.length) throw new Unverified('buffer read past the end');
     const d = this.view, p = this.pos;
     this.pos += size;
     switch (type) {
@@ -310,7 +314,7 @@ export class Buffer {
       case BUF.f32: return d.getFloat32(p, true); case BUF.f64: return d.getFloat64(p, true);
       case BUF.u64: return Number(d.getBigUint64(p, true));
     }
-    throw new GmlError(`buffer type ${type} not supported`);
+    throw new NotImplemented(`buffer type ${type} not supported`);
   }
 }
 

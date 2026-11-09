@@ -1,13 +1,13 @@
 // Variables (functions): arrays, structs, variable_* and method (var_*).
 
 import { define, n, str } from './registry.ts';
-import { compare, equals, GmlError, GmMethod, GmStruct, real, Scope, truthy, type GArray, type Value } from '../value.ts';
+import { compare, equals, GmlError, GmMethod, GmStruct, real, Scope, truthy, Unverified, type GArray, type Value } from '../value.ts';
 import { IV_NAMES } from '../compile/names.ts';
 import { Instance, NOI } from '../runtime/instance.ts';
 import type { Game } from '../runtime/game.ts';
 
 const arr = (v: Value, fn: string): GArray => {
-  if (!Array.isArray(v)) throw new GmlError(`${fn}: argument is not an array`);
+  if (!Array.isArray(v)) throw new Unverified(`${fn}: argument is not an array`);
   return v;
 };
 
@@ -27,7 +27,7 @@ define('var_arr_2d', (_g, s, t) => {
 });
 define('var_arr_create', (_g, s, t, argc) => {
   const k = Math.trunc(n(s, t, 0)), v = argc > 1 ? s[t - 1] : 0;
-  if (k < 0 || k > 1 << 26) throw new GmlError(`array_create: bad size ${k}`);
+  if (k < 0 || k > 1 << 26) throw new Unverified(`array_create: bad size ${k}`);
   return new Array(k).fill(v);
 });
 define('var_arr_push', (_g, s, t, argc) => { const a = arr(s[t], 'array_push'); for (let k = 1; k < argc; k++) a.push(s[t - k]); return undefined; });
@@ -67,7 +67,7 @@ define('var_arr_sort', (g, s, t) => {
 
 const struct = (v: Value, fn: string): Scope => {
   if (v instanceof Scope) return v;
-  throw new GmlError(`${fn}: argument is not a struct`);
+  throw new Unverified(`${fn}: argument is not a struct`);
 };
 define('var_struct_get', (g, s, t) => struct(s[t], 'struct_get').vars.get(g.a.varSlot(str(s, t, 1))));
 define('var_struct_set', (g, s, t) => { struct(s[t], 'struct_set').vars.set(g.a.varSlot(str(s, t, 1)), s[t - 2]); return undefined; });
@@ -78,7 +78,7 @@ define('var_struct_keys', (g, s, t) => [...struct(s[t], 'struct_get_names').vars
 /** An instance's variable by name: built-ins too (variable_instance_get(id, "x")). */
 function instVar(g: Game, v: Value, name: string): { inst: Instance; iv: number | undefined; slot: number } {
   const sc = g.vm.scopeOf(v);
-  if (!(sc instanceof Instance)) throw new GmlError('variable_instance_*: not an instance');
+  if (!(sc instanceof Instance)) throw new Unverified('variable_instance_*: not an instance');
   return { inst: sc, iv: IV_NAMES.get(name), slot: g.a.varSlot(name) };
 }
 define('var_inst_get', (g, s, t) => {
@@ -98,7 +98,7 @@ define('var_inst_exists', (g, s, t) => {
 });
 define('var_inst_names', (g, s, t) => {
   const inst = g.first(real(s[t]));
-  if (!inst) throw new GmlError(`variable_instance_get_names: instance ${String(s[t])} does not exist`);
+  if (!inst) throw new Unverified(`variable_instance_get_names: instance ${String(s[t])} does not exist`);
   return [...inst.vars.keys()].map((k) => g.a.varNames[k]);
 });
 define('var_global_get', (g, s, t) => g.globalScope.vars.get(g.a.varSlot(str(s, t, 0))));
@@ -109,7 +109,7 @@ define('var_global_exists', (g, s, t) => g.globalScope.vars.has(g.a.varSlot(str(
 define('var_method', (g, s, t) => {
   const ctx = s[t], f = s[t - 1];
   const fn = f instanceof GmMethod ? f.fn : typeof f === 'number' ? g.scriptFunction(f) : -1;
-  if (fn < 0) throw new GmlError('method: not a function');
+  if (fn < 0) throw new Unverified('method: not a function');
   const self = ctx === undefined ? null : ctx instanceof Scope ? ctx : real(ctx) === -1 ? g.self : g.vm.scopeOf(ctx);
   return new GmMethod(fn, self, g.a.functions[fn].name);
 });

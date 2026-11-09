@@ -33,7 +33,13 @@ export class GmMethod {
 /** GM's default math_get_epsilon(). Real comparisons use it. */
 export const EPSILON = 0.00001;
 
+/** A GML runtime error that GameMaker raises too (VM-known, or yyError in the HTML5 runner). */
 export class GmlError extends Error {}
+/**
+ * A GML error krplayer raises without evidence that GameMaker does (docs/error_audit.md).
+ * Catchable like GmlError; a crash here is probably krplayer being stricter than GM.
+ */
+export class Unverified extends GmlError {}
 /** A GML feature krplayer lacks. Never caught by GML try/catch, so gaps stay loud. */
 export class NotImplemented extends GmlError {}
 
@@ -45,7 +51,8 @@ export const typeName = (v: Value): string =>
 export function real(v: Value): number {
   if (typeof v === 'number') return v;
   if (typeof v === 'boolean') return v ? 1 : 0;
-  throw new GmlError(`expected a number, got ${typeName(v)}${typeof v === 'string' ? ` "${v}"` : ''}`);
+  // HTML5's yyGetReal reads a numeric string ("5" -> 5) and errors on the rest; the VM is unchecked.
+  throw new (typeof v === 'string' ? Unverified : GmlError)(`expected a number, got ${typeName(v)}${typeof v === 'string' ? ` "${v}"` : ''}`);
 }
 
 /** real() for function arguments that GM also accepts as undefined (-> 0). */
@@ -56,7 +63,8 @@ export function truthy(v: Value): boolean {
   if (typeof v === 'number') return v > 0.5;
   if (typeof v === 'boolean') return v;
   if (v === undefined) return false;
-  throw new GmlError(`unable to convert ${typeName(v)} to bool`);
+  // HTML5's yyGetBool reads "true"/"false" and numeric strings; the VM is unchecked.
+  throw new (typeof v === 'string' ? Unverified : GmlError)(`unable to convert ${typeName(v)} to bool`);
 }
 
 export function add(a: Value, b: Value): Value {
@@ -71,6 +79,26 @@ const CMP_NUM = /^[-+]?(?:[0-9]{0,30}\.)?[0-9]{1,30}(?:[Ee][-+]?[1-2]?[0-9])?/;
 function cmpStr(s: string): number {
   const m = CMP_NUM.exec(s.trim());
   return m ? Number(m[0]) : NaN;
+}
+
+/**
+ * A builtin argument used as a real: like real(), but a numeric string reads as its number, as HTML5's yyGetReal
+ * (error_audit.md). Operators keep real(): GM treats strings in arithmetic separately.
+ */
+export function argReal(v: Value): number {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') { const x = cmpStr(v); if (!Number.isNaN(x)) return x; }
+  return real(v);
+}
+/** A builtin argument used as a bool: "true", "false" and numeric strings read as HTML5's yyGetBool does. */
+export function argBool(v: Value): boolean {
+  if (typeof v === 'string') {
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+    const x = cmpStr(v);
+    if (!Number.isNaN(x)) return x > 0.5;
+  }
+  return truthy(v);
 }
 
 export function equals(a: Value, b: Value): boolean {

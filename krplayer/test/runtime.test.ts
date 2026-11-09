@@ -7,6 +7,7 @@ import { compare, equals, str, add } from '../src/value.ts';
 import { follow } from '../src/runtime/game.ts';
 import { warpSetup } from '../src/runtime/debug.ts';
 import { md5 } from '../src/runtime/md5.ts';
+import { errorKind } from '../src/vm/vm.ts';
 
 function project(objects: Krpj['objects'], instances: { object: string; x: number; y: number }[]): Krpj {
   return {
@@ -72,16 +73,49 @@ test('md5 and buffer_md5 (DR ch2 obj_shapepuzzle)', async () => {
   assert.deepEqual([v.all, v.abc, v.tail], [md5(enc('abcd')), '900150983cd24fb0d6963f7d28e17f72', md5(enc('cd'))]);
 });
 
-test('layer setters ignore a missing layer, getters still fail (DR ch2 obj_controller_tasquePaintingsRevisit)', async () => {
+test('layer setters ignore a missing layer, getters give defaults (DR ch2 obj_controller_tasquePaintingsRevisit)', async () => {
   const v = await exec([
     ['rom_layer_set_visible', 'reference', 0],
     ['rom_layer_depth', 'reference', 5],
     ['rom_layer_set', 'x', 'reference', 3],
     ['rom_layer_set_visible', 'I', 0],
     ['var_set', ['_lv', 'vis'], ['rom_layer_get_visible', 'I']],
+    ['var_set', ['_lv', 'gone'], ['rom_layer_get_visible', 'reference']],
+    ['var_set', ['_lv', 'ld'], ['rom_layer_get_depth', 'reference']],
+    ['var_set', ['_lv', 'lx'], ['rom_layer_get', 'x', 'reference']],
   ]);
   assert.equal(v.vis, false);
-  await assert.rejects(exec([['var_set', ['_lv', 'x'], ['rom_layer_get_visible', 'reference']]]), /layer "reference" does not exist/);
+  assert.deepEqual([v.gone, v.ld, v.lx], [undefined, -1, 0]);
+});
+
+test('missing resources behave like GM, not errors (docs/error_audit.md)', async () => {
+  const v = await exec([
+    ['var_set', ['_lv', 'snd'], ['snd_play', 999, 0, false]], // audio_play_sound -> -1
+    ['snd_gain', 999, 0.5, 0], ['snd_pitch', 999, 2],
+    ['var_set', ['_lv', 'gain'], ['snd_get', 'gain', 999]],
+    ['var_set', ['_lv', 'pitch'], ['snd_get', 'pitch', 999]],
+    ['drw_sprite', 999, 0, 0, 0], ['drw_sprite_ext', -1, 0, 0, 0, 1, 1, 0, 0xffffff, 1],
+    ['var_set', ['_lv', 'sw'], ['lks_sprite_info', 'width', 999]],
+    ['var_set', ['_lv', 'sw0'], ['lks_sprite_info', 'width', '0']], // numeric string argument reads as 0
+    ['dat_ini_open', 'a.ini'], ['dat_ini_write', 'string', 's', 'k', 'v'], ['dat_ini_open', 'b.ini'], ['dat_ini_close'],
+    ['ins_event_user', 20],
+    ['drw_set_font', 99],
+    ['rom_sprite', 'x', 999, 5],
+    ['var_set', ['_lv', 'ex'], ['rom_sprite', 'get_x', 999]],
+    ['var_set', ['_lv', 'esc'], ['rom_sprite', 'get_xscale', 999]],
+    ['cam_set_pos', 99, 1, 2],
+    ['var_set', ['_lv', 'cx'], ['cam_get', 'x', 99]],
+    ['var_set', ['_lv', 'px'], ['mov_path', 'get_x', 99, 0.5]],
+    ['var_set', ['_lv', 'pn'], ['mov_path', 'get_number', 99]],
+    ['var_set', ['_lv', 'b0'], ['dat_buffer', 'read', 99, 1]],
+    ['var_set', ['_lv', 'b'], ['dat_buffer', 'create', 1, 0, 1]],
+    ['var_set', ['_lv', 'b1'], ['dat_buffer', 'read', ['_lv', 'b'], 1]],
+    ['var_set', ['_lv', 'b2'], ['dat_buffer', 'read', ['_lv', 'b'], 1]],
+  ]);
+  assert.deepEqual([v.snd, v.gain, v.pitch], [-1, 0, 1]);
+  assert.deepEqual([v.sw, v.sw0], [0, 10]);
+  assert.deepEqual([v.ex, v.esc, v.cx, v.px, v.pn], [0, 1, -1, -1, 0]);
+  assert.deepEqual([v.b0, v.b1, v.b2], [0, 0, -3]); // past the end: eBuffer_OutOfBounds
 });
 
 test('real division by zero gives inf / NaN instead of failing (ch1_ribbit_mod obj_crackintro)', async () => {
@@ -429,4 +463,11 @@ test('local projects save to a "_"-prefixed partition', () => {
   assert.equal(partition(src('demo')), 'demo');
   assert.equal(partition(src('demo', true)), '_demo');
   assert.equal(partition(src('', true)), '_unpublished');
+});
+
+test('crashes are labelled by error kind (docs/error_audit.md)', async () => {
+  const kind = (body: unknown[]) => exec(body).then(() => 'no error', errorKind);
+  assert.match(await kind([['var_arr_get', ['var_arr_create', 1], 5]]), /^GML error/);
+  assert.match(await kind([['var_arr_create', -1]]), /^unverified/);
+  assert.match(await kind([['drw_texturegroup', 'no_such_member']]), /^not implemented/);
 });

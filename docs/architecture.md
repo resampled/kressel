@@ -65,6 +65,7 @@ scripts/
 * **GML semantics live in two places.** `value.ts` holds the value rules and `runtime/instances.ts` holds instance order. Builtins call into them and never re-implement coercion.
 * **The runtime only sees `Platform`.** No DOM, WebGL, WebAudio or fetch outside `platform/` (included files come through `Platform.fetchBytes`). Keep platform arguments flat (no per-call objects) for the hot loop.
 * **Errors name the place.** Format errors carry the file offset. Unknown opcodes and functions carry the object/event/offset. Nothing silently no-ops.
+* **Loud failure is for krplayer's gaps; krplayer is never stricter than GM.** Where GM logs a warning and carries on, krplayer does the same. A `GmlError` needs a cited source; an error without one is `Unverified`. See docs/error_audit.md for the error kinds and the audit.
 * **Browser code has no Node types.** Package tsconfigs exclude `@types/node`; only tests and `scripts/` (`tsconfig.test.json`) get it.
 * **Imports use `.ts` extensions and erasable syntax only** (no enums, namespaces or constructor parameter properties). Node runs the tests directly, with no build step.
 

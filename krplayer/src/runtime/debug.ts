@@ -1,7 +1,7 @@
 // Debug start state for ?room= warps (see architecture.md "Debug start room"): ?set= and ?call= params,
 // run in URL order just before the warp room is entered, so the room sees the globals the skipped rooms would set.
 
-import { GmlError, GmMethod, type GArray, type Value } from '../value.ts';
+import { GmMethod, type GArray, type Value } from '../value.ts';
 import type { Game } from './game.ts';
 
 /** Splits on commas outside quotes and parentheses. */
@@ -16,7 +16,7 @@ function literal(s: string): Value {
 
 function setter(g: Game, item: string): () => void {
   const m = /^(?:global\.)?(\w+)(?:\[(\d+)\])?=(.*)$/.exec(item);
-  if (!m) throw new GmlError(`?set=${item}: expected name=value or name[index]=value`);
+  if (!m) throw new Error(`?set=${item}: expected name=value or name[index]=value`);
   const slot = g.a.varSlot(m[1]), v = literal(m[3]), vars = g.globalScope.vars;
   return () => {
     if (m[2] === undefined) return void vars.set(slot, v);
@@ -29,9 +29,9 @@ function setter(g: Game, item: string): () => void {
 
 function caller(g: Game, item: string): () => void {
   const m = /^(\w+)(?:\((.*)\))?$/.exec(item);
-  if (!m) throw new GmlError(`?call=${item}: expected fn or fn(arg, ...)`);
+  if (!m) throw new Error(`?call=${item}: expected fn or fn(arg, ...)`);
   const fn = g.a.functions.findIndex((f) => f.name === m[1]);
-  if (fn < 0) throw new GmlError(`?call=${m[1]}: no such function`);
+  if (fn < 0) throw new Error(`?call=${m[1]}: no such function`);
   const f = new GmMethod(fn, null, m[1]), args = split(m[2] ?? '').map(literal);
   return () => void g.vm.callValue(f, g.globalScope, args);
 }

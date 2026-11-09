@@ -3,7 +3,7 @@
 
 import type { Layer, View } from '../krpj.ts';
 import type { Assets } from './assets.ts';
-import { GmlError, type Value } from '../value.ts';
+import { Unverified, type Value } from '../value.ts';
 
 export const ELEM = { background: 1, instance: 2, sprite: 4, tilemap: 5, tile: 7 } as const;
 
@@ -62,7 +62,7 @@ export class Layers {
     for (const d of defs) {
       const l = this.create(d.depth, d.name, d.id);
       l.visible = d.visible !== false; l.x = d.x ?? 0; l.y = d.y ?? 0; l.hspeed = d.hspeed ?? 0; l.vspeed = d.vspeed ?? 0;
-      const spr = (n: string) => { const i = a.assetIndex.get(n); if (i === undefined) throw new GmlError(`unknown sprite ${n}`); return i; };
+      const spr = (n: string) => { const i = a.assetIndex.get(n); if (i === undefined) throw new Error(`unknown sprite ${n}`); return i; };
       switch (d.type) {
         case 'instances': l.instances = true; break;
         case 'background': {
@@ -86,7 +86,7 @@ export class Layers {
           break;
         case 'tiles': {
           const e = this.add(l, ELEM.tilemap), ts = d.tileset === null ? -1 : a.assetIndex.get(d.tileset);
-          if (ts === undefined) throw new GmlError(`unknown tileset ${d.tileset}`);
+          if (ts === undefined) throw new Error(`unknown tileset ${d.tileset}`);
           e.asset = ts; e.w = d.cols; e.h = d.rows; e.cells = Int32Array.from(d.data);
           break;
         }
@@ -120,7 +120,7 @@ export class Layers {
   /** A layer by id or name; throws if missing. */
   get(v: number | string): RtLayer {
     const l = this.find(v);
-    if (!l) throw new GmlError(`layer ${JSON.stringify(v)} does not exist`);
+    if (!l) throw new Unverified(`layer ${JSON.stringify(v)} does not exist`);
     return l;
   }
   find(v: number | string): RtLayer | undefined {

@@ -5,7 +5,7 @@ import { WINDOW, type Platform } from '../platform/types.ts';
 import type { RoomInstance } from '../krpj.ts';
 import { EK, type Block } from '../compile/bytecode.ts';
 import { GV, IV } from '../compile/names.ts';
-import { GmlError, GmStruct, real, Scope, truthy, type GArray, type Value } from '../value.ts';
+import { GmlError, GmStruct, real, Scope, truthy, NotImplemented, Unverified, type GArray, type Value } from '../value.ts';
 import { VM } from '../vm/vm.ts';
 import { ASYNC, EV, emptyEvents, type Assets, type Events, type ObjectDef } from './assets.ts';
 import { Instance, NOI } from './instance.ts';
@@ -139,7 +139,7 @@ export class Game {
    * first room change out of that room instead, for games whose setup room isn't the first (Deltarune Ch2).
    */
   start(warp = -1, direct = false, init: (() => void) | null = null, after = -1): void {
-    if (warp >= 0 && !this.a.rooms[warp]) throw new GmlError(`start room ${warp} does not exist`);
+    if (warp >= 0 && !this.a.rooms[warp]) throw new Error(`start room ${warp} does not exist`);
     void this.snd.preload();
     for (const b of this.a.globalInit) this.vm.run(b, this.globalScope, null);
     if (direct && warp >= 0) { init?.(); return this.enterRoom(warp, true); }
@@ -272,7 +272,7 @@ export class Game {
 
   getIV(inst: Instance, id: number, index: Value): Value {
     if (id === IV.alarm) return inst.alarm[this.alarmIndex(index)];
-    if (index !== NOI) throw new GmlError(`built-in variable ${this.ivName(id)} is not an array`);
+    if (index !== NOI) throw new Unverified(`built-in variable ${this.ivName(id)} is not an array`);
     if (id >= IV.bbox_left && id <= IV.bbox_bottom) {
       const k = shape(inst, inst.x, inst.y, this.sa);
       if (!k) return id === IV.bbox_left || id === IV.bbox_right ? inst.x : inst.y;
@@ -284,7 +284,7 @@ export class Game {
 
   setIV(inst: Instance, id: number, v: Value, index: Value): void {
     if (id === IV.alarm) { inst.alarm[this.alarmIndex(index)] = real(v); return; }
-    if (index !== NOI) throw new GmlError(`built-in variable ${this.ivName(id)} is not an array`);
+    if (index !== NOI) throw new Unverified(`built-in variable ${this.ivName(id)} is not an array`);
     if (id === IV.layer) {
       const l = this.layers.get(real(v));
       inst.layer = l.id; inst.depth = l.depth;
@@ -295,16 +295,16 @@ export class Game {
   }
 
   private alarmIndex(index: Value): number {
-    if (index === NOI) throw new GmlError('alarm is an array');
+    if (index === NOI) throw new Unverified('alarm is an array');
     const i = Math.trunc(real(index));
-    if (i < 0 || i > 11) throw new GmlError(`alarm index ${i} out of range`);
+    if (i < 0 || i > 11) throw new Unverified(`alarm index ${i} out of range`);
     return i;
   }
 
   getGV(id: number, index: Value): Value {
     if (index !== NOI) {
       const i = Math.trunc(real(index));
-      if (i < 0 || i > 7) throw new GmlError(`view index ${i} out of range`);
+      if (i < 0 || i > 7) throw new Unverified(`view index ${i} out of range`);
       const v = this.views[i];
       switch (id) {
         case GV.view_camera: return v.camera;
@@ -319,7 +319,7 @@ export class Game {
         case GV.view_wview: return c?.w ?? 0; case GV.view_hview: return c?.h ?? 0;
         case GV.view_angle: return c?.angle ?? 0; case GV.view_object: return c?.target ?? -1;
       }
-      throw new GmlError('built-in global is not an array');
+      throw new Unverified('built-in global is not an array');
     }
     const d = new Date();
     switch (id) {
@@ -369,13 +369,13 @@ export class Game {
       case GV.display_aa: return 0;
       case GV.health: case GV.score: case GV.lives: return this.globalScope.vars.get(this.a.varSlot(`<${id}>`)) ?? 0;
     }
-    throw new GmlError(`global ${id} can't be read`);
+    throw new Unverified(`global ${id} can't be read`);
   }
 
   setGV(id: number, v: Value, index: Value): void {
     if (index !== NOI) {
       const i = Math.trunc(real(index)), view = this.views[i];
-      if (!view) throw new GmlError(`view index ${i} out of range`);
+      if (!view) throw new Unverified(`view index ${i} out of range`);
       switch (id) {
         case GV.view_camera: view.camera = real(v); return;
         case GV.view_visible: view.visible = truthy(v); return;
@@ -389,7 +389,7 @@ export class Game {
         case GV.view_wview: if (c) c.w = real(v); return; case GV.view_hview: if (c) c.h = real(v); return;
         case GV.view_angle: if (c) c.angle = real(v); return; case GV.view_object: if (c) c.target = real(v); return;
       }
-      throw new GmlError('built-in global is not an array');
+      throw new Unverified('built-in global is not an array');
     }
     switch (id) {
       case GV.room: this.goto(real(v)); return;
@@ -405,7 +405,7 @@ export class Game {
       case GV.background_showcolour: case GV.background_showcolor: this.room.showColour = truthy(v); return;
       case GV.health: case GV.score: case GV.lives: this.globalScope.vars.set(this.a.varSlot(`<${id}>`), v); return;
     }
-    throw new GmlError(`global ${id} can't be assigned`);
+    throw new Unverified(`global ${id} can't be assigned`);
   }
 
   private currentKey(): number {
@@ -415,7 +415,7 @@ export class Game {
   }
 
   goto(room: number): void {
-    if (!this.a.rooms[room]) throw new GmlError(`room ${room} does not exist`);
+    if (!this.a.rooms[room]) throw new Unverified(`room ${room} does not exist`);
     this.pendingRoom = room;
   }
 
@@ -464,7 +464,7 @@ export class Game {
   /** event_perform(type, number) with GM's ev_* numbering. Kinds krplayer has no key for fail loudly. */
   performEvent(inst: Instance, type: number, num: number): void {
     const key = gmEventKey(type, num);
-    if (key < 0) throw new GmlError(`event_perform(${type}, ${num}) is not supported yet`);
+    if (key < 0) throw new NotImplemented(`event_perform(${type}, ${num}) is not supported yet`);
     this.run(eventBlocks(inst.obj.ev, key), inst, this.other);
   }
 

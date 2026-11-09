@@ -1,65 +1,76 @@
 // Drawing (drw_*).
 
 import { define, family, n, b, str, opt } from './registry.ts';
-import { GmlError, real, type GArray, type Value } from '../value.ts';
+import { real, NotImplemented, Unverified, type GArray, type Value } from '../value.ts';
 import { Instance } from '../runtime/instance.ts';
 import { ELEM } from '../runtime/layers.ts';
 import type { Game } from '../runtime/game.ts';
+import type { SpriteDef } from '../runtime/assets.ts';
 import {
-  drawSprite, drawSpriteGeneral, drawSpritePart, drawSpriteTiled, drawText, ellipse, line, mix, rect, roundrect, spriteOrThrow, textSize, triangle,
+  drawSprite, drawSpriteGeneral, drawSpritePart, drawSpriteTiled, drawText, ellipse, line, mix, rect, roundrect, textSize, triangle,
 } from '../runtime/draw.ts';
 import { gstr } from './opr.ts';
 
 const D2R = Math.PI / 180;
 
-const spr = (g: Game, v: unknown) => spriteOrThrow(g, real(v as number));
+/** draw_sprite* on a missing sprite draws nothing, like GM (error_audit.md). */
+const spr = (g: Game, v: unknown): SpriteDef | undefined => g.a.sprites[real(v as number)];
 const a = (g: Game) => g.alpha;
 
 define('drw_self', (g) => { if (g.self instanceof Instance) g.drawSelf(g.self); return undefined; });
 define('drw_sprite', (g, s, t) => {
   const sp = spr(g, s[t]), f = n(s, t, 1);
+  if (!sp) return undefined;
   const img = f < 0 && g.self instanceof Instance ? g.self.image_index : f;
   drawSprite(g, sp, img, n(s, t, 2), n(s, t, 3), 1, 1, 0, 0xffffff, a(g));
   return undefined;
 });
 define('drw_sprite_ext', (g, s, t) => {
   const sp = spr(g, s[t]), f = n(s, t, 1);
+  if (!sp) return undefined;
   const img = f < 0 && g.self instanceof Instance ? g.self.image_index : f;
   drawSprite(g, sp, img, n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), n(s, t, 7), n(s, t, 8));
   return undefined;
 });
 define('drw_sprite_stretched', (g, s, t) => {
   const sp = spr(g, s[t]);
+  if (!sp) return undefined;
   drawSpriteGeneral(g, sp, n(s, t, 1), 0, 0, sp.width, sp.height, n(s, t, 2), n(s, t, 3), n(s, t, 4) / sp.width, n(s, t, 5) / sp.height, 0, 0xffffff, 0xffffff, 0xffffff, 0xffffff, a(g));
   return undefined;
 });
 define('drw_sprite_stretched_ext', (g, s, t) => {
   const sp = spr(g, s[t]), c = n(s, t, 6);
+  if (!sp) return undefined;
   drawSpriteGeneral(g, sp, n(s, t, 1), 0, 0, sp.width, sp.height, n(s, t, 2), n(s, t, 3), n(s, t, 4) / sp.width, n(s, t, 5) / sp.height, 0, c, c, c, c, n(s, t, 7));
   return undefined;
 });
 define('drw_sprite_part', (g, s, t) => {
-  drawSpritePart(g, spr(g, s[t]), n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), n(s, t, 7), 1, 1, 0xffffff, a(g));
+  const sp = spr(g, s[t]);
+  if (sp) drawSpritePart(g, sp, n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), n(s, t, 7), 1, 1, 0xffffff, a(g));
   return undefined;
 });
 define('drw_sprite_part_ext', (g, s, t) => {
-  drawSpritePart(g, spr(g, s[t]), n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), n(s, t, 7), n(s, t, 8), n(s, t, 9), n(s, t, 10), n(s, t, 11));
+  const sp = spr(g, s[t]);
+  if (sp) drawSpritePart(g, sp, n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), n(s, t, 7), n(s, t, 8), n(s, t, 9), n(s, t, 10), n(s, t, 11));
   return undefined;
 });
 define('drw_sprite_general', (g, s, t) => {
-  drawSpriteGeneral(g, spr(g, s[t]), n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), n(s, t, 7), n(s, t, 8), n(s, t, 9), n(s, t, 10),
+  const sp = spr(g, s[t]);
+  if (sp) drawSpriteGeneral(g, sp, n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), n(s, t, 7), n(s, t, 8), n(s, t, 9), n(s, t, 10),
     n(s, t, 11), n(s, t, 12), n(s, t, 13), n(s, t, 14), n(s, t, 15));
   return undefined;
 });
 define('drw_sprite_pos', (g, s, t) => {
   const sp = spr(g, s[t]), f = Math.floor(n(s, t, 1));
+  if (!sp) return undefined;
   g.p.renderer.drawQuad(sp.frames[((f % sp.frames.length) + sp.frames.length) % sp.frames.length], 0, 0, sp.width, sp.height,
     n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), n(s, t, 7), n(s, t, 8), n(s, t, 9), 0xffffff, 0xffffff, 0xffffff, 0xffffff, n(s, t, 10));
   return undefined;
 });
-define('drw_sprite_tiled', (g, s, t) => { drawSpriteTiled(g, spr(g, s[t]), n(s, t, 1), n(s, t, 2), n(s, t, 3), 1, 1, 0xffffff, a(g)); return undefined; });
+define('drw_sprite_tiled', (g, s, t) => { const sp = spr(g, s[t]); if (sp) drawSpriteTiled(g, sp, n(s, t, 1), n(s, t, 2), n(s, t, 3), 1, 1, 0xffffff, a(g)); return undefined; });
 define('drw_sprite_tiled_ext', (g, s, t) => {
-  drawSpriteTiled(g, spr(g, s[t]), n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), n(s, t, 7));
+  const sp = spr(g, s[t]);
+  if (sp) drawSpriteTiled(g, sp, n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), n(s, t, 7));
   return undefined;
 });
 /** draw_path: the followed line in the draw colour; relative paths put their first point at (x, y). */
@@ -95,9 +106,8 @@ define('drw_text_transformed_colour', (g, s, t) => {
 });
 define('drw_text_size', (g, s, t) => textSize(g, gstr(g, s[t - 1]))[s[t] === 'width' ? 0 : 1]);
 define('drw_set_font', (g, s, t) => {
-  const f = real(s[t]);
-  if (f !== -1 && !g.a.fonts[f]) throw new GmlError(`font ${f} does not exist`);
-  g.font = f; return undefined;
+  // GM stores any id unchecked (HTML5 draw_set_font); text in a missing font draws in the fallback font.
+  g.font = Math.trunc(real(s[t])); return undefined;
 });
 define('drw_set_colour', (g, s, t) => { g.colour = n(s, t, 0); return undefined; });
 define('drw_set_alpha', (g, s, t) => { g.alpha = n(s, t, 0); return undefined; });
@@ -107,7 +117,7 @@ define('drw_get', (g, s, t) => {
     case 'colour': return g.colour; case 'alpha': return g.alpha; case 'font': return g.font;
     case 'halign': return g.halign; case 'valign': return g.valign;
   }
-  throw new GmlError(`draw_get_${String(s[t])} unknown`);
+  throw new NotImplemented(`draw_get_${String(s[t])} unknown`);
 });
 
 // ---------------------------------------------------------------- shapes
@@ -188,7 +198,7 @@ define('drw_colour_get', (_g, s, t) => {
       return Math.round((((h / 6) % 1) + 1) % 1 * 255);
     }
   }
-  throw new GmlError(`colour_get_${String(s[t])} unknown`);
+  throw new NotImplemented(`colour_get_${String(s[t])} unknown`);
 });
 
 // ---------------------------------------------------------------- GPU state
@@ -197,7 +207,7 @@ define('drw_colour_get', (_g, s, t) => {
 const BLEND: Record<number, [number, number]> = { 0: [5, 6], 1: [5, 2], 2: [5, 4], 3: [1, 4] };
 define('drw_blendmode', (g, s, t) => {
   const m = BLEND[n(s, t, 0)];
-  if (!m) throw new GmlError(`blend mode ${n(s, t, 0)} not supported`);
+  if (!m) throw new NotImplemented(`blend mode ${n(s, t, 0)} not supported`);
   g.p.renderer.setBlend(m[0], m[1], m[0], m[1]);
   return undefined;
 });
@@ -236,7 +246,7 @@ const matMul = (a: number[], b: number[]): GArray => Array.from({ length: 16 }, 
   return a[r * 4] * b[c] + a[r * 4 + 1] * b[4 + c] + a[r * 4 + 2] * b[8 + c] + a[r * 4 + 3] * b[12 + c];
 });
 const matrix = (v: Value, fn: string): number[] => {
-  if (!Array.isArray(v) || v.length < 16) throw new GmlError(`${fn}: not a matrix`);
+  if (!Array.isArray(v) || v.length < 16) throw new Unverified(`${fn}: not a matrix`);
   return v.slice(0, 16).map((x) => real(x));
 };
 family('drw_matrix', 'matrix_', {
@@ -256,8 +266,8 @@ family('drw_matrix', 'matrix_', {
   get: (g, s, t) => [...(g.matrices[n(s, t, 0)] ?? IDENTITY)] as GArray,
   set: (g, s, t) => {
     const which = n(s, t, 0), m = matrix(s[t - 1], 'matrix_set');
-    if (!g.matrices[which]) throw new GmlError(`matrix_set: unknown matrix type ${which}`);
-    if (m.some((x, k) => x !== IDENTITY[k])) throw new GmlError('matrix_set: krplayer draws in 2D and does not support transform matrices yet');
+    if (!g.matrices[which]) throw new Unverified(`matrix_set: unknown matrix type ${which}`);
+    if (m.some((x, k) => x !== IDENTITY[k])) throw new NotImplemented('matrix_set: krplayer draws in 2D and does not support transform matrices yet');
     g.matrices[which] = m;
     return undefined;
   },
@@ -302,7 +312,7 @@ define('drw_surface_texture', (g, s, t) => g.surface(s[t]).tex);
 let prim = new Float64Array(6 * 1024), primN = 0, primKind = -1, primTex = -1;
 const begin = (kind: number, tex: number) => { primKind = kind; primTex = tex; primN = 0; return undefined; };
 function vertex(x: number, y: number, u: number, v: number, c: number, al: number) {
-  if (primKind < 0) throw new GmlError('draw_vertex outside draw_primitive_begin/end');
+  if (primKind < 0) throw new Unverified('draw_vertex outside draw_primitive_begin/end');
   if ((primN + 1) * 6 > prim.length) { const p = new Float64Array(prim.length * 2); p.set(prim); prim = p; }
   const o = primN++ * 6;
   prim[o] = x; prim[o + 1] = y; prim[o + 2] = u; prim[o + 3] = v; prim[o + 4] = c; prim[o + 5] = al;
@@ -330,7 +340,7 @@ define('drw_primitive_end', (g) => {
     case 4: for (let i = 2; i < primN; i += 3) tri(i - 2, i - 1, i); break;
     case 5: for (let i = 2; i < primN; i++) tri(i - 2, i - 1, i); break;
     case 6: for (let i = 2; i < primN; i++) tri(0, i - 1, i); break;
-    default: throw new GmlError(`draw_primitive_begin: unknown primitive kind ${kind}`);
+    default: throw new Unverified(`draw_primitive_begin: unknown primitive kind ${kind}`);
   }
   return undefined;
 });
@@ -339,8 +349,8 @@ define('drw_primitive_end', (g) => {
 
 const shader = (g: Game, v: Value, fn: string) => {
   const sh = g.a.shaders[real(v)];
-  if (!sh) throw new GmlError(`${fn}: shader ${String(v)} does not exist`);
-  if (sh.handle < 0) throw new GmlError(`${fn}: shader ${sh.name} did not compile`);
+  if (!sh) throw new Unverified(`${fn}: shader ${String(v)} does not exist`);
+  if (sh.handle < 0) throw new NotImplemented(`${fn}: shader ${sh.name} did not compile`);
   return sh.handle;
 };
 define('drw_shader_set', (g, s, t) => { g.p.renderer.setShader(shader(g, s[t], 'shader_set')); return undefined; });
@@ -354,7 +364,7 @@ define('drw_shader_uniform_f', (g, s, t, argc) => {
 });
 define('drw_tilemap', (g, s, t) => {
   const e = g.layers.element(n(s, t, 0));
-  if (!e || e.kind !== ELEM.tilemap) throw new GmlError(`draw_tilemap: tilemap ${String(s[t])} does not exist`);
+  if (!e || e.kind !== ELEM.tilemap) throw new Unverified(`draw_tilemap: tilemap ${String(s[t])} does not exist`);
   g.drawTilemap(e, n(s, t, 1), n(s, t, 2));
   return undefined;
 });

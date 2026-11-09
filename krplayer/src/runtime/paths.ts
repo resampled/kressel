@@ -2,7 +2,7 @@
 // Positions are 0..1 along the path's length. See gm_gotchas.md for what's observed vs assumed.
 
 import type { Path } from '../krpj.ts';
-import { GmlError } from '../value.ts';
+import { Unverified } from '../value.ts';
 import type { Instance } from './instance.ts';
 
 export class PathDef {
@@ -88,7 +88,7 @@ export class Paths {
 
   get(id: number, fn: string): PathDef {
     const p = this.list[Math.trunc(id)];
-    if (!p) throw new GmlError(`${fn}: path ${id} does not exist`);
+    if (!p) throw new Unverified(`${fn}: path ${id} does not exist`);
     return p;
   }
   exists(id: number): boolean { return !!this.list[Math.trunc(id)]; }

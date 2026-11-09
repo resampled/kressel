@@ -1,7 +1,7 @@
 // Instances (ins_*) and movement (mov_*).
 
 import { define, family, n, b } from './registry.ts';
-import { GmlError, GmStruct, real, type Value } from '../value.ts';
+import { GmStruct, real, Unverified, type Value } from '../value.ts';
 import { EV } from '../runtime/assets.ts';
 import type { Game } from '../runtime/game.ts';
 import { Instance } from '../runtime/instance.ts';
@@ -75,8 +75,8 @@ define('ins_set_active_object', (g, s, t) => {
 define('ins_event_inherited', (g) => { g.inherited(); return undefined; });
 define('ins_event_user', (g, s, t) => {
   const k = Math.trunc(n(s, t, 0));
-  if (k < 0 || k > 15) throw new GmlError(`event_user(${k}): user events are 0-15`);
-  if (g.self instanceof Instance) g.userEvent(g.self, k);
+  // Outside 0-15 GM does nothing (HTML5 event_user; error_audit.md).
+  if (k >= 0 && k <= 15 && g.self instanceof Instance) g.userEvent(g.self, k);
   return undefined;
 });
 define('ins_event_perform', (g, s, t) => { if (g.self instanceof Instance) g.performEvent(g.self, Math.trunc(n(s, t, 0)), Math.trunc(n(s, t, 1))); return undefined; });
@@ -88,7 +88,7 @@ define('ins_is_ancestor', (g, s, t) => { const c = g.object(s[t]); return c.isA.
 
 const D2R = Math.PI / 180;
 export const self = (g: Game): Instance => {
-  if (!(g.self instanceof Instance)) throw new GmlError('this function needs an instance (self is a struct)');
+  if (!(g.self instanceof Instance)) throw new Unverified('this function needs an instance (self is a struct)');
   return g.self;
 };
 
@@ -127,34 +127,36 @@ define('mov_wrap', (g, s, t) => {
 });
 define('mov_path_start', (g, s, t) => { g.paths.start(self(g), n(s, t, 0), n(s, t, 1), n(s, t, 2), b(s, t, 3)); return undefined; });
 define('mov_path_end', (g) => { self(g).path = -1; return undefined; });
-const path = (g: Game, s: Value[], t: number, fn: string) => g.paths.get(n(s, t, 0), `path_${fn}`);
+/*
+ * GM never errors on a missing path (or point): edits do nothing and getters give the HTML5 runner's defaults
+ * (error_audit.md).
+ */
+const path = (g: Game, s: Value[], t: number): PathDef | undefined => (g.paths.exists(n(s, t, 0)) ? g.paths.get(n(s, t, 0), 'path') : undefined);
 /** Edits a path's control points or settings; its followed line is rebuilt on next use. */
-const edit = (fn: string, f: (p: PathDef, s: Value[], t: number) => void) => (g: Game, s: Value[], t: number) => { const p = path(g, s, t, fn); f(p, s, t); p.changed(); return undefined; };
-const point = (s: Value[], t: number, fn: string, p: PathDef) => {
-  const k = Math.trunc(n(s, t, 1));
-  if (k < 0 || k >= p.count) throw new GmlError(`path_${fn}: point ${k} out of range`);
-  return k * 3;
-};
+const edit = (f: (p: PathDef, s: Value[], t: number) => void) => (g: Game, s: Value[], t: number) => { const p = path(g, s, t); if (p) { f(p, s, t); p.changed(); } return undefined; };
+const get = (dflt: Value, f: (p: PathDef, s: Value[], t: number) => Value) => (g: Game, s: Value[], t: number) => { const p = path(g, s, t); return p ? f(p, s, t) : dflt; };
+/** A control point's x/y/speed (axis 0-2), or 0 out of range. */
+const point = (axis: number) => get(0, (p, s, t) => { const k = Math.trunc(n(s, t, 1)); return k >= 0 && k < p.count ? p.pts[k * 3 + axis] : 0; });
 family('mov_path', 'path_', {
   add: (g) => g.paths.add(),
   delete: (g, s, t) => { g.paths.delete(n(s, t, 0)); return undefined; },
   exists: (g, s, t) => g.paths.exists(n(s, t, 0)),
-  add_point: edit('add_point', (p, s, t) => { p.pts.push(n(s, t, 1), n(s, t, 2), n(s, t, 3)); }),
-  clear_points: edit('clear_points', (p) => { p.pts.length = 0; }),
-  set_closed: edit('set_closed', (p, s, t) => { p.closed = b(s, t, 1); }),
-  set_kind: edit('set_kind', (p, s, t) => { p.smooth = n(s, t, 1) === 1; }),
-  set_precision: edit('set_precision', (p, s, t) => { p.precision = Math.max(1, Math.min(8, Math.trunc(n(s, t, 1)))); }),
-  get_x: (g, s, t) => path(g, s, t, 'get_x').at(n(s, t, 1), 0),
-  get_y: (g, s, t) => path(g, s, t, 'get_y').at(n(s, t, 1), 1),
-  get_speed: (g, s, t) => path(g, s, t, 'get_speed').at(n(s, t, 1), 2),
-  get_length: (g, s, t) => path(g, s, t, 'get_length').length(),
-  get_number: (g, s, t) => path(g, s, t, 'get_number').count,
-  get_closed: (g, s, t) => path(g, s, t, 'get_closed').closed,
-  get_kind: (g, s, t) => (path(g, s, t, 'get_kind').smooth ? 1 : 0),
-  get_precision: (g, s, t) => path(g, s, t, 'get_precision').precision,
-  get_point_x: (g, s, t) => { const p = path(g, s, t, 'get_point_x'); return p.pts[point(s, t, 'get_point_x', p)]; },
-  get_point_y: (g, s, t) => { const p = path(g, s, t, 'get_point_y'); return p.pts[point(s, t, 'get_point_y', p) + 1]; },
-  get_point_speed: (g, s, t) => { const p = path(g, s, t, 'get_point_speed'); return p.pts[point(s, t, 'get_point_speed', p) + 2]; },
+  add_point: edit((p, s, t) => { p.pts.push(n(s, t, 1), n(s, t, 2), n(s, t, 3)); }),
+  clear_points: edit((p) => { p.pts.length = 0; }),
+  set_closed: edit((p, s, t) => { p.closed = b(s, t, 1); }),
+  set_kind: edit((p, s, t) => { p.smooth = n(s, t, 1) === 1; }),
+  set_precision: edit((p, s, t) => { p.precision = Math.max(1, Math.min(8, Math.trunc(n(s, t, 1)))); }),
+  get_x: get(-1, (p, s, t) => p.at(n(s, t, 1), 0)),
+  get_y: get(-1, (p, s, t) => p.at(n(s, t, 1), 1)),
+  get_speed: get(-1, (p, s, t) => p.at(n(s, t, 1), 2)),
+  get_length: get(0, (p) => p.length()),
+  get_number: get(0, (p) => p.count),
+  get_closed: get(true, (p) => p.closed),
+  get_kind: get(0, (p) => (p.smooth ? 1 : 0)),
+  get_precision: get(8, (p) => p.precision),
+  get_point_x: point(0),
+  get_point_y: point(1),
+  get_point_speed: point(2),
 });
 /** instance_id_get(n): the nth active instance, in instance order (GM's instance_id[n]). */
 define('ins_id_get', (g, s, t) => {
