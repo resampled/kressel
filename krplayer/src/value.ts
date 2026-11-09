@@ -85,6 +85,11 @@ export function equals(a: Value, b: Value): boolean {
 /** a < b (-1), a == b (0), a > b (1). Reals use the epsilon; strings compare by code unit. */
 export function compare(a: Value, b: Value): number {
   if (typeof a === 'string' && typeof b === 'string') return a < b ? -1 : a > b ? 1 : 0;
+  // undefined against a real/bool is unordered: NaN makes < <= > >= all false, no error (DR ch2 scr_monsterattackidcount).
+  if (a === undefined || b === undefined) {
+    if (a === b) return 0;
+    if (typeof a !== 'string' && typeof b !== 'string' && !Array.isArray(a) && !Array.isArray(b)) return NaN;
+  }
   // A string against a real is read as a number (c_wait("5") in DR ch2); a non-numeric one is an error.
   const x = typeof a === 'string' ? cmpStr(a) : real(a), y = typeof b === 'string' ? cmpStr(b) : real(b);
   if (Number.isNaN(x) || Number.isNaN(y)) {

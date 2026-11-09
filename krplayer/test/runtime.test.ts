@@ -46,6 +46,17 @@ test('a numeric string compares with a real as a number (DR ch2 c_wait("5"))', a
   assert.deepEqual([v.gt, v.gte], [true, false]);
 });
 
+test('undefined orders against a real as unordered: < <= > >= all false (DR ch2 scr_monsterattackidcount)', async () => {
+  const c = compare(undefined, 0), d = compare(1, undefined);
+  assert.deepEqual([c < 0, c <= 0, c > 0, c >= 0, d < 0, d > 0, compare(undefined, undefined)], [false, false, false, false, false, false, 0]);
+  const v = await exec([
+    ['var_set', ['_lv', 'u'], ['_lv', 'undefined']],
+    ['var_set', ['_lv', 'gt'], ['opr_or', ['opr_gt', 0, 1], ['opr_gt', ['_lv', 'u'], 0]]],
+    ['var_set', ['_lv', 'lte'], ['opr_lte', ['_lv', 'u'], 0]],
+  ]);
+  assert.deepEqual([v.gt, v.lte], [false, false]);
+});
+
 test('md5 and buffer_md5 (DR ch2 obj_shapepuzzle)', async () => {
   const enc = (x: string) => new TextEncoder().encode(x);
   assert.equal(md5(enc('')), 'd41d8cd98f00b204e9800998ecf8427e');
