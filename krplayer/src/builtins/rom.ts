@@ -36,19 +36,23 @@ define('rom_set', (g, s, t) => {
 // ---------------------------------------------------------------- layers
 
 const layer = (g: Game, v: Value) => g.layers.get(typeof v === 'string' ? v : real(v));
+/** Setters on a missing layer do nothing, as GM: Ch2 obj_controller_tasquePaintingsRevisit hides a "reference" layer its room lacks (gm_gotchas.md). */
+const setLayer = (g: Game, v: Value) => g.layers.find(typeof v === 'string' ? v : real(v));
 define('rom_layer_id', (g, s, t) => g.layers.find(str(s, t, 0))?.id ?? -1);
-define('rom_layer_exists', (g, s, t) => !!g.layers.find(typeof s[t] === 'string' ? s[t] as string : real(s[t])));
-define('rom_layer_set_visible', (g, s, t) => { layer(g, s[t]).visible = b(s, t, 1); return undefined; });
+define('rom_layer_exists', (g, s, t) => !!setLayer(g, s[t]));
+define('rom_layer_set_visible', (g, s, t) => { const l = setLayer(g, s[t]); if (l) l.visible = b(s, t, 1); return undefined; });
 define('rom_layer_get_visible', (g, s, t) => layer(g, s[t]).visible);
 define('rom_layer_depth', (g, s, t) => {
-  const l = layer(g, s[t]);
+  const l = setLayer(g, s[t]);
+  if (!l) return undefined;
   l.depth = n(s, t, 1); g.layers.version++;
   for (const i of g.instances) if (i.layer === l.id) i.depth = l.depth;
   return undefined;
 });
 define('rom_layer_get_depth', (g, s, t) => layer(g, s[t]).depth);
 define('rom_layer_set', (g, s, t) => {
-  const l = layer(g, s[t - 1]), v = n(s, t, 2);
+  const l = setLayer(g, s[t - 1]), v = n(s, t, 2);
+  if (!l) return undefined;
   switch (s[t]) { case 'x': l.x = v; break; case 'y': l.y = v; break; case 'hspeed': l.hspeed = v; break; case 'vspeed': l.vspeed = v; break; }
   return undefined;
 });
@@ -191,7 +195,8 @@ define('rom_layer_at_depth', (g, s, t) => {
   return out.length ? out : [-1];
 });
 define('rom_layer_script', (g, s, t) => {
-  const l = layer(g, s[t - 1]), f = s[t - 2], none = typeof f === 'number' && f < 0;
+  const l = setLayer(g, s[t - 1]), f = s[t - 2], none = typeof f === 'number' && f < 0;
+  if (!l) return undefined;
   if (l.instances && !none) throw new NotImplemented('layer_script_begin/end on instance layers is not implemented in krplayer yet');
   if (s[t] === 'begin') l.scriptBegin = none ? null : f; else l.scriptEnd = none ? null : f;
   return undefined;

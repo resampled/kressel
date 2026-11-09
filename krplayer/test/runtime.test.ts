@@ -61,6 +61,18 @@ test('md5 and buffer_md5 (DR ch2 obj_shapepuzzle)', async () => {
   assert.deepEqual([v.all, v.abc, v.tail], [md5(enc('abcd')), '900150983cd24fb0d6963f7d28e17f72', md5(enc('cd'))]);
 });
 
+test('layer setters ignore a missing layer, getters still fail (DR ch2 obj_controller_tasquePaintingsRevisit)', async () => {
+  const v = await exec([
+    ['rom_layer_set_visible', 'reference', 0],
+    ['rom_layer_depth', 'reference', 5],
+    ['rom_layer_set', 'x', 'reference', 3],
+    ['rom_layer_set_visible', 'I', 0],
+    ['var_set', ['_lv', 'vis'], ['rom_layer_get_visible', 'I']],
+  ]);
+  assert.equal(v.vis, false);
+  await assert.rejects(exec([['var_set', ['_lv', 'x'], ['rom_layer_get_visible', 'reference']]]), /layer "reference" does not exist/);
+});
+
 test('real division by zero gives inf / NaN instead of failing (ch1_ribbit_mod obj_crackintro)', async () => {
   const v = await exec([
     ['var_set', ['_lv', 'z'], 0],
