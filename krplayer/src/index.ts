@@ -82,7 +82,7 @@ async function run(source: ProjectSource, ui: Shell): Promise<void> {
     ui.canvas.style.height = `${Math.floor(ui.canvas.height * s)}px`;
   };
   new ResizeObserver(fit).observe(ui.root); // .kr-root's size is set by the page, not just the window
-  const fail = (e: unknown) => { ui.say(`Game error:
+  const fail = (e: unknown) => { ui.say(`krplayer FATAL CRASH:
 ${(e as Error).message}`, true); console.error(e); };
   try {
     const q = params(), debug = q.has('debug');
