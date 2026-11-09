@@ -71,7 +71,7 @@ ID,Section,Category,Applies to,Status,Included In…,Notes,Build progress
 7.05,"Files, saves & storage","get_open_filename, get_save_filename",Both,Partial,Later,"Browser file pickers, with a user gesture.",Not started
 7.06,"Files, saves & storage",Absolute or host file system access,Both,Unsupported,None,,Not started
 7.07,"Files, saves & storage","game_save, game_load",Both,Partial,Later,Snapshot serialisation. Low priority.,Not started
-7.08,"Files, saves & storage",Buffers (buffer_*),Both,Supported,Early,ArrayBuffer-backed.,"Started: buffer_create/read/write/peek/seek/load/save, buffer_get_surface and async save/load (Save/Load async event)"
+7.08,"Files, saves & storage",Buffers (buffer_*),Both,Supported,Early,ArrayBuffer-backed.,"Started: buffer_create/read/write/peek/seek/load/save/md5, buffer_get_surface and async save/load (Save/Load async event)"
 7.09,"Files, saves & storage",buffer_get_address and raw pointers,Both,Unsupported,None,No raw memory access in a JS sandbox.,Not started
 7.1,"Files, saves & storage","Zip and compression (zip_*, buffer_compress)",Both,Partial,Later,,Not started
 8.01,Networking & platform,"http_get, http_request",Both,Unsupported,None,DECISION: fully blocked. No proxy or allowlist. Player's own CDN asset loading is separate and not project-controlled.,Not started

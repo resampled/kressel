@@ -4,6 +4,7 @@ import { define, family, n, str, opt } from './registry.ts';
 import { compare, equals, GmlError, NotImplemented, GmStruct, real, type GArray, type Value } from '../value.ts';
 import { Buffer, DS, DsList, DsMap, Ini, iniReal, listRead, listWrite, readLn, readReal, readString } from '../runtime/data.ts';
 import type { Game } from '../runtime/game.ts';
+import { md5 } from '../runtime/md5.ts';
 import { gstr } from './opr.ts';
 
 const list = (g: Game, v: Value) => g.data.lists.get(v, 'ds_list');
@@ -239,6 +240,11 @@ family('dat_buffer', 'buffer_', {
   seek: (g, s, t) => { const bf = buf(g, s[t]), base = n(s, t, 1); bf.pos = Math.max(0, (base === 0 ? 0 : base === 1 ? bf.pos : bf.data.length) + n(s, t, 2)); return undefined; },
   tell: (g, s, t) => buf(g, s[t]).pos,
   get_size: (g, s, t) => buf(g, s[t]).data.length,
+  /** (buffer, offset, size): hex MD5 of the range, clamped to the buffer; a negative size means to the end. */
+  md5: (g, s, t) => {
+    const d = buf(g, s[t]).data, off = Math.min(d.length, Math.max(0, Math.trunc(n(s, t, 1)))), size = Math.trunc(n(s, t, 2));
+    return md5(d.subarray(off, size < 0 ? d.length : Math.min(d.length, off + size)));
+  },
   load: (g, s, t) => { const d = g.files.readBytes(str(s, t, 0)); return d ? g.data.buffers.add(Buffer.from(d)) : -1; },
   save: (g, s, t) => { g.files.writeBytes(str(s, t, 1), buf(g, s[t]).data); return undefined; },
   // Async saves/loads complete straight away; the Save/Load async event fires at the start of the next step.

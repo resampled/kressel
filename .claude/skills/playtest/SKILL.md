@@ -22,7 +22,8 @@ current converter. `samples/*.krpj*` files may be stale or in an old layout. Pre
 - `--set <name=v,...>` / `--call <fn(args),...>`: with `--room`, set globals / call functions before the warp room (same as the player's `?set=` / `?call=`).
 - `--shared <dir>`: local folder for `/sa/` shared assets.
 - `--render-all`: rasterize every frame. By default only the last frame of each run is drawn (~250 ms/frame
-  at 1000x1000 otherwise). Use it if a game accumulates drawing on a persistent surface.
+  at 1000x1000 otherwise). Use it if a game accumulates drawing on a persistent surface, or reads pixels back
+  (`buffer_get_surface`, `surface_getpixel`): skipped frames read back zeros (e.g. Ch2 darkbulb `obj_shapepuzzle`'s md5 goal).
 
 ## Commands
 | command | effect |

@@ -6,6 +6,7 @@ import { load, partition, prepare } from '../src/play.ts';
 import { compare, equals, str, add } from '../src/value.ts';
 import { follow } from '../src/runtime/game.ts';
 import { warpSetup } from '../src/runtime/debug.ts';
+import { md5 } from '../src/runtime/md5.ts';
 
 function project(objects: Krpj['objects'], instances: { object: string; x: number; y: number }[]): Krpj {
   return {
@@ -43,6 +44,21 @@ test('a numeric string compares with a real as a number (DR ch2 c_wait("5"))', a
     ['var_set', ['_lv', 'gte'], ['opr_gte', 4, ['_lv', 'amt']]],
   ]);
   assert.deepEqual([v.gt, v.gte], [true, false]);
+});
+
+test('md5 and buffer_md5 (DR ch2 obj_shapepuzzle)', async () => {
+  const enc = (x: string) => new TextEncoder().encode(x);
+  assert.equal(md5(enc('')), 'd41d8cd98f00b204e9800998ecf8427e');
+  assert.equal(md5(enc('a'.repeat(56))), '3b0c8ac703f828b04c6c197006d17218'); // padding spills into a second block
+  assert.equal(md5(enc('The quick brown fox jumps over the lazy dog')), '9e107d9d372bb6826bd81d3542a419d6');
+  const v = await exec([
+    ['var_set', ['_lv', 'b'], ['dat_buffer', 'create', 4, 0, 1]],
+    ...[97, 98, 99, 100].map((c) => ['dat_buffer', 'write', ['_lv', 'b'], 1, c]),
+    ['var_set', ['_lv', 'all'], ['dat_buffer', 'md5', ['_lv', 'b'], 0, -1]],
+    ['var_set', ['_lv', 'abc'], ['dat_buffer', 'md5', ['_lv', 'b'], 0, 3]],
+    ['var_set', ['_lv', 'tail'], ['dat_buffer', 'md5', ['_lv', 'b'], 2, 100]],
+  ]);
+  assert.deepEqual([v.all, v.abc, v.tail], [md5(enc('abcd')), '900150983cd24fb0d6963f7d28e17f72', md5(enc('cd'))]);
 });
 
 test('real division by zero gives inf / NaN instead of failing (ch1_ribbit_mod obj_crackintro)', async () => {
