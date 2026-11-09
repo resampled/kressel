@@ -50,4 +50,23 @@ Pressed/released latches clear after each step, as in GM.
 5. Report what you did, what you saw (screenshot paths) and anything that differs from the GML's intent.
    Quirks confirmed against real GameMaker go in `docs/gm_gotchas.md`.
 
+## Deltarune samples: light/dark world state for warps
+Both chapters' init runs `scr_gamestart`, which leaves you in the light world at the very start: `darkzone=0`,
+`plot=0`, `char=[1,0,0]` (Kris alone). A `--room` warp doesn't change these, so a dark room shows light-world Kris
+(small sprites, no party, light text boxes/typer). Set the state the room expects:
+
+| what | globals |
+|---|---|
+| world | `darkzone=1` dark (2x sprites, dark dialogue box, follower offsets) / `darkzone=0` light. `scr_become_dark`/`scr_become_light` also convert HP/items, but setting the flag is enough for rooms |
+| party | `char[0]=1` Kris (always), `char[1]`, `char[2]`: 2 Susie, 3 Ralsei, 4 Noelle (Ch2), 0 empty. Followers spawn as `obj_caterpillarchara` |
+| story | `plot`: rooms/NPCs/cutscenes gate on it (`plot < N` triggers an event, `>= N` removes it). Pick one at or after the room's cutscene |
+
+- **Ch1** (`samples/chapter1_windows`, no `--after` needed): light world = defaults (`plot` 0–10 before the closet).
+  Dark world: `--set darkzone=1,plot=40,char[1]=2,char[2]=3` (e.g. `room_field3`; verified).
+- **Ch2** (`samples/chapter2_windows`, always `--after ROOM_INITIALIZE`): light world = defaults.
+  Dark world: `--set darkzone=1,plot=60,char[1]=2,char[2]=3` (Cyber World, e.g. `room_dw_cyber_savepoint`; verified).
+  Plot milestones from the cutscene code (unverified): Castle Town ~10–15, Cyber field entry 50–51,
+  City with Noelle 70–99 (`char[1]=4,char[2]=0`), mansion 120–160, ending/back to light world 200+.
+- Check with `var global.darkzone` / `var global.char` / `state` (count `obj_caterpillarchara`) before trusting a screenshot.
+
 Not covered: WebGL renderer, real audio, timing/feel. For those, run `pnpm dev:player` and use the browser.
