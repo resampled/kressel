@@ -15,6 +15,8 @@ export class SoftRenderer implements Renderer {
   /** world -> target: x' = a x + c y + e, y' = b x + d y + f */
   private m = [1, 0, 0, 1, 0, 0];
   private src = 5; private dst = 6; private fog = false; private fogCol = 0;
+  /** Alpha test reference (0-255), or -1 when off. */
+  private at = -1;
   /** Skip all rasterization (fast runs); draw calls are still counted. */
   enabled = true;
   draws = 0;
@@ -61,6 +63,7 @@ export class SoftRenderer implements Renderer {
   }
   setBlend(src: number, dst: number): void { this.src = src; this.dst = dst; }
   setFog(on: boolean, color: number): void { this.fog = on; this.fogCol = color; }
+  setAlphaTest(on: boolean, ref: number): void { this.at = on ? ref : -1; }
   setColorWrite(): void {}
   setFilter(): void {}
   systemText(): void {}
@@ -92,7 +95,7 @@ export class SoftRenderer implements Renderer {
       const tx = Math.floor(sx + u * sw), ty = Math.floor(sy + v * sh);
       if (tx < 0 || ty < 0 || tx >= img.w || ty >= img.h) continue;
       const k = (ty * img.w + tx) * 4, a = (img.data[k + 3] / 255) * alpha;
-      if (a <= 0) continue;
+      if (a <= 0 || a * 255 <= this.at) continue;
       if (this.fog) this.blend(px, py, (this.fogCol & 255) / 255, ((this.fogCol >> 8) & 255) / 255, ((this.fogCol >> 16) & 255) / 255, a);
       else this.blend(px, py, (img.data[k] / 255) * tr, (img.data[k + 1] / 255) * tg, (img.data[k + 2] / 255) * tb, a);
     }
@@ -146,6 +149,7 @@ export class SoftRenderer implements Renderer {
         tr = img.data[k] / 255; tg = img.data[k + 1] / 255; tb = img.data[k + 2] / 255; ta = img.data[k + 3] / 255;
         if (ta <= 0) continue;
       }
+      if (alpha * ta * 255 <= this.at) continue;
       const f = this.fog;
       this.blend(px, py, f ? ch(this.fogCol, 0) : tr * (l1 * ch(c1, 0) + l2 * ch(c2, 0) + l3 * ch(c3, 0)),
         f ? ch(this.fogCol, 8) : tg * (l1 * ch(c1, 8) + l2 * ch(c2, 8) + l3 * ch(c3, 8)), f ? ch(this.fogCol, 16) : tb * (l1 * ch(c1, 16) + l2 * ch(c2, 16) + l3 * ch(c3, 16)), alpha * ta);

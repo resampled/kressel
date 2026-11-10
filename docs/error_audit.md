@@ -54,6 +54,7 @@ These threw in krplayer while the HTML5 runner carries on. All now match the HTM
 * `builtins/var.ts`: array/struct/instance argument checks, `array_create` size, `method` on a non-function.
 * `builtins/lks.ts`: `background_replace` on a missing background, `sprite_collision_mask` kind.
 * `builtins/ins.ts`: instance-only functions called from a struct, path point out of range.
+* `builtins/drw.ts` `vertex_*`: a missing vertex buffer or format, writes outside `vertex_begin`/`vertex_end`. `builtins/dat.ts` `file_bin_*` on a handle that isn't open.
 * `builtins/opr.ts` `string_join_ext` with a non-array, `builtins/rom.ts` `room_set_*` on a missing room, `builtins/dat.ts` `buffer_get_surface` size, `runtime/data.ts` `ds_list_read` bad data, buffer overflow.
 
 ## Confirmed (GmlError)

@@ -71,3 +71,16 @@ void main() { vec4 c; for (float i = u_Uvs.y; i < u_Uvs.w; i += 0.1) c = texture
   const v3 = '#version 300 es\nvoid main() {}';
   assert.equal(glslTo300(v3, true), v3);
 });
+
+test('soft renderer alpha test: pixels at or below the reference are not drawn (gpu_set_alphatestenable)', async () => {
+  const { SoftRenderer } = await import('../src/platform/soft.ts');
+  // A 2x1 texture: opaque red, then red at alpha 100.
+  const r = new SoftRenderer(async () => ({ w: 2, h: 1, data: new Uint8ClampedArray([255, 0, 0, 255, 255, 0, 0, 100]) }), 2, 1);
+  const tex = await r.loadTexture('t.png'), red = () => [r.window().data[0], r.window().data[4]];
+  r.setAlphaTest(true, 128);
+  r.drawImage(tex, 0, 0, 2, 1, 0, 0, 0, 0, 1, 1, 0, 0xffffff, 1);
+  assert.deepEqual(red(), [255, 0]);
+  r.setAlphaTest(false, 128);
+  r.drawImage(tex, 0, 0, 2, 1, 0, 0, 0, 0, 1, 1, 0, 0xffffff, 1);
+  assert.deepEqual(red(), [255, 100]);
+});

@@ -137,5 +137,16 @@ GEN8 says 2.0.0.0 and there is no SEQN/FEAT/TGIN chunk. `fmt.gms23` is false.
 * krplayer reports `os_type` = `os_windows`, so games take their PC code paths.
 * `ds_list_write` / `ds_map_find_first` order use krplayer's own formats/insertion order, not GM's hash order.
 * Pre-2.3 arrays alias 1D and 2D access (`a[j]` is `a[0, j]`), but imports read `a[i, j]` as `a[i][j]`, so code that mixes the two forms on one array diverges.
-* `matrix_set` only accepts the identity matrix and `vertex_submit` isn't implemented. Both fail loudly (ch1_ribbit_mod's `obj_boingball` easter egg uses them).
+* `matrix_set` only accepts the identity matrix and fails loudly otherwise (ch1_ribbit_mod's `obj_boingball` easter egg uses it). `vertex_submit` draws in 2D: positions' z, normals and custom attributes are dropped.
+* **Alpha test matters with `bm_dest_alpha` masks.** Ch2's `obj_mansion_vase` (and `scr_draw_in_mask_begin`) writes alpha into a region with `gpu_set_colorwriteenable`, then draws with `gpu_set_blendmode_ext(bm_dest_alpha, bm_inv_dest_alpha)` under `gpu_set_alphatestenable(true)`. Without the test, the sprite's fully transparent pixels (alpha 0, not above the default ref 0) replace the background wherever destination alpha is 1. Repro: Ch2 `room_dw_mansion_dining_a`, the vases on the wall. GM's GLSL ES shaders do the test themselves (`gm_AlphaTestEnabled` / `gm_AlphaRefValue` in `DoAlphaTest`), so krplayer sets those uniforms too.
+
+## Assumed from GM's HTML5 runner (not yet checked against the VM)
+* **`instance_change(obj, perf)`** runs destroy then clean up, switches the object (taking its sprite, mask, solid, visible and persistent, but not its depth), then runs pre-create and create. The rest of the calling event still runs. A missing object is logged and ignored.
+* **`instance_copy`** copies every variable and built-in (alarms too) under a new id; pre-create and create only run when asked.
+* **`move_bounce_*` first steps back to `xprevious`/`yprevious`** if the instance is already colliding. The simple bounce tests `x + hspeed`, `y + vspeed` and both, and reverses both speeds when only the diagonal is blocked. The advanced one rounds the direction to 10 degrees and sweeps 10 degree steps each way for the free arc.
+* **`move_contact_*` does nothing if the instance already collides**; `move_outside_*` stays wherever it got to if it never gets free. Both step one pixel at a time, 1000 steps when `maxdist` <= 0.
+* **`mp_linear_step` returns true when the goal is within one step even if the step was blocked.** `mp_potential_step` turns the instance 30 degrees on the spot when no direction works.
+* **Positional audio has no falloff by default** (`audio_falloff_none`): `audio_play_sound_at` only pans until the game calls `audio_falloff_set_model`. New emitters have falloff ref 100, max 100000, factor 1.
+* `instance_place_list`'s `ordered` sorts by the distance from the tested point to each instance's `x`/`y`, not to its mask.
+* `file_find_*` and `file_bin_*` aren't in the HTML5 runner; krplayer follows the manual. File names come back lower-case, and `file_bin_read_byte` past the end gives 0.
 * `screen_save` fails when called. `sprite_add`/`font_add` removeback/smooth aren't supported, and precise `sprite_collision_mask` only works on `sprite_add` sprites.

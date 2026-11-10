@@ -41,6 +41,8 @@ export interface Renderer {
   /** Fog replaces the colour of everything drawn (alpha kept), as Deltarune uses it for flashes. */
   setFog(on: boolean, color: number): void;
   setColorWrite(r: boolean, g: boolean, b: boolean, a: boolean): void;
+  /** Alpha test (gpu_set_alphatestenable / alphatestref): while on, pixels whose alpha is not above ref (0-255) aren't drawn. */
+  setAlphaTest(on: boolean, ref: number): void;
   /** Linear texture filtering on/off (gpu_set_texfilter). */
   setFilter(on: boolean): void;
   /** Draws [sx, sy, sw, sh] of tex with its (ox, oy) pixel at (x, y), scaled, then rotated (degrees, counter-clockwise). */
@@ -94,6 +96,13 @@ export interface Audio {
   position(voice: VoiceId): number;
   seek(voice: VoiceId, seconds: number): void;
   setMasterGain(gain: number): void;
+  /**
+   * Makes a voice positional (audio_play_sound_at / _on) or moves it. model: 0 no falloff, 1 inverse, 2 linear,
+   * 3 exponential (WebAudio PannerNode distance models, as GM's HTML5 runner maps them).
+   */
+  setPanner(voice: VoiceId, x: number, y: number, z: number, model: number, ref: number, max: number, factor: number): void;
+  /** The listener's position, look-at vector and up vector. */
+  setListener(x: number, y: number, z: number, lx: number, ly: number, lz: number, ux: number, uy: number, uz: number): void;
 }
 
 export interface Input {
@@ -159,4 +168,7 @@ export interface Platform {
   fonts?: FontRasterizer;
   /** A blocking text prompt (get_string); null if cancelled. Absent: the default is returned. */
   ask?(prompt: string, def: string): string | null;
+  /** Blocking message / yes-no dialogs (show_message, show_question). Absent: the text is logged and the answer is yes. */
+  alert?(text: string): void;
+  confirm?(text: string): boolean;
 }

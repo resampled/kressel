@@ -58,6 +58,26 @@ const point = (g: Game, x: number, y: number) => box(g, x, y, x + 1e-6, y + 1e-6
 define('sen_position_meeting', (g, s, t) => g.collideShape(point(g, n(s, t, 0), n(s, t, 1)), real(s[t - 2]), null) !== null);
 define('sen_position_empty', (g, s, t) => g.collideShape(point(g, n(s, t, 0), n(s, t, 1)), -3, null) === null);
 define('sen_instance_position', (g, s, t) => g.collideShape(point(g, n(s, t, 0), n(s, t, 1)), real(s[t - 2]), null)?.id ?? -4);
+/**
+ * instance_place_list / instance_position_list(x, y, obj, list, ordered): appends every hit's id to the ds_list and
+ * returns how many. Ordered sorts by distance from (x, y) to each instance's position (HTML5 AppendCollisionResults).
+ */
+const hits: Instance[] = [];
+define('sen_instance_list', (g, s, t) => {
+  const x = n(s, t, 1), y = n(s, t, 2), list = g.data.lists.get(s[t - 4], 'ds_list');
+  hits.length = 0;
+  if (s[t] === 'place') g.placeMeeting(self(g), x, y, real(s[t - 3]), false, hits);
+  else g.collideShape(point(g, x, y), real(s[t - 3]), null, undefined, hits);
+  if (real(s[t - 5]) > 0.5) hits.sort((a, c) => (a.x - x) ** 2 + (a.y - y) ** 2 - (c.x - x) ** 2 - (c.y - y) ** 2);
+  for (const o of hits) list.a.push(o.id);
+  return hits.length;
+});
+/** device_mouse_x/y_to_gui: the window position mapped through the letterboxed application surface to GUI coordinates. */
+define('sen_mouse_gui', (g, s, t) => {
+  const [ww, wh] = g.p.renderer.windowSize(), app = g.surface(0), k = Math.min(ww / app.w, wh / app.h);
+  return s[t] === 'x' ? ((g.p.input.mouseX - (ww - app.w * k) / 2) / (app.w * k)) * (g.guiW || app.w)
+    : ((g.p.input.mouseY - (wh - app.h * k) / 2) / (app.h * k)) * (g.guiH || app.h);
+});
 define('sen_collision_point', (g, s, t, argc) => g.collideShape(point(g, n(s, t, 0), n(s, t, 1)), real(s[t - 2]), notMe(g, s[t - 4], argc, 4))?.id ?? -4);
 define('sen_collision_rect', (g, s, t, argc) => {
   const x1 = n(s, t, 0), y1 = n(s, t, 1), x2 = n(s, t, 2), y2 = n(s, t, 3);

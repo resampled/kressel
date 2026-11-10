@@ -219,7 +219,9 @@ family('drw_gpu', 'gpu_set_', {
   texfilter: (g, s, t) => { g.p.renderer.setFilter(b(s, t, 0)); return undefined; },
   colorwriteenable: (g, s, t) => { g.p.renderer.setColorWrite(b(s, t, 0), b(s, t, 1), b(s, t, 2), b(s, t, 3)); return undefined; },
   colourwriteenable: (g, s, t) => { g.p.renderer.setColorWrite(b(s, t, 0), b(s, t, 1), b(s, t, 2), b(s, t, 3)); return undefined; },
-  alphatestenable: () => undefined, alphatestref: () => undefined, ztestenable: () => undefined, zwriteenable: () => undefined, cullmode: () => undefined,
+  alphatestenable: (g, s, t) => { g.alphaTest = b(s, t, 0); g.p.renderer.setAlphaTest(g.alphaTest, g.alphaRef); return undefined; },
+  alphatestref: (g, s, t) => { g.alphaRef = Math.max(0, Math.min(255, n(s, t, 0))); g.p.renderer.setAlphaTest(g.alphaTest, g.alphaRef); return undefined; },
+  ztestenable: () => undefined, zwriteenable: () => undefined, cullmode: () => undefined,
 });
 // Texture pages are a desktop concern: everything is resident in krplayer.
 family('drw_texture', 'texture_', {
@@ -230,12 +232,61 @@ family('drw_texture', 'texture_', {
   set_stage: (g, s, t) => { g.p.renderer.setSampler(n(s, t, 0), n(s, t, 1)); return undefined; },
 });
 family('drw_texturegroup', 'texturegroup_', { get_textures: () => [], load: () => 0, unload: () => undefined, get_status: () => 3 });
-// Vertex formats/buffers are created by Deltarune's d3d compatibility init but never submitted.
-let vertexIds = 0;
+// Vertex buffers. krplayer draws in 2D, so a buffer keeps what a primitive needs (x, y, u, v, colour, alpha per
+// vertex) and drops z, normals and custom attributes. A format is its attribute count: every vertex_* write is
+// one attribute, and a vertex is complete after that many.
+interface VBuf { per: number; k: number; n: number; d: Float64Array; open: boolean }
+const vformats: number[] = [0], vbufs: (VBuf | null)[] = [null];
+let vformat = 0;
+const fmtAdd = () => { vformat++; return undefined; };
+const vbuf = (v: Value, fn: string): VBuf => {
+  const bf = vbufs[real(v)];
+  if (!bf) throw new Unverified(`${fn}: vertex buffer ${String(v)} does not exist`);
+  return bf;
+};
+/** Starts the next attribute of buffer s[t] and returns the offset of its vertex in d. */
+function vattr(s: Value[], t: number, fn: string): number {
+  const bf = vbuf(s[t], fn);
+  if (!bf.open) throw new Unverified(`${fn} outside vertex_begin/vertex_end`);
+  if (bf.k === 0) {
+    if ((bf.n + 1) * 6 > bf.d.length) { const d = new Float64Array(bf.d.length * 2); d.set(bf.d); bf.d = d; }
+    bf.d.set([0, 0, 0, 0, 0xffffff, 1], bf.n++ * 6);
+  }
+  bf.k = (bf.k + 1) % bf.per;
+  return (bf.n - 1) * 6;
+}
+const vskip = (fn: string) => (_g: Game, s: Value[], t: number) => { vattr(s, t, fn); return undefined; };
+const vpos = (g: Game, s: Value[], t: number) => { const o = vattr(s, t, 'vertex_position'), d = vbuf(s[t], '').d; d[o] = n(s, t, 1); d[o + 1] = n(s, t, 2); return undefined; };
+const vcol = (g: Game, s: Value[], t: number) => { const o = vattr(s, t, 'vertex_colour'), d = vbuf(s[t], '').d; d[o + 4] = n(s, t, 1); d[o + 5] = n(s, t, 2); return undefined; };
+const vtex = (g: Game, s: Value[], t: number) => { const o = vattr(s, t, 'vertex_texcoord'), d = vbuf(s[t], '').d; d[o + 2] = n(s, t, 1); d[o + 3] = n(s, t, 2); return undefined; };
 family('drw_vertex', 'vertex_', {
-  format_begin: () => undefined, format_add_position: () => undefined, format_add_position_3d: () => undefined, format_add_colour: () => undefined,
-  format_add_color: () => undefined, format_add_normal: () => undefined, format_add_texcoord: () => undefined, format_add_textcoord: () => undefined, format_end: () => ++vertexIds,
-  create_buffer: () => ++vertexIds,
+  format_begin: () => { vformat = 0; return undefined; },
+  format_add_position: fmtAdd, format_add_position_3d: fmtAdd, format_add_colour: fmtAdd, format_add_color: fmtAdd, format_add_normal: fmtAdd,
+  format_add_texcoord: fmtAdd, format_add_textcoord: fmtAdd, format_add_custom: fmtAdd,
+  format_end: () => vformats.push(vformat) - 1,
+  format_delete: () => undefined,
+  create_buffer: () => vbufs.push({ per: 1, k: 0, n: 0, d: new Float64Array(6 * 64), open: false }) - 1,
+  create_buffer_ext: () => vbufs.push({ per: 1, k: 0, n: 0, d: new Float64Array(6 * 64), open: false }) - 1,
+  delete_buffer: (_g, s, t) => { vbuf(s[t], 'vertex_delete_buffer'); vbufs[real(s[t])] = null; return undefined; },
+  begin: (_g, s, t) => {
+    const bf = vbuf(s[t], 'vertex_begin'), per = vformats[real(s[t - 1])];
+    if (!per) throw new Unverified(`vertex_begin: vertex format ${String(s[t - 1])} does not exist`);
+    bf.per = per; bf.k = 0; bf.n = 0; bf.open = true;
+    return undefined;
+  },
+  end: (_g, s, t) => { vbuf(s[t], 'vertex_end').open = false; return undefined; },
+  freeze: (_g, s, t) => { vbuf(s[t], 'vertex_freeze'); return 0; },
+  get_number: (_g, s, t) => vbuf(s[t], 'vertex_get_number').n,
+  position: vpos, position_3d: vpos, colour: vcol, color: vcol, texcoord: vtex,
+  argb: (_g, s, t) => {
+    const o = vattr(s, t, 'vertex_argb'), d = vbuf(s[t], '').d, c = n(s, t, 1) >>> 0;
+    d[o + 4] = ((c >> 16) & 255) | (c & 0xff00) | ((c & 255) << 16); d[o + 5] = (c >>> 24) / 255;
+    return undefined;
+  },
+  normal: vskip('vertex_normal'), float1: vskip('vertex_float1'), float2: vskip('vertex_float2'), float3: vskip('vertex_float3'),
+  float4: vskip('vertex_float4'), ubyte4: vskip('vertex_ubyte4'),
+  /** vertex_submit(buffer, primitive kind, texture): -1 draws untextured. */
+  submit: (g, s, t) => { const bf = vbuf(s[t], 'vertex_submit'); drawPrim(g, n(s, t, 1), n(s, t, 2), bf.d, bf.n); return undefined; },
 });
 
 // Matrices are 16-element arrays (row-vector convention, translation in 12..14). krplayer draws in 2D only,
@@ -324,15 +375,15 @@ define('drw_prim_vertex', (g, s, t) => vertex(n(s, t, 0), n(s, t, 1), 0, 0, g.co
 define('drw_prim_vertex_colour', (_g, s, t) => vertex(n(s, t, 0), n(s, t, 1), 0, 0, n(s, t, 2), n(s, t, 3)));
 define('drw_prim_vertex_texture', (g, s, t) => vertex(n(s, t, 0), n(s, t, 1), n(s, t, 2), n(s, t, 3), g.colour, g.alpha));
 define('drw_prim_vertex_texture_colour', (_g, s, t) => vertex(n(s, t, 0), n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5)));
-/** Draws the vertices: pr_pointlist 1, linelist 2, linestrip 3, trianglelist 4, trianglestrip 5, trianglefan 6. Alpha is per primitive (the first vertex's). */
-define('drw_primitive_end', (g) => {
-  const kind = primKind, P = prim, r = g.p.renderer, tri = (i: number, j: number, k: number) => {
+define('drw_primitive_end', (g) => { const kind = primKind; primKind = -1; drawPrim(g, kind, primTex, prim, primN); return undefined; });
+/** Draws primN vertices of P: pr_pointlist 1, linelist 2, linestrip 3, trianglelist 4, trianglestrip 5, trianglefan 6. Alpha is per primitive (the first vertex's). */
+function drawPrim(g: Game, kind: number, primTex: number, P: Float64Array, primN: number): void {
+  const r = g.p.renderer, tri = (i: number, j: number, k: number) => {
     const a = i * 6, b2 = j * 6, c = k * 6;
     if (primTex >= 0) r.triangleTex(primTex, P[a], P[a + 1], P[a + 2], P[a + 3], P[a + 4], P[b2], P[b2 + 1], P[b2 + 2], P[b2 + 3], P[b2 + 4], P[c], P[c + 1], P[c + 2], P[c + 3], P[c + 4], P[a + 5]);
     else r.triangle(P[a], P[a + 1], P[b2], P[b2 + 1], P[c], P[c + 1], P[a + 4], P[b2 + 4], P[c + 4], P[a + 5]);
   };
   const seg = (i: number, j: number) => line(g, P[i * 6], P[i * 6 + 1], P[j * 6], P[j * 6 + 1], 1, P[i * 6 + 4], P[j * 6 + 4], P[i * 6 + 5]);
-  primKind = -1;
   switch (kind) {
     case 1: for (let i = 0; i < primN; i++) rect(g, P[i * 6], P[i * 6 + 1], P[i * 6], P[i * 6 + 1], P[i * 6 + 4], P[i * 6 + 4], P[i * 6 + 4], P[i * 6 + 4], P[i * 6 + 5], false); break;
     case 2: for (let i = 1; i < primN; i += 2) seg(i - 1, i); break;
@@ -342,8 +393,7 @@ define('drw_primitive_end', (g) => {
     case 6: for (let i = 2; i < primN; i++) tri(0, i - 1, i); break;
     default: throw new Unverified(`draw_primitive_begin: unknown primitive kind ${kind}`);
   }
-  return undefined;
-});
+}
 
 // ---------------------------------------------------------------- shaders
 

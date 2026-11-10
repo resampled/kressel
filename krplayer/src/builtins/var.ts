@@ -1,7 +1,7 @@
 // Variables (functions): arrays, structs, variable_* and method (var_*).
 
 import { define, n, str } from './registry.ts';
-import { compare, equals, GmlError, GmMethod, GmStruct, real, Scope, truthy, Unverified, type GArray, type Value } from '../value.ts';
+import { compare, equals, GmlError, GmMethod, GmStruct, NotImplemented, real, Scope, truthy, Unverified, type GArray, type Value } from '../value.ts';
 import { IV_NAMES } from '../compile/names.ts';
 import { Instance, NOI } from '../runtime/instance.ts';
 import type { Game } from '../runtime/game.ts';
@@ -44,6 +44,30 @@ define('var_arr_resize', (_g, s, t) => {
   const a = arr(s[t], 'array_resize'), k = Math.trunc(n(s, t, 1));
   if (k < a.length) a.length = k; else while (a.length < k) a.push(0);
   return undefined;
+});
+/**
+ * array_foreach / map / filter / find_index / any / all (array, callback(element, index), [offset, length]).
+ * A negative offset counts from the end; a negative length walks backwards from the offset.
+ */
+define('var_arr_iterate', (g, s, t, argc) => {
+  const fn = String(s[t]), a = arr(s[t - 1], `array_${fn}`), f = s[t - 2], out: GArray = [], args: Value[] = [0, 0];
+  let i = argc > 3 ? Math.trunc(n(s, t, 3)) : 0, len = argc > 4 ? Math.trunc(n(s, t, 4)) : a.length;
+  if (i < 0) i = Math.max(0, a.length + i);
+  const step = len < 0 ? -1 : 1;
+  for (len = Math.abs(len); len > 0 && i >= 0 && i < a.length; len--, i += step) {
+    args[0] = a[i]; args[1] = i;
+    const r = g.vm.callValue(f, g.self, args);
+    switch (fn) {
+      case 'foreach': break;
+      case 'map': out.push(r); break;
+      case 'filter': if (truthy(r)) out.push(a[i]); break;
+      case 'find_index': if (truthy(r)) return i; break;
+      case 'any': if (truthy(r)) return true; break;
+      case 'all': if (!truthy(r)) return false; break;
+      default: throw new NotImplemented(`array_${fn} is not implemented in krplayer yet`);
+    }
+  }
+  return fn === 'map' || fn === 'filter' ? out : fn === 'find_index' ? -1 : fn === 'any' ? false : fn === 'all' ? true : undefined;
 });
 define('var_arr_contains', (_g, s, t) => arr(s[t], 'array_contains').some((x) => equals(x, s[t - 1])));
 define('var_arr_index_of', (_g, s, t) => arr(s[t], 'array_get_index').findIndex((x) => equals(x, s[t - 1])));

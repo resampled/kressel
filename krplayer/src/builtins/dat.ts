@@ -211,6 +211,46 @@ define('dat_text_eof', (g, s, t) => { const f = file(g, s[t]); return f.pos >= f
 define('dat_text_write', (g, s, t) => { const f = file(g, s[t - 1]); f.text += s[t] === 'real' ? ' ' + gstr(g, s[t - 2]) : gstr(g, s[t - 2]); return undefined; });
 define('dat_text_writeln', (g, s, t) => { file(g, s[t]).text += '\r\n'; return undefined; });
 
+// file_find_*: fa_directory (16) adds directory names. Names come back lower-case, as the virtual file system stores them.
+define('dat_file_find_first', (g, s, t) => { g.fileFind = g.files.find(str(s, t, 0), (n(s, t, 1) & 16) !== 0); return g.fileFind.shift() ?? ''; });
+define('dat_file_find_next', (g) => g.fileFind.shift() ?? '');
+define('dat_file_find_close', (g) => { g.fileFind = []; return undefined; });
+
+// file_bin_*: the whole file is held in memory and written back on close. Modes: 0 read, 1 write, 2 both.
+const bin = (g: Game, v: Value, fn: string) => {
+  const f = g.binFiles.get(real(v));
+  if (!f) throw new Unverified(`file_bin_${fn}: binary file ${String(v)} is not open`);
+  return f;
+};
+family('dat_bin', 'file_bin_', {
+  open: (g, s, t) => {
+    const path = str(s, t, 0), d = g.files.readBytes(path);
+    if (!d && n(s, t, 1) === 0) return -1;
+    g.binFiles.set(g.nextFile, { path, data: d ? d.slice() : new Uint8Array(64), size: d ? d.length : 0, pos: 0, dirty: !d });
+    return g.nextFile++;
+  },
+  close: (g, s, t) => {
+    const f = bin(g, s[t], 'close');
+    if (f.dirty) g.files.writeBytes(f.path, f.data.subarray(0, f.size));
+    g.binFiles.delete(real(s[t]));
+    return undefined;
+  },
+  rewrite: (g, s, t) => { const f = bin(g, s[t], 'rewrite'); f.size = 0; f.pos = 0; f.dirty = true; return undefined; },
+  size: (g, s, t) => bin(g, s[t], 'size').size,
+  position: (g, s, t) => bin(g, s[t], 'position').pos,
+  seek: (g, s, t) => { bin(g, s[t], 'seek').pos = Math.max(0, Math.trunc(n(s, t, 1))); return undefined; },
+  write_byte: (g, s, t) => {
+    const f = bin(g, s[t], 'write_byte');
+    if (f.pos >= f.data.length) { const d = new Uint8Array(Math.max(f.pos + 1, f.data.length * 2)); d.set(f.data); f.data = d; }
+    f.data[f.pos++] = n(s, t, 1) & 255;
+    if (f.pos > f.size) f.size = f.pos;
+    f.dirty = true;
+    return undefined;
+  },
+  /** Past the end reads 0 (assumed). */
+  read_byte: (g, s, t) => { const f = bin(g, s[t], 'read_byte'); return f.pos < f.size ? f.data[f.pos++] : 0; },
+});
+
 define('dat_encode', (_g, s, t) => {
   const x = str(s, t, 1);
   switch (s[t]) {

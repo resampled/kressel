@@ -471,3 +471,121 @@ test('crashes are labelled by error kind (docs/error_audit.md)', async () => {
   assert.match(await kind([['var_arr_create', -1]]), /^unverified/);
   assert.match(await kind([['drw_texturegroup', 'no_such_member']]), /^not implemented/);
 });
+
+test('alpha test state reaches the renderer; show_message / show_question use the platform dialogs', async () => {
+  const body = [
+    ['drw_gpu', 'alphatestref', 128], ['drw_gpu', 'alphatestenable', true],
+    ['sys_alert', 'hi'], ['var_set', ['_lv', 'q'], ['sys_confirm', 'sure?']],
+  ];
+  const calls: unknown[] = [], said: string[] = [];
+  const p = createHeadless(() => [10, 10], undefined, undefined, { alert: (m) => { said.push(m); }, confirm: (m) => { said.push(m); return false; } });
+  p.renderer.setAlphaTest = (on, ref) => { calls.push([on, ref]); };
+  const g = await load({ krpj: project({ o: obj([['evt_create', body]]) }, [{ object: 'o', x: 0, y: 0 }]), url: (x) => x }, p);
+  assert.deepEqual(calls, [[false, 128], [true, 128]]);
+  assert.deepEqual([said, g.instances[0].vars.get(g.a.varSlot('q'))], [['hi', 'sure?'], false]);
+  assert.equal((await exec(body)).q, true); // no dialogs: logged, answered yes
+});
+
+test('instance_copy copies variables (not array writes); instance_change swaps the object and runs its create', async () => {
+  const pj = project({
+    a: obj([['evt_create', [
+      ['var_set', ['_ai', ['_lv', 'v'], 0], 1],
+      ['var_set', ['_lv', 'c'], ['ins_copy', false]],
+      ['var_set', ['_ai', ['_lv', 'v'], 0], 9],
+      ['ins_change', ['_as', 'b'], true],
+    ]]]),
+    b: obj([['evt_create', [['var_set', ['_lv', 'changed'], true]]]]),
+  }, [{ object: 'a', x: 3, y: 4 }]);
+  const g = await load({ krpj: pj, url: (x) => x }, createHeadless(() => [10, 10]));
+  const [a, c] = g.instances, v = (i: typeof a, k: string) => i.vars.get(g.a.varSlot(k));
+  assert.deepEqual([g.instances.length, a.obj.name, v(a, 'changed'), v(a, 'v'), c.obj.name, c.x, v(c, 'v'), v(c, 'changed'), v(a, 'c')], [2, 'b', true, [9], 'a', 3, [1], undefined, c.id]);
+});
+
+test('move_contact / move_outside / move_bounce / place_snapped / mp_*_step against a solid (HTML5 runner behaviour)', async () => {
+  const pj = project({
+    wall: { ...obj([], 'spr_box'), solid: true },
+    mover: obj([['evt_create', [
+      ['mov_contact', 'solid', 0, 100], ['var_set', ['_lv', 'cx'], ['_lv', 'x']],
+      ['var_set', ['_lv', 'snapped'], ['mov_is_snapped', 10, 10]],
+      ['var_set', ['_lv', 'pot'], ['mov_mp_potential_step', 100, 0, 2, false]], ['var_set', ['_lv', 'potdir'], ['_lv', 'direction']],
+      ['var_set', ['_lv', 'lin'], ['mov_mp_linear_step', 100, 0, 5, false]], ['var_set', ['_lv', 'lx'], ['_lv', 'x']],
+      ['var_set', ['_lv', 'x'], 25], ['mov_outside', 'solid', 180, 100], ['var_set', ['_lv', 'ox'], ['_lv', 'x']],
+      ['var_set', ['_lv', 'hspeed'], 5], ['mov_bounce', 'solid', false], ['var_set', ['_lv', 'bh'], ['_lv', 'hspeed']],
+      ['var_set', ['_lv', 'near'], ['mov_mp_linear_step', 20, 3, 5, false]],
+    ]]], 'spr_box'),
+  }, [{ object: 'wall', x: 30, y: 0 }, { object: 'mover', x: 0, y: 0 }]);
+  const g = await load({ krpj: pj, url: (x) => x }, createHeadless(() => [10, 10]));
+  const m = g.instances[1], v = (k: string) => m.vars.get(g.a.varSlot(k));
+  assert.deepEqual([v('cx'), v('snapped'), v('pot'), v('potdir'), v('lin'), v('lx'), v('ox'), v('bh'), v('near'), m.x, m.y], [20, true, false, 30, false, 20, 20, -5, true, 20, 3]);
+});
+
+test('instance_place_list (ordered by distance), rectangle_in_rectangle', async () => {
+  const pj = project({
+    wall: obj([], 'spr_box'),
+    o: obj([['evt_create', [
+      ['var_set', ['_lv', 'l'], ['dat_list_create']],
+      ['var_set', ['_lv', 'n'], ['sen_instance_list', 'place', 0, 0, ['_as', 'wall'], ['_lv', 'l'], true]],
+      ['var_set', ['_lv', 'first'], ['dat_list_get', ['_lv', 'l'], 0]],
+      ['var_set', ['_lv', 'pos'], ['sen_instance_list', 'position', 6, 1, ['_kw', 'all'], ['_lv', 'l'], false]],
+      ['var_set', ['_lv', 'r1'], ['opr_rect_in_rect', 0, 0, 5, 5, 0, 0, 10, 10]],
+      ['var_set', ['_lv', 'r2'], ['opr_rect_in_rect', 5, 5, 0, 0, 3, 3, 10, 10]],
+      ['var_set', ['_lv', 'r0'], ['opr_rect_in_rect', 0, 0, 1, 1, 5, 5, 6, 6]],
+    ]]], 'spr_box'),
+  }, [{ object: 'wall', x: 5, y: 0 }, { object: 'wall', x: 2, y: 0 }, { object: 'wall', x: 50, y: 0 }, { object: 'o', x: 0, y: 0 }]);
+  const g = await load({ krpj: pj, url: (x) => x }, createHeadless(() => [10, 10]));
+  const v = (k: string) => g.instances[3].vars.get(g.a.varSlot(k));
+  assert.deepEqual([v('n'), v('first'), v('pos'), v('r1'), v('r2'), v('r0')], [2, g.instances[1].id, 3, 1, 2, 0]);
+});
+
+test('array_map / filter / find_index / any / all call back with (element, index)', async () => {
+  const set = (k: number, x: number) => ['var_set', ['_ai', ['_lv', 'a'], k], x], it = (fn: string, f: string, ...more: number[]) => ['var_arr_iterate', fn, ['_lv', 'a'], ['_fn', f], ...more];
+  const v = await execFn([
+    set(0, 1), set(1, 2), set(2, 3),
+    ['var_set', ['_lv', 'map'], it('map', 'dbl')], ['var_set', ['_lv', 'filter'], it('filter', 'big')], ['var_set', ['_lv', 'find'], it('find_index', 'big')],
+    ['var_set', ['_lv', 'any'], it('any', 'big')], ['var_set', ['_lv', 'all'], it('all', 'big')], ['var_set', ['_lv', 'back'], it('map', 'dbl', -1, -2)],
+  ], {
+    dbl: { args: [], body: [['ctr_return', ['opr_add', ['opr_mul', ['_lv', 'argument0'], 2], ['_lv', 'argument1']]]] },
+    big: { args: [], body: [['ctr_return', ['opr_gt', ['_lv', 'argument0'], 2]]] },
+  }, ['dbl', 'big']);
+  assert.deepEqual([v.map, v.filter, v.find, v.any, v.all, v.back], [[2, 5, 8], [3], 2, true, false, [8, 5]]);
+});
+
+test('file_bin_* round-trips bytes; file_find_* lists a directory by mask', async () => {
+  const v = await exec([
+    ['var_set', ['_lv', 'f'], ['dat_bin', 'open', 'Data/a.bin', 1]],
+    ['dat_bin', 'write_byte', ['_lv', 'f'], 7], ['dat_bin', 'write_byte', ['_lv', 'f'], 265], ['dat_bin', 'close', ['_lv', 'f']],
+    ['var_set', ['_lv', 'f'], ['dat_bin', 'open', 'data/a.bin', 0]],
+    ['var_set', ['_lv', 'size'], ['dat_bin', 'size', ['_lv', 'f']]], ['dat_bin', 'seek', ['_lv', 'f'], 1],
+    ['var_set', ['_lv', 'b1'], ['dat_bin', 'read_byte', ['_lv', 'f']]], ['var_set', ['_lv', 'eof'], ['dat_bin', 'read_byte', ['_lv', 'f']]],
+    ['dat_bin', 'close', ['_lv', 'f']],
+    ['var_set', ['_lv', 'missing'], ['dat_bin', 'open', 'nope.bin', 0]],
+    ['var_set', ['_lv', 'first'], ['dat_file_find_first', 'data/*.bin', 0]], ['var_set', ['_lv', 'next'], ['dat_file_find_next']], ['dat_file_find_close'],
+    ['var_set', ['_lv', 'none'], ['dat_file_find_first', '*.bin', 0]], ['var_set', ['_lv', 'dir'], ['dat_file_find_first', 'd?ta', 16]],
+  ]);
+  assert.deepEqual([v.size, v.b1, v.eof, v.missing, v.first, v.next, v.none, v.dir], [2, 9, 0, -1, 'a.bin', '', '', 'data']);
+});
+
+test('positional audio: emitters position their voices; vertex buffers submit as primitives', async () => {
+  const p = createHeadless(() => [10, 10]), pans: number[][] = [];
+  p.audio.setPanner = (_v, ...rest) => { pans.push(rest); };
+  const pj = project({ o: obj([['evt_create', [
+    ['var_set', ['_lv', 'e'], ['snd_3d', 'emitter_create']], ['snd_3d', 'emitter_position', ['_lv', 'e'], 5, 6, 7],
+    ['var_set', ['_lv', 'v'], ['snd_play_on', ['_lv', 'e'], ['_as', 'snd'], false, 0]],
+    ['var_set', ['_lv', 'none'], ['snd_play_on', 99, ['_as', 'snd'], false, 0]],
+    ['var_set', ['_lv', 'ex'], ['snd_3d', 'emitter_get_x', ['_lv', 'e']]],
+    ['snd_play_at', ['_as', 'snd'], 1, 2, 3, 50, 500, 1, false, 0],
+    ['drw_vertex', 'format_begin'], ['drw_vertex', 'format_add_position'], ['drw_vertex', 'format_add_colour'], ['var_set', ['_lv', 'fmt'], ['drw_vertex', 'format_end']],
+    ['var_set', ['_lv', 'vb'], ['drw_vertex', 'create_buffer']], ['drw_vertex', 'begin', ['_lv', 'vb'], ['_lv', 'fmt']],
+    ...[[0, 0], [4, 0], [0, 4]].flatMap(([x, y]) => [['drw_vertex', 'position', ['_lv', 'vb'], x, y], ['drw_vertex', 'colour', ['_lv', 'vb'], 255, 1]]),
+    ['drw_vertex', 'end', ['_lv', 'vb']], ['var_set', ['_lv', 'vn'], ['drw_vertex', 'get_number', ['_lv', 'vb']]],
+    ['drw_vertex', 'submit', ['_lv', 'vb'], 4, -1],
+  ]]]) }, [{ object: 'o', x: 0, y: 0 }]);
+  pj.sounds = { snd: { name: 'snd', src: './snd.ogg', volume: 1, stream: false } } as Krpj['sounds'];
+  const g = await load({ krpj: pj, url: (x) => x }, p);
+  await new Promise((r) => setTimeout(r)); // sounds decode asynchronously; voices start once loaded
+  const v = (k: string) => g.instances[0].vars.get(g.a.varSlot(k));
+  assert.deepEqual([v('none'), v('ex'), v('vn'), p.stats.draws], [-1, 5, 3, 1]);
+  assert.deepEqual(pans, [[5, 6, 7, 0, 100, 100000, 1], [1, 2, 3, 0, 50, 500, 1]]);
+  g.snd.falloff = 3; g.snd.emitterChanged(null);
+  assert.deepEqual(pans.slice(2).map((x) => x[3]), [2, 2]);
+});

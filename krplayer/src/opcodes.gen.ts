@@ -285,7 +285,7 @@ export const OPCODES: readonly OpcodeDef[] = [
   {"name":"snd_stream_create","flags":["hidden"],"args":"str path","gml":"`audio_create_stream`"},
   {"name":"snd_stream_destroy","flags":["hidden"],"args":"snd stream","gml":"`audio_destroy_stream`"},
   {"name":"snd_group","flags":["compat","family"],"args":"ref fn, ...","gml":"`audio_group_*` (`load`, `is_loaded`, `set_gain`)"},
-  {"name":"snd_3d","flags":["hidden","family"],"args":"ref fn, ...","gml":"`audio_emitter_*`, `audio_listener_*`"},
+  {"name":"snd_3d","flags":["hidden","family"],"args":"ref fn, ...","gml":"`audio_emitter_*`, `audio_listener_*`, `audio_falloff_*`"},
   {"name":"drw_self","flags":[],"args":"-","gml":"`draw_self`"},
   {"name":"drw_sprite","flags":[],"args":"spr s, num frame, num x, num y","gml":"`draw_sprite`"},
   {"name":"drw_sprite_ext","flags":[],"args":"spr s, num frame, num x, num y, num xscale, num yscale, num angle, col colour, num alpha","gml":"`draw_sprite_ext`"},

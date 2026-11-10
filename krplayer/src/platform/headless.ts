@@ -16,7 +16,7 @@ export interface HeadlessPlatform extends Platform {
 }
 
 /** Optional host decoders (Node has no image or font decoding of its own). */
-export interface HeadlessExtras { decodeImage?: (bytes: Uint8Array) => Promise<Pixels>; fonts?: FontRasterizer }
+export interface HeadlessExtras { decodeImage?: (bytes: Uint8Array) => Promise<Pixels>; fonts?: FontRasterizer; alert?: (text: string) => void; confirm?: (text: string) => boolean }
 
 export function createHeadless(textureSize: (url: string) => [number, number] = () => [1, 1], decode?: (url: string) => Promise<Pixels>,
   fetchBytes: (url: string) => Promise<Uint8Array> = async (u) => { throw new Error(`headless: no file ${u}`); }, extras: HeadlessExtras = {}): HeadlessPlatform {
@@ -35,7 +35,7 @@ export function createHeadless(textureSize: (url: string) => [number, number] = 
     readPixels: (t) => { const [w, h] = sizes.get(t) ?? [0, 0]; return { w, h, data: new Uint8ClampedArray(w * h * 4) }; },
     createTexture: (px) => { const id = nextId++; sizes.set(id, [px.w, px.h]); return id; },
     copyTexture: (_t, _x, _y, w, h) => { const id = nextId++; sizes.set(id, [w, h]); return id; },
-    setTarget() {}, setView() {}, clear() {}, setBlend() {}, setFog() {}, setColorWrite() {}, setFilter() {},
+    setTarget() {}, setView() {}, clear() {}, setBlend() {}, setFog() {}, setAlphaTest() {}, setColorWrite() {}, setFilter() {},
     drawImage() { stats.draws++; }, drawQuad() { stats.draws++; }, triangle() { stats.draws++; }, triangleTex() { stats.draws++; }, systemText() {},
     compileShader: () => nextId++, setShader() {}, shaderUniform: () => nextId++, setUniformF() {}, setSampler() {},
   };
@@ -47,7 +47,7 @@ export function createHeadless(textureSize: (url: string) => [number, number] = 
     load: async () => nextId++, length: () => 1,
     play: (_s, loop) => { stats.sounds++; const v = nextId++; voices.set(v, loop ? Infinity : time + 1000); return v; },
     stop: (v) => { voices.delete(v); }, pause() {}, isPlaying: (v) => (voices.get(v) ?? -1) > time,
-    setGain() {}, setPitch() {}, setLoop() {}, position: () => 0, seek() {}, setMasterGain() {},
+    setGain() {}, setPitch() {}, setLoop() {}, position: () => 0, seek() {}, setMasterGain() {}, setPanner() {}, setListener() {},
   };
   return {
     stats, soft,

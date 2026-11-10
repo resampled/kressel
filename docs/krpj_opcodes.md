@@ -628,7 +628,7 @@ Sound inputs take an `_as` sound or a voice id reporter (the value `snd_play` re
 | `snd_stream_create` (hidden) | str path | `audio_create_stream` | The path is resolved against the project's CDN path. |
 | `snd_stream_destroy` (hidden) | snd stream | `audio_destroy_stream` | |
 | `snd_group` (compat, family) | ref fn, ... | `audio_group_*` (`load`, `is_loaded`, `set_gain`) | Only a loading hint. |
-| `snd_3d` (hidden, family) | ref fn, ... | `audio_emitter_*`, `audio_listener_*` | ref drops `audio_` (`["snd_3d","emitter_position",em,0,0,0]`). |
+| `snd_3d` (hidden, family) | ref fn, ... | `audio_emitter_*`, `audio_listener_*`, `audio_falloff_*` | ref drops `audio_` (`["snd_3d","emitter_position",em,0,0,0]`). Positional audio: panning only until `audio_falloff_set_model`; no Doppler. |
 
 ## Drawing
 Only does anything in draw events; the editor greys these out elsewhere. Colour inputs are Scratch-style pickers that store a BGR int. "as GML" means the same arguments as the GML function.
@@ -880,7 +880,7 @@ Arrays and structs (Variables) are better for visual scripts; `ds_*` mainly exis
 | Opcode | Arguments | GML | Notes |
 |---|---|---|---|
 | `sys_log` | any message | `show_debug_message` | Goes to the dev console. |
-| `sys_alert` (compat) | str text | `show_message` | In-canvas modal; pauses the game like GM does. |
+| `sys_alert` (compat) | str text | `show_message` | The platform's blocking dialog; pauses the game like GM does. |
 | `sys_confirm` (compat) | str text | `show_question` | Same; returns a bool. |
 | `sys_error` (hidden) | str text, bool abort | `show_error` | Cap. |
 | `sys_game_end` | - | `game_end` | Cap. Returns to the player menu. |

@@ -41,6 +41,14 @@ export class Instance extends Scope {
     this.id = id; this.obj = obj;
   }
 
+  /** instance_copy: every built-in and variable of src except the id. Arrays are copied, so the two never share writes. */
+  copyFrom(src: Instance): void {
+    const { id, order, vars, alarm } = this;
+    Object.assign(this, src, { id, order, vars, alarm });
+    alarm.set(src.alarm);
+    for (const [k, v] of src.vars) vars.set(k, Array.isArray(v) ? v.slice() : v);
+  }
+
   setSpeed(s: number): void {
     this.speed = s;
     this.hspeed = s * Math.cos(this.direction * D2R);

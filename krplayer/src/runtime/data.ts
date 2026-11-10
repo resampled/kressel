@@ -62,6 +62,20 @@ export class Files {
   writeText(path: string, text: string): void { this.st.write(Files.norm(path), text.startsWith('b64:') ? text + ' ' : text); }
   writeBytes(path: string, b: Uint8Array): void { this.st.write(Files.norm(path), 'b64:' + toB64(b)); }
   remove(path: string): void { this.st.remove(Files.norm(path)); }
+  /**
+   * file_find_first: names (no path) in the mask's directory that match its `*` / `?` pattern, saved files first.
+   * Directories only exist as prefixes of file paths; they're listed when withDirs (fa_directory) is set.
+   */
+  find(mask: string, withDirs: boolean): string[] {
+    const m = Files.norm(mask), cut = m.lastIndexOf('/') + 1, dir = m.slice(0, cut), out = new Set<string>();
+    const re = new RegExp('^' + m.slice(cut).replace(/[.+^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*').replaceAll('?', '.') + '$');
+    for (const p of [...this.st.keys(dir), ...this.included.keys()]) {
+      if (!p.startsWith(dir)) continue;
+      const rest = p.slice(cut), slash = rest.indexOf('/'), name = slash < 0 ? rest : rest.slice(0, slash);
+      if ((slash < 0 || withDirs) && re.test(name)) out.add(name);
+    }
+    return [...out];
+  }
   copy(from: string, to: string): void {
     const b = this.readBytes(from);
     if (b) this.writeBytes(to, b);

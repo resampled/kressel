@@ -158,6 +158,100 @@ family('mov_path', 'path_', {
   get_point_y: point(1),
   get_point_speed: point(2),
 });
+// The functions below follow GM's HTML5 runner (Function_Instance.js, Function_Movement.js, Function_MotionPlanning.js).
+
+/** instance_copy(performevent): the copy gets a new id; pre-create and create run on it when asked. */
+define('ins_copy', (g, s, t) => {
+  const src = self(g), i = g.create(src.obj, src.x, src.y, src.depth);
+  i.copyFrom(src);
+  if (b(s, t, 0)) g.runCreate(i);
+  return i.id;
+});
+/**
+ * instance_change(obj, perf): destroy + clean up events (if perf), then the instance takes the object's sprite, mask,
+ * solid, visible and persistent (not its depth), then pre-create + create (if perf). A missing object is logged and ignored.
+ */
+define('ins_change', (g, s, t) => {
+  const i = self(g), o = g.a.objects[real(s[t])], perf = b(s, t, 1);
+  if (!o) { g.p.log(`instance_change: object ${String(s[t])} does not exist`); return undefined; }
+  if (perf) { g.event(i, EV.destroy, null); g.event(i, EV.cleanup, null); }
+  i.obj = o; i.sprite = o.sprite; i.mask = o.mask; i.solid = o.solid; i.visible = o.visible; i.persistent = o.persistent;
+  if (perf) g.runCreate(i);
+  return undefined;
+});
+
+/** place_free (solid instances only) or, with all, place_empty. */
+const free = (g: Game, i: Instance, x: number, y: number, all: boolean): boolean => g.placeMeeting(i, x, y, -3, !all) === null;
+const dirTo = (x1: number, y1: number, x2: number, y2: number) => ((Math.atan2(y1 - y2, x2 - x1) / D2R) + 360) % 360;
+
+/** move_bounce_solid / _all(advanced). Advanced sweeps 10 degree steps either side of the heading for the free arc and reflects about it. */
+define('mov_bounce', (g, s, t) => {
+  const i = self(g), all = s[t] === 'all';
+  let bounced = false;
+  if (!free(g, i, i.x, i.y, all)) { i.x = i.xprevious; i.y = i.yprevious; bounced = true; }
+  if (b(s, t, 1)) {
+    const dir = 10 * Math.round(i.direction / 10), x = i.x, y = i.y, sp = i.speed;
+    let l = dir, r = dir;
+    for (let k = 1; k < 36; k++) { l -= 10; if (free(g, i, x + sp * Math.cos(l * D2R), y - sp * Math.sin(l * D2R), all)) break; bounced = true; }
+    for (let k = 1; k < 36; k++) { r += 10; if (free(g, i, x + sp * Math.cos(r * D2R), y - sp * Math.sin(r * D2R), all)) break; bounced = true; }
+    if (bounced) i.setDirection(180 + l + r - dir);
+    return undefined;
+  }
+  const h = free(g, i, i.x + i.hspeed, i.y, all), v = free(g, i, i.x, i.y + i.vspeed, all), d = free(g, i, i.x + i.hspeed, i.y + i.vspeed, all);
+  if ((!h && !v) || (h && v && !d)) i.setHV(-i.hspeed, -i.vspeed); else if (!h) i.setHV(-i.hspeed, i.vspeed); else if (!v) i.setHV(i.hspeed, -i.vspeed);
+  return undefined;
+});
+/** Steps of one pixel along dir: maxdist rounded, or 1000 when it's 0 or less. */
+const steps = (maxdist: number) => (maxdist <= 0 ? 1000 : Math.round(maxdist));
+/** move_contact_solid / _all(dir, maxdist): moves while the next pixel is free; does nothing if already colliding. */
+define('mov_contact', (g, s, t) => {
+  const i = self(g), all = s[t] === 'all', dx = Math.cos(n(s, t, 1) * D2R), dy = -Math.sin(n(s, t, 1) * D2R);
+  if (!free(g, i, i.x, i.y, all)) return undefined;
+  for (let k = steps(n(s, t, 2)); k > 0 && free(g, i, i.x + dx, i.y + dy, all); k--) { i.x += dx; i.y += dy; }
+  return undefined;
+});
+/** move_outside_solid / _all(dir, maxdist): moves until free; stays where it got to if it never is. */
+define('mov_outside', (g, s, t) => {
+  const i = self(g), all = s[t] === 'all', dx = Math.cos(n(s, t, 1) * D2R), dy = -Math.sin(n(s, t, 1) * D2R);
+  for (let k = steps(n(s, t, 2)); k > 0 && !free(g, i, i.x, i.y, all); k--) { i.x += dx; i.y += dy; }
+  return undefined;
+});
+define('mov_is_snapped', (g, s, t) => {
+  const i = self(g), h = n(s, t, 0), v = n(s, t, 1);
+  return !(h > 0 && Math.abs(i.x - h * Math.round(i.x / h)) >= 0.001) && !(v > 0 && Math.abs(i.y - v * Math.round(i.y / v)) >= 0.001);
+});
+/** mp_linear_step(x, y, stepsize, checkall): one straight step if it's free. Returns whether the goal is within reach (even if blocked). */
+define('mov_mp_linear_step', (g, s, t) => {
+  const i = self(g), x = n(s, t, 0), y = n(s, t, 1), step = n(s, t, 2), all = b(s, t, 3);
+  if (i.x === x && i.y === y) return true;
+  const dist = Math.hypot(i.x - x, i.y - y), near = dist <= step;
+  const nx = near ? x : i.x + step * (x - i.x) / dist, ny = near ? y : i.y + step * (y - i.y) / dist;
+  if (free(g, i, nx, ny, all)) { i.setDirection(dirTo(i.x, i.y, nx, ny)); i.x = nx; i.y = ny; }
+  return near;
+});
+// mp_potential_settings defaults: turn at most 30 degrees a step, try every 10 degrees, look 3 steps ahead, rotate on the spot when stuck.
+const POT_MAXROT = 30, POT_STEP = 10, POT_AHEAD = 3;
+/** Takes a step in direction dir if it's within the turn limit and both the look-ahead and the next position are free. */
+function tryDir(g: Game, i: Instance, dir: number, step: number, all: boolean): boolean {
+  const diff = Math.abs(((((dir - i.direction) % 360) + 540) % 360) - 180), c = Math.cos(dir * D2R), sn = Math.sin(dir * D2R);
+  if (diff > POT_MAXROT || !free(g, i, i.x + step * POT_AHEAD * c, i.y - step * POT_AHEAD * sn, all) || !free(g, i, i.x + step * c, i.y - step * sn, all)) return false;
+  i.setDirection(dir); i.x += step * c; i.y -= step * sn;
+  return true;
+}
+/** mp_potential_step(x, y, stepsize, checkall): a step towards the goal, steering round obstacles. Returns whether the goal is within reach. */
+define('mov_mp_potential_step', (g, s, t) => {
+  const i = self(g), x = n(s, t, 0), y = n(s, t, 1), step = n(s, t, 2), all = b(s, t, 3);
+  if (i.x === x && i.y === y) return true;
+  if (Math.hypot(i.x - x, i.y - y) <= step) {
+    if (free(g, i, x, y, all)) { i.setDirection(dirTo(i.x, i.y, x, y)); i.x = x; i.y = y; }
+    return true;
+  }
+  const goal = dirTo(i.x, i.y, x, y);
+  for (let d = 0; d < 180; d += POT_STEP) if (tryDir(g, i, goal - d, step, all) || tryDir(g, i, goal + d, step, all)) return false;
+  i.setDirection(i.direction + POT_MAXROT);
+  return false;
+});
+
 /** instance_id_get(n): the nth active instance, in instance order (GM's instance_id[n]). */
 define('ins_id_get', (g, s, t) => {
   let k = Math.trunc(n(s, t, 0));

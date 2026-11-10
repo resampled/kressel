@@ -8,7 +8,12 @@ import type { Assets } from './assets.ts';
 export const VOICE_BASE = 200000;
 
 interface Snd { name: string; url: string; stream: boolean; volume: number; pitch: number; group: number; id: SoundId | null; loading: Promise<void> | null; gain: number; destroyed: boolean }
-interface Voice { id: number; snd: number; handle: VoiceId | null; gain: number; pitch: number; loop: boolean; paused: boolean; stopped: boolean; offset: number }
+interface Voice { id: number; snd: number; handle: VoiceId | null; gain: number; pitch: number; loop: boolean; paused: boolean; stopped: boolean; offset: number; em: Emitter | null }
+/** A positional source (audio_emitter_*, or the one-off position of audio_play_sound_at). Defaults as GM's HTML5 runner. */
+export interface Emitter { x: number; y: number; z: number; gain: number; pitch: number; ref: number; max: number; factor: number }
+export const newEmitter = (x = 0, y = 0, z = 0, ref = 100, max = 100000, factor = 1): Emitter => ({ x, y, z, gain: 1, pitch: 1, ref, max, factor });
+/** audio_falloff_* constant -> Audio.setPanner model. Clamped and scaled models fall back to their plain one, like the HTML5 runner. */
+const MODEL = [0, 1, 1, 2, 2, 3, 3, 1, 3];
 
 export class Sounds {
   private readonly p: Platform;
@@ -17,6 +22,11 @@ export class Sounds {
   private nextVoice = VOICE_BASE;
   readonly groupGain: number[] = [];
   master = 1;
+  readonly emitters: (Emitter | null)[] = [];
+  /** audio_falloff_set_model; GM starts with audio_falloff_none (panning only). */
+  falloff = 0;
+  /** Listener position, velocity, look-at and up (audio_listener_get_data order). WebAudio's defaults. */
+  readonly listener = [0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 1, 0];
 
   constructor(p: Platform, a: Assets) {
     this.p = p;
@@ -56,18 +66,41 @@ export class Sounds {
 
   private effective(v: Voice): number {
     const s = this.sounds[v.snd];
-    return v.gain * s.gain * s.volume * (this.groupGain[s.group] ?? 1);
+    return v.gain * s.gain * s.volume * (this.groupGain[s.group] ?? 1) * (v.em ? v.em.gain : 1);
   }
+  private rate(v: Voice): number { return v.pitch * (v.em ? v.em.pitch : 1); }
+  private pan(v: Voice): void {
+    const e = v.em;
+    if (e && v.handle !== null) this.p.audio.setPanner(v.handle, e.x, e.y, e.z, MODEL[this.falloff] ?? 0, e.ref, e.max, e.factor);
+  }
+  /** Re-applies position, falloff, gain and pitch to the voices on an emitter (all positional voices if null). */
+  emitterChanged(e: Emitter | null): void {
+    for (const v of this.voices.values()) {
+      if (!v.em || (e && v.em !== e) || v.handle === null) continue;
+      this.pan(v);
+      this.p.audio.setGain(v.handle, this.effective(v), 0);
+      this.p.audio.setPitch(v.handle, this.rate(v));
+    }
+  }
+  /** audio_emitter_free: stops the emitter's voices (HTML5 runner). */
+  freeEmitter(i: number): void {
+    const e = this.emitters[i];
+    if (!e) return;
+    for (const v of [...this.voices.values()]) if (v.em === e) this.stop(v.id);
+    this.emitters[i] = null;
+  }
+  listenerChanged(): void { const l = this.listener; this.p.audio.setListener(l[0], l[1], l[2], l[6], l[7], l[8], l[9], l[10], l[11]); }
 
-  play(i: number, loop: boolean, gain = 1, offset = 0, pitch = 1): number {
+  play(i: number, loop: boolean, gain = 1, offset = 0, pitch = 1, em: Emitter | null = null): number {
     const s = this.snd(i);
     if (!s) return -1;
     const id = this.nextVoice++;
-    const v: Voice = { id, snd: i, handle: null, gain, pitch: pitch * s.pitch, loop, paused: false, stopped: false, offset };
+    const v: Voice = { id, snd: i, handle: null, gain, pitch: pitch * s.pitch, loop, paused: false, stopped: false, offset, em };
     this.voices.set(id, v);
     const start = () => {
       if (v.stopped || s.id === null) return;
-      v.handle = this.p.audio.play(s.id, loop, this.effective(v), v.pitch, v.offset);
+      v.handle = this.p.audio.play(s.id, loop, this.effective(v), this.rate(v), v.offset);
+      this.pan(v);
       if (v.paused) this.p.audio.pause(v.handle, true);
     };
     if (s.id !== null) start(); else void this.load(i).then(start);
@@ -123,7 +156,7 @@ export class Sounds {
   }
   setPitch(target: number, pitch: number): void {
     if (target < VOICE_BASE) { const s = this.snd(target); if (!s) return; s.pitch = pitch; }
-    this.each(target, (v) => { v.pitch = pitch; if (v.handle !== null) this.p.audio.setPitch(v.handle, pitch); });
+    this.each(target, (v) => { v.pitch = pitch; if (v.handle !== null) this.p.audio.setPitch(v.handle, this.rate(v)); });
   }
   getPitch(target: number): number {
     if (target < VOICE_BASE) return this.snd(target)?.pitch ?? 1;

@@ -15,9 +15,9 @@ void main() { gl_Position = vec4(a_pos.x * u_proj.x + u_proj.z, a_pos.y * u_proj
 const FS = `#version 300 es
 precision mediump float;
 in vec2 v_uv; in vec4 v_col;
-uniform sampler2D u_tex; uniform vec4 u_fog;
+uniform sampler2D u_tex; uniform vec4 u_fog; uniform float u_at; // alpha test reference, -1 when off
 out vec4 o;
-void main() { vec4 c = texture(u_tex, v_uv) * v_col; if (u_fog.a > 0.5) c.rgb = u_fog.rgb; o = c; }`;
+void main() { vec4 c = texture(u_tex, v_uv) * v_col; if (c.a <= u_at) discard; if (u_fog.a > 0.5) c.rgb = u_fog.rgb; o = c; }`;
 
 interface Tex { t: WebGLTexture; w: number; h: number; fb: WebGLFramebuffer | null }
 
@@ -33,6 +33,8 @@ class GLRenderer implements Renderer {
   private readonly prog: WebGLProgram;
   private readonly uProj: WebGLUniformLocation;
   private readonly uFog: WebGLUniformLocation;
+  private readonly uAt: WebGLUniformLocation;
+  private alphaOn = false; private alphaRef = 0;
   private readonly buf = new ArrayBuffer(MAX_QUADS * 6 * FLOATS * 4);
   private readonly f32 = new Float32Array(this.buf);
   private readonly u32 = new Uint32Array(this.buf);
@@ -44,7 +46,7 @@ class GLRenderer implements Renderer {
   private m = [1, 0, 0, 1, 0, 0];
   private filter = false;
   /** GameMaker shaders (compileShader handles index this), the one in use (-1: default), and uniform handles. */
-  private readonly shaders: { p: WebGLProgram; wvp: WebGLUniformLocation | null; units: number }[] = [];
+  private readonly shaders: { p: WebGLProgram; wvp: WebGLUniformLocation | null; at: WebGLUniformLocation | null; atRef: WebGLUniformLocation | null; units: number }[] = [];
   private shader = -1;
   private readonly uniforms: { sh: number; loc: WebGLUniformLocation; unit: number }[] = [];
 
@@ -70,6 +72,8 @@ class GLRenderer implements Renderer {
     this.uFog = gl.getUniformLocation(p, 'u_fog')!;
     gl.uniform1i(gl.getUniformLocation(p, 'u_tex'), 0);
     gl.uniform4f(this.uFog, 0, 0, 0, 0);
+    this.uAt = gl.getUniformLocation(p, 'u_at')!;
+    gl.uniform1f(this.uAt, -1);
     const vb = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vb);
     gl.bufferData(gl.ARRAY_BUFFER, this.buf.byteLength, gl.DYNAMIC_DRAW);
@@ -209,7 +213,7 @@ class GLRenderer implements Renderer {
     if (base) gl.uniform1i(base, 0);
     for (let k = 0; k < 5; k++) { const m = gl.getUniformLocation(p, `gm_Matrices[${k}]`); if (m) gl.uniformMatrix4fv(m, false, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); }
     gl.useProgram(this.shaders[this.shader]?.p ?? this.prog);
-    this.shaders.push({ p, wvp: gl.getUniformLocation(p, 'gm_Matrices[4]'), units: 1 });
+    this.shaders.push({ p, wvp: gl.getUniformLocation(p, 'gm_Matrices[4]'), at: gl.getUniformLocation(p, 'gm_AlphaTestEnabled'), atRef: gl.getUniformLocation(p, 'gm_AlphaRefValue'), units: 1 });
     return this.shaders.length - 1;
   }
   setShader(sh: number): void {
@@ -218,6 +222,20 @@ class GLRenderer implements Renderer {
     this.shader = this.shaders[sh] ? sh : -1;
     this.gl.useProgram(this.shaders[this.shader]?.p ?? this.prog);
     this.project();
+    this.applyAlphaTest();
+  }
+  setAlphaTest(on: boolean, ref: number): void {
+    if (on === this.alphaOn && ref === this.alphaRef) return;
+    this.flush();
+    this.alphaOn = on; this.alphaRef = ref;
+    this.applyAlphaTest();
+  }
+  /** Alpha test state for the program in use. GM shaders test in their own DoAlphaTest (gm_AlphaTestEnabled / gm_AlphaRefValue). */
+  private applyAlphaTest(): void {
+    const gl = this.gl, sh = this.shaders[this.shader], ref = this.alphaRef / 255;
+    if (!sh) { gl.uniform1f(this.uAt, this.alphaOn ? ref : -1); return; }
+    if (sh.at) gl.uniform1i(sh.at, this.alphaOn ? 1 : 0);
+    if (sh.atRef) gl.uniform1f(sh.atRef, ref);
   }
   shaderUniform(sh: number, name: string): number {
     const s = this.shaders[sh], loc = s && this.gl.getUniformLocation(s.p, name);
@@ -354,7 +372,7 @@ class WebAudio implements Audio {
   readonly ctx = new AudioContext();
   private readonly master = this.ctx.createGain();
   private readonly buffers: (AudioBuffer | null)[] = [null];
-  private readonly voices = new Map<number, { buf: AudioBuffer; src: AudioBufferSourceNode | null; gain: GainNode; pitch: number; loop: boolean; started: number; offset: number; paused: boolean; ended: boolean }>();
+  private readonly voices = new Map<number, { buf: AudioBuffer; src: AudioBufferSourceNode | null; gain: GainNode; pan: PannerNode | null; pitch: number; loop: boolean; started: number; offset: number; paused: boolean; ended: boolean }>();
   private next = 1;
 
   constructor() { this.master.connect(this.ctx.destination); }
@@ -382,7 +400,7 @@ class WebAudio implements Audio {
     if (!buf) return id;
     const g = this.ctx.createGain();
     g.gain.value = gain; g.connect(this.master);
-    this.voices.set(id, { buf, src: null, gain: g, pitch, loop, started: 0, offset, paused: false, ended: false });
+    this.voices.set(id, { buf, src: null, gain: g, pan: null, pitch, loop, started: 0, offset, paused: false, ended: false });
     this.start(id);
     return id;
   }
@@ -391,7 +409,7 @@ class WebAudio implements Audio {
     if (!v) return;
     v.ended = true;
     try { v.src?.stop(); } catch { /* already stopped */ }
-    v.gain.disconnect();
+    v.gain.disconnect(); v.pan?.disconnect();
     this.voices.delete(id);
   }
   pause(id: VoiceId, paused: boolean): void {
@@ -430,6 +448,28 @@ class WebAudio implements Audio {
     if (v.src && !v.paused) { try { v.src.stop(); } catch { /* */ } this.start(id); }
   }
   setMasterGain(g: number): void { this.master.gain.value = g; }
+  setPanner(id: VoiceId, x: number, y: number, z: number, model: number, ref: number, max: number, factor: number): void {
+    const v = this.voices.get(id);
+    if (!v) return;
+    if (!v.pan) {
+      v.pan = new PannerNode(this.ctx, { panningModel: 'equalpower' });
+      v.gain.disconnect();
+      v.gain.connect(v.pan).connect(this.master);
+    }
+    const p = v.pan;
+    p.positionX.value = x; p.positionY.value = y; p.positionZ.value = z;
+    // No falloff is the inverse model with a rolloff of 0, as in GM's HTML5 runner.
+    p.distanceModel = model === 2 ? 'linear' : model === 3 ? 'exponential' : 'inverse';
+    p.refDistance = Math.max(0, ref); p.maxDistance = Math.max(Number.MIN_VALUE, max);
+    p.rolloffFactor = model === 0 ? 0 : model === 2 ? Math.min(1, Math.max(0, factor)) : Math.max(0, factor);
+  }
+  setListener(x: number, y: number, z: number, lx: number, ly: number, lz: number, ux: number, uy: number, uz: number): void {
+    const l = this.ctx.listener;
+    if (!l.positionX) { l.setPosition(x, y, z); l.setOrientation(lx, ly, lz, ux, uy, uz); return; } // older Firefox
+    l.positionX.value = x; l.positionY.value = y; l.positionZ.value = z;
+    l.forwardX.value = lx; l.forwardY.value = ly; l.forwardZ.value = lz;
+    l.upX.value = ux; l.upY.value = uy; l.upZ.value = uz;
+  }
 }
 
 /** Image files -> RGBA via a 2D canvas (not WebGL: strips can be wider than the max texture size). */
@@ -506,6 +546,8 @@ export function createWebPlatform(canvas: HTMLCanvasElement): Platform & { audio
   addEventListener('mouseup', (e) => { if (input.mouseButtons & bit(e)) input.mouseReleased |= bit(e); input.mouseButtons &= ~bit(e); });
   canvas.addEventListener('wheel', (e) => { if (e.deltaY) input.wheel += e.deltaY < 0 ? 1 : -1; }, { passive: true });
   const audio = new WebAudio();
+  // A blocking dialog swallows key-up events, so held keys are released when it closes.
+  const modal = <T>(r: T): T => { input.keys.fill(0); return r; };
   return {
     renderer: new GLRenderer(canvas),
     audio,
@@ -525,6 +567,8 @@ export function createWebPlatform(canvas: HTMLCanvasElement): Platform & { audio
     },
     decodeImage,
     fonts: new CanvasFonts(),
-    ask: (text, def) => prompt(text, def),
+    ask: (text, def) => modal(prompt(text, def)),
+    alert: (text) => modal(alert(text)),
+    confirm: (text) => modal(confirm(text)),
   };
 }

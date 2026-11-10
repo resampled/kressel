@@ -84,7 +84,13 @@ export class Game {
   // files and async events
   ini: { path: string; ini: Ini; dirty: boolean } | null = null;
   readonly textFiles = new Map<number, TextFile>();
+  /** file_bin_* handles (ids shared with text files). Written back on close. */
+  readonly binFiles = new Map<number, { path: string; data: Uint8Array; size: number; pos: number; dirty: boolean }>();
   nextFile = 1;
+  /** Names file_find_first matched that file_find_next hasn't returned yet. */
+  fileFind: string[] = [];
+  /** gpu_set_alphatestenable / gpu_set_alphatestref (0-255). */
+  alphaTest = false; alphaRef = 0;
   asyncLoad = -1;
   private readonly asyncQueue: { kind: number; map: number }[] = [];
   /** Current event (for event_type / event_inherited); see EK. */
@@ -422,25 +428,28 @@ export class Game {
   // ---------------------------------------------------------------- collisions
 
   /** Would inst at (x, y) touch target (instance, object or all)? Returns the first instance hit. */
-  placeMeeting(inst: Instance, x: number, y: number, target: number, solidOnly = false): Instance | null {
+  placeMeeting(inst: Instance, x: number, y: number, target: number, solidOnly = false, all?: Instance[]): Instance | null {
     const ka = shape(inst, x, y, this.sa);
     if (!ka) return null;
     for (const o of this.instances) {
       if (!o.alive || !o.active || o === inst || (solidOnly && !o.solid)) continue;
       if (target >= FIRST_ID ? o.id !== target : target !== -3 && !o.obj.isA.has(target)) continue;
-      if (overlaps(ka, this.sa, shape(o, o.x, o.y, this.sb), this.sb)) return o;
+      if (overlaps(ka, this.sa, shape(o, o.x, o.y, this.sb), this.sb)) { if (!all) return o; all.push(o); }
     }
     return null;
   }
 
-  /** collision_* / position_*: the first instance of target whose mask overlaps the given shape (in sa), or null. */
-  collideShape(ka: number, target: number, notme: Instance | null, test?: (o: Instance) => boolean): Instance | null {
+  /**
+   * collision_* / position_*: the first instance of target whose mask overlaps the given shape (in sa), or null.
+   * With `all` (the *_list functions), every hit is appended to it instead and null is returned.
+   */
+  collideShape(ka: number, target: number, notme: Instance | null, test?: (o: Instance) => boolean, all?: Instance[]): Instance | null {
     for (const o of this.instances) {
       if (!o.alive || !o.active || o === notme) continue;
       if (target >= FIRST_ID ? o.id !== target : target !== -3 && !o.obj.isA.has(target)) continue;
       const kb = shape(o, o.x, o.y, this.sb);
       if (!kb) continue;
-      if (test ? test(o) : overlaps(ka, this.sa, kb, this.sb)) return o;
+      if (test ? test(o) : overlaps(ka, this.sa, kb, this.sb)) { if (!all) return o; all.push(o); }
     }
     return null;
   }

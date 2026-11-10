@@ -7,6 +7,8 @@ import type { SpriteDef } from '../runtime/assets.ts';
 import { Files } from '../runtime/data.ts';
 import type { Game } from '../runtime/game.ts';
 import type { Pixels } from '../platform/types.ts';
+import { DsMap } from '../runtime/data.ts';
+import { newEmitter, type Emitter } from '../runtime/sound.ts';
 
 const SPRITE_INFO: Record<string, true> = { width: true, height: true, number: true, xoffset: true, yoffset: true };
 define('lks_sprite_info', (g, s, t) => {
@@ -169,6 +171,54 @@ define('lks_font_add', (g, s, t) => {
 const target = (v: unknown) => Math.trunc(real(v as number));
 
 define('snd_play', (g, s, t, argc) => g.snd.play(target(s[t]), b(s, t, 2), opt(s, t, 3, argc, 1), opt(s, t, 4, argc, 0), opt(s, t, 5, argc, 1)));
+// Positional audio follows GM's HTML5 runner: WebAudio panning, no falloff until audio_falloff_set_model, no Doppler.
+/** audio_play_sound_at(sound, x, y, z, falloff_ref, falloff_max, falloff_factor, loop, priority, [gain, offset, pitch]) */
+define('snd_play_at', (g, s, t, argc) => g.snd.play(target(s[t]), b(s, t, 7), opt(s, t, 9, argc, 1), opt(s, t, 10, argc, 0), opt(s, t, 11, argc, 1),
+  newEmitter(n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6))));
+/** audio_play_sound_on(emitter, sound, loop, priority, [gain, offset, pitch]); a missing emitter plays nothing (-1). */
+define('snd_play_on', (g, s, t, argc) => {
+  const e = g.snd.emitters[n(s, t, 0)];
+  return e ? g.snd.play(target(s[t - 1]), b(s, t, 2), opt(s, t, 4, argc, 1), opt(s, t, 5, argc, 0), opt(s, t, 6, argc, 1), e) : -1;
+});
+/** An emitter member: does nothing (and gives dflt) on a missing emitter. */
+const em = (dflt: number, f: (e: Emitter, s: unknown[], t: number, g: Game) => number | void) => (g: Game, s: unknown[], t: number) => {
+  const e = g.snd.emitters[real(s[t] as number)];
+  return e ? f(e, s, t, g) ?? undefined : dflt;
+};
+const emSet = (f: (e: Emitter, s: unknown[], t: number) => void) => em(0, (e, s, t, g) => { f(e, s, t); g.snd.emitterChanged(e); });
+const num = (s: unknown[], t: number, k: number) => real(s[t - k] as number);
+/** Listener values from index k of Sounds.listener; set_* variants take a listener index first (only listener 0 exists). */
+const listen = (k: number, count: number, indexed: boolean) => (g: Game, s: unknown[], t: number) => {
+  if (indexed && num(s, t, 0) !== 0) return undefined;
+  for (let i = 0; i < count; i++) g.snd.listener[k + i] = num(s, t, i + (indexed ? 1 : 0));
+  g.snd.listenerChanged();
+  return undefined;
+};
+family('snd_3d', 'audio_', {
+  emitter_create: (g) => { const l = g.snd.emitters, free = l.indexOf(null), i = free < 0 ? l.length : free; l[i] = newEmitter(); return i; },
+  emitter_free: (g, s, t) => { g.snd.freeEmitter(n(s, t, 0)); return undefined; },
+  emitter_exists: (g, s, t) => !!g.snd.emitters[n(s, t, 0)],
+  emitter_position: emSet((e, s, t) => { e.x = num(s, t, 1); e.y = num(s, t, 2); e.z = num(s, t, 3); }),
+  emitter_velocity: em(0, () => {}), // Doppler: WebAudio has none
+  emitter_falloff: emSet((e, s, t) => { e.ref = num(s, t, 1); e.max = num(s, t, 2); e.factor = num(s, t, 3); }),
+  emitter_gain: emSet((e, s, t) => { e.gain = Math.max(0, num(s, t, 1)); }),
+  emitter_pitch: emSet((e, s, t) => { e.pitch = num(s, t, 1); }),
+  emitter_get_x: em(0, (e) => e.x), emitter_get_y: em(0, (e) => e.y), emitter_get_z: em(0, (e) => e.z),
+  emitter_get_gain: em(0, (e) => e.gain), emitter_get_pitch: em(1, (e) => e.pitch),
+  listener_position: listen(0, 3, false), listener_velocity: listen(3, 3, false), listener_orientation: listen(6, 6, false),
+  listener_set_position: listen(0, 3, true), listener_set_velocity: listen(3, 3, true), listener_set_orientation: listen(6, 6, true),
+  listener_get_data: (g, s, t) => {
+    if (n(s, t, 0) !== 0) return -1;
+    const m = new DsMap();
+    ['x', 'y', 'z', 'vx', 'vy', 'vz', 'lookat_x', 'lookat_y', 'lookat_z', 'up_x', 'up_y', 'up_z'].forEach((k, i) => m.m.set(k, g.snd.listener[i]));
+    return g.data.maps.add(m);
+  },
+  falloff_set_model: (g, s, t) => {
+    const m = Math.trunc(n(s, t, 0));
+    if (m >= 0 && m <= 8) { g.snd.falloff = m; g.snd.emitterChanged(null); } // an unknown model is ignored (HTML5 runner)
+    return undefined;
+  },
+});
 define('snd_stop', (g, s, t) => { g.snd.stop(target(s[t])); return undefined; });
 define('snd_stop_all', (g) => { g.snd.stopAll(); return undefined; });
 define('snd_pause', (g, s, t) => { g.snd.pause(target(s[t - 1]), s[t] === 'pause'); return undefined; });

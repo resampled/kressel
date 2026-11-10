@@ -64,6 +64,13 @@ define('opr_point_in_rect', (_g, s, t) => {
   const px = n(s, t, 0), py = n(s, t, 1);
   return px >= n(s, t, 2) && px <= n(s, t, 4) && py >= n(s, t, 3) && py <= n(s, t, 5);
 });
+/** rectangle_in_rectangle(source, destination): 1 source inside destination, 2 overlapping, 0 apart (edges inclusive; corners in any order). */
+define('opr_rect_in_rect', (_g, s, t) => {
+  const lo = (i: number, j: number) => Math.min(n(s, t, i), n(s, t, j)), hi = (i: number, j: number) => Math.max(n(s, t, i), n(s, t, j));
+  const sl = lo(0, 2), st = lo(1, 3), sr = hi(0, 2), sb = hi(1, 3), dl = lo(4, 6), dt = lo(5, 7), dr = hi(4, 6), db = hi(5, 7);
+  if (sl >= dl && sr <= dr && st >= dt && sb <= db) return 1;
+  return sl <= dr && sr >= dl && st <= db && sb >= dt ? 2 : 0;
+});
 define('opr_point_in_circle', (_g, s, t) => Math.hypot(n(s, t, 0) - n(s, t, 2), n(s, t, 1) - n(s, t, 3)) <= n(s, t, 4));
 
 // ---------------------------------------------------------------- random

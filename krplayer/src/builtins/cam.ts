@@ -74,8 +74,15 @@ define('ctr_script_name', (g, s, t) => { const f = real(s[t]); return g.a.functi
 // ---------------------------------------------------------------- system
 
 define('sys_log', (g, s, t) => { g.p.log(gstr(g, s[t])); return undefined; });
-define('sys_alert', (g, s, t) => { g.p.log(`show_message: ${gstr(g, s[t])}`); return undefined; });
-define('sys_confirm', () => true);
+// show_message / show_question block like GM's dialogs (the platform's own, as get_string). A platform without
+// dialogs (headless) logs the text and answers yes.
+define('sys_alert', (g, s, t) => { const m = gstr(g, s[t]); if (g.p.alert) g.p.alert(m); else g.p.log(`show_message: ${m}`); return undefined; });
+define('sys_confirm', (g, s, t) => {
+  const m = gstr(g, s[t]);
+  if (g.p.confirm) return g.p.confirm(m);
+  g.p.log(`show_question: ${m} (no dialog on this platform: answered yes)`);
+  return true;
+});
 define('sys_error', (g, s, t) => { throw new GmlError(`show_error: ${gstr(g, s[t])}`); });
 define('sys_game_end', (g) => { g.ended = true; g.endMessage = 'Game ended.'; return undefined; });
 define('sys_game_restart', (g) => { g.ended = true; g.endMessage = 'game_restart is not supported yet: reload the page.'; return undefined; });
