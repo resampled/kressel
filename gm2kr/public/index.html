@@ -15,6 +15,10 @@
   <h1>GameMaker → Kratience</h1>
   <p>Select your GameMaker game folder (must include <code>data.win</code> and referenced assets).</p>
   <input id="input" type="file" webkitdirectory multiple />
+  <p>
+    <label><input id="ogg" type="checkbox" /> Compress <code>.ogg</code> audio (re-encodes as Opus, lossy)</label>
+    <label>at <input id="kbps" type="number" min="16" max="256" step="8" value="64" /> kbps</label>
+  </p>
   <div class="actions">
     <button id="download" disabled>Download .krpj</button>
     <button id="play" disabled>Play in krplayer</button>

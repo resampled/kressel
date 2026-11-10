@@ -12,11 +12,21 @@ Verified on a GM 2024 (bytecode 17) game (asteroids), on Deltarune Chapters 1 an
 
 Anything else fails loudly with the chunk, code entry or address: timelines, HLSL-only shaders, try/finally, sequences/particles in asset layers, PNG texture pages and any GML function without an opcode in krpj_opcodes.md.
 
+## Compressing .ogg audio (optional)
+Music is most of a converted project's size, so the page has a **Compress .ogg audio** option (off by default) with a bitrate (default 64 kbps, total for all channels). It re-encodes every `.ogg` in the output (`sounds/` and `files/`) as Ogg Opus and keeps the original wherever the result isn't smaller or the file can't be re-encoded (logged). File names and `game.json` don't change, so it can be toggled after converting. Deltarune Chapter 1 at 64 kbps: 48.6 MB of `.ogg` becomes 22.7 MB (the `.krpj` goes from 73.8 MB to 47.8 MB).
+
+* It is lossy, and audio is resampled to 48 kHz (Opus's rate). Lengths in seconds are unchanged: the encoder's lead-in and padding are trimmed by the Ogg headers, so loops keep their length.
+* The page encodes with WebCodecs (`AudioEncoder`, `src/opus_web.ts`); the option is disabled in browsers without it. The Ogg container is written by `oggOpus` in `src/emit/ogg.ts`.
+* Players need Ogg Opus support in `decodeAudioData` (checked in Firefox; not yet checked in Chrome or Safari).
+* `.wav` and `.mp3` files are left alone.
+
 ## Converting from Node
 `convert(dataWin, extraFiles)` in `src/convert.ts` has no DOM dependency, so the same pipeline runs in tests (`gm2kr/test/emit.test.ts` converts and plays `samples/asteroids/data.win` when present) and from the command line:
 
 ```
 node scripts/convert.ts samples/chapter1_windows samples/chapter1.krpj
 ```
+
+Add `--ogg-kbps=64` for the .ogg option above; from Node it encodes with `ffmpeg` (libopus), which must be on PATH.
 
 `extraFiles` maps paths relative to the game folder (`"mus/battle.ogg"`) to loaders, so large folders are only read as needed.

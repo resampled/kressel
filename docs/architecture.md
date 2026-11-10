@@ -22,8 +22,10 @@ gm2kr/src/
   model.ts          GmModel: GameMaker-side types, not krpj
   decompile/        disasm.ts → structure.ts (stack sim + pattern structuring → krpj); program.ts (all entries,
                     child functions); builtins.ts (GML name → opcode, derived from the opcode table)
-  emit/             krpj.ts, textures.ts (QOI → RGBA → PNG), zip.ts
+  emit/             krpj.ts, textures.ts (QOI → RGBA → PNG), zip.ts, ogg.ts (optional .ogg → Ogg Opus pass over the
+                    output files; the encoder is passed in)
   convert.ts        data.win + game folder → { krpj, files }, no DOM
+  opus_web.ts       the page's Opus encoder (WebAudio decode + WebCodecs), browser only
   index.ts          UI only
 
 krplayer/src/

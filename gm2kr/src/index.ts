@@ -4,18 +4,43 @@
 
 import { convert, type GameFiles } from './convert.ts';
 import { zip } from './emit/zip.ts';
+import { compressOggs } from './emit/ogg.ts';
+import { canEncodeOpus, toOpus } from './opus_web.ts';
 import { sendToPlayer } from '../../krplayer/src/loader/handoff.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const input = $<HTMLInputElement>('input'), playBtn = $<HTMLButtonElement>('play'), dlBtn = $<HTMLButtonElement>('download');
+const oggBox = $<HTMLInputElement>('ogg'), kbpsBox = $<HTMLInputElement>('kbps');
 const log = (msg: string) => { $('log').textContent += msg + '\n'; };
 const playerUrl = document.querySelector('meta[name="gm2kr-player-url"]')?.getAttribute('content') ?? '';
 
-let files: Map<string, Uint8Array> | null = null, slug = 'game';
+/** `converted` is gm2kr's output as is; `files` is what the buttons use (the same, or with .ogg's compressed). */
+let converted: Map<string, Uint8Array> | null = null, files: Map<string, Uint8Array> | null = null, slug = 'game';
+
+oggBox.disabled = kbpsBox.disabled = !canEncodeOpus();
+if (oggBox.disabled) oggBox.parentElement!.title = 'This browser has no Opus encoder (WebCodecs AudioEncoder)';
+
+/** Applies the .ogg option to the converted project. The controls are off meanwhile, so the buttons never see a half-done set. */
+async function pack() {
+  if (!converted) return;
+  const controls = [input, oggBox, kbpsBox, dlBtn, playBtn];
+  for (const c of controls) c.disabled = true;
+  files = converted;
+  const kbps = Math.min(256, Math.max(16, +kbpsBox.value || 64));
+  try {
+    if (oggBox.checked) files = await compressOggs(converted, (d) => toOpus(d, kbps), log);
+  } catch (e) {
+    log(`error: ${(e as Error).message}`);
+  }
+  for (const c of controls) c.disabled = false;
+  playBtn.disabled = !playerUrl;
+}
+oggBox.addEventListener('change', pack);
+kbpsBox.addEventListener('change', () => { if (oggBox.checked) pack(); });
 
 input.addEventListener('change', async () => {
   $('log').textContent = '';
-  files = null;
+  converted = files = null;
   playBtn.disabled = dlBtn.disabled = true;
   const picked = [...(input.files ?? [])];
   const dataWin = picked.find((f) => f.name.toLowerCase() === 'data.win');
@@ -30,13 +55,12 @@ input.addEventListener('change', async () => {
   try {
     const t0 = performance.now();
     const out = await convert(await dataWin.arrayBuffer(), extra, log);
-    files = out.files; slug = out.krpj.cfg_db_relay.slug || 'game';
+    converted = out.files; slug = out.krpj.cfg_db_relay.slug || 'game';
     const k = out.krpj;
     log(`converted "${k.cfg_db_relay.title}" in ${Math.round(performance.now() - t0)} ms`);
-    log(`  ${Object.keys(k.objects ?? {}).length} objects, ${Object.keys(k.rooms ?? {}).length} rooms, ${Object.keys(k.functions ?? {}).length} functions, ${Object.keys(k.sprites).length} sprites, ${Object.keys(k.sounds).length} sounds, ${Object.keys(k.included_files ?? {}).length} included files, ${files.size} files`);
-    dlBtn.disabled = false;
-    playBtn.disabled = !playerUrl;
+    log(`  ${Object.keys(k.objects ?? {}).length} objects, ${Object.keys(k.rooms ?? {}).length} rooms, ${Object.keys(k.functions ?? {}).length} functions, ${Object.keys(k.sprites).length} sprites, ${Object.keys(k.sounds).length} sounds, ${Object.keys(k.included_files ?? {}).length} included files, ${converted.size} files`);
     if (!playerUrl) log('(no gm2kr-player-url configured: Play is disabled)');
+    await pack();
   } catch (e) {
     log(`error: ${(e as Error).message}`);
     console.error(e);
