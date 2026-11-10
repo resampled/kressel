@@ -364,8 +364,7 @@ define('drw_shader_uniform_f', (g, s, t, argc) => {
 });
 define('drw_tilemap', (g, s, t) => {
   const e = g.layers.element(n(s, t, 0));
-  if (!e || e.kind !== ELEM.tilemap) throw new Unverified(`draw_tilemap: tilemap ${String(s[t])} does not exist`);
-  g.drawTilemap(e, n(s, t, 1), n(s, t, 2));
+  if (e && e.kind === ELEM.tilemap) g.drawTilemap(e, n(s, t, 1), n(s, t, 2)); // missing tilemap: draws nothing (gm_gotchas.md)
   return undefined;
 });
 
