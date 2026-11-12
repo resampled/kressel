@@ -114,6 +114,15 @@ function readVar(path: string): unknown {
   return builtin !== undefined && typeof builtin !== 'function' ? builtin : slot < 0 ? undefined : inst.vars.get(slot);
 }
 
+/** Sets global.name, or a user var on every live instance of an object. */
+function setVar(path: string, v: string | number): void {
+  const [scope, name] = path.split('.');
+  const slot = g.a.varNames.indexOf(name);
+  if (slot < 0) throw new Error(`no variable "${name}" in the project`);
+  if (scope === 'global') g.globalScope.vars.set(slot, v);
+  else for (const i of g.instances) if (i.alive && i.obj.name === scope) i.vars.set(slot, v);
+}
+
 mkdirSync(outDir, { recursive: true });
 console.log(`${krpj.cfg_db_relay?.title ?? input}: ${g.a.rooms.length} rooms, ${g.speed} fps`);
 flush();
@@ -131,6 +140,7 @@ try {
     else if (op === 'shot') await shot(a);
     else if (op === 'state') state(a);
     else if (op === 'var') console.log(`  ${a} = ${JSON.stringify(readVar(a))}`);
+    else if (op === 'set') setVar(a, Number.isNaN(Number(b)) ? b : Number(b));
     else throw new Error(`unknown command "${op}"`);
     if (g.ended) break;
   }

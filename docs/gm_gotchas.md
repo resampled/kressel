@@ -147,6 +147,7 @@ GEN8 says 2.0.0.0 and there is no SEQN/FEAT/TGIN chunk. `fmt.gms23` is false.
 * **`move_contact_*` does nothing if the instance already collides**; `move_outside_*` stays wherever it got to if it never gets free. Both step one pixel at a time, 1000 steps when `maxdist` <= 0.
 * **`mp_linear_step` returns true when the goal is within one step even if the step was blocked.** `mp_potential_step` turns the instance 30 degrees on the spot when no direction works.
 * **Positional audio has no falloff by default** (`audio_falloff_none`): `audio_play_sound_at` only pans until the game calls `audio_falloff_set_model`. New emitters have falloff ref 100, max 100000, factor 1.
+* **`make_colour_hsv` with a hue outside 0-255** wraps the hue (krplayer). Ch2 `obj_firework_explosion` user event 0 (`colorProfile` 2) passes `255 * (mypixely[i] + height/2) / (2*height)`, which goes negative for pixels above the centre once `scale` > 1. Repro: `show_debug_message(make_colour_hsv(-20, 100, 255))` vs `make_colour_hsv(235, 100, 255)`.
 * `instance_place_list`'s `ordered` sorts by the distance from the tested point to each instance's `x`/`y`, not to its mask.
 * `file_find_*` and `file_bin_*` aren't in the HTML5 runner; krplayer follows the manual. File names come back lower-case, and `file_bin_read_byte` past the end gives 0.
 * `screen_save` fails when called. `sprite_add`/`font_add` removeback/smooth aren't supported, and precise `sprite_collision_mask` only works on `sprite_add` sprites.

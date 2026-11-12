@@ -35,6 +35,7 @@ current converter. `samples/*.krpj*` files may be stale or in an old layout. Pre
 | `shot name` | save the window to `<out>/name.png` (view it with Read) |
 | `state` / `state obj_player` | room + instance counts, or per-instance x/y/angle/sprite |
 | `var obj_game._points` / `var global.flag` | print a variable (builtins like `image_angle` work too) |
+| `set obj_fireworks_manager.is_active 1` / `set global.plot 60` | set a user variable that already exists in the project (all live instances of the object), e.g. to trigger an event without walking there |
 
 Keys: `A-Z 0-9 Left Right Up Down Enter Space Shift Ctrl Alt Esc Tab Backspace F1-F12`, or a GML key code.
 Pressed/released latches clear after each step, as in GM.

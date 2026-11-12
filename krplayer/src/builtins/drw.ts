@@ -179,8 +179,8 @@ define('drw_clear', (g, s, t, argc) => { g.p.renderer.clear(n(s, t, 0), opt(s, t
 define('drw_make_colour', (_g, s, t) => {
   const x = n(s, t, 1), y = n(s, t, 2), z = n(s, t, 3);
   if (s[t] === 'rgb') return (clamp8(x)) | (clamp8(y) << 8) | (clamp8(z) << 16);
-  // GM HSV components are 0-255.
-  const h = (x / 255) * 6, sa = y / 255, v = z / 255, i = Math.floor(h) % 6, f = h - Math.floor(h);
+  // GM HSV components are 0-255. Hue wraps (Ch2 obj_firework_explosion passes negative hues); NaN acts as 0.
+  const h = (x / 255) * 6, sa = y / 255, v = z / 255, i = ((Math.floor(h) % 6) + 6) % 6 || 0, f = h - Math.floor(h);
   const p = v * (1 - sa), q = v * (1 - f * sa), u = v * (1 - (1 - f) * sa);
   const [r, gg, bb] = [[v, u, p], [q, v, p], [p, v, u], [p, q, v], [u, p, v], [v, p, q]][i];
   return clamp8(r * 255) | (clamp8(gg * 255) << 8) | (clamp8(bb * 255) << 16);

@@ -129,6 +129,12 @@ test('real division by zero gives inf / NaN instead of failing (ch1_ribbit_mod o
   assert.deepEqual([Number.isNaN(v.nan), v.inf, v.q], [true, -Infinity, Infinity]);
 });
 
+test('make_colour_hsv wraps an out-of-range hue (DR ch2 obj_firework_explosion)', async () => {
+  const hsv = (h: number) => ['drw_make_colour', 'hsv', h, 100, 255];
+  const v = await exec([['var_set', ['_lv', 'neg'], hsv(-20)], ['var_set', ['_lv', 'pos'], hsv(235)], ['var_set', ['_lv', 'big'], hsv(255 + 40)], ['var_set', ['_lv', 'ok'], hsv(40)]]);
+  assert.deepEqual([v.neg, v.big], [v.pos, v.ok]);
+});
+
 test('locals, loops, switch fall-through, compound assignment', async () => {
   const v = await exec([
     ['var_local', 'i', 0],
