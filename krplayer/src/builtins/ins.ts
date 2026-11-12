@@ -6,6 +6,9 @@ import { EV } from '../runtime/assets.ts';
 import type { Game } from '../runtime/game.ts';
 import { Instance } from '../runtime/instance.ts';
 import type { PathDef } from '../runtime/paths.ts';
+import { MpGrid } from '../runtime/mpgrid.ts';
+import { shape } from '../runtime/collision.ts';
+import { rect } from '../runtime/draw.ts';
 
 /** instance_create_*'s optional struct: its fields are set before the create event runs. */
 function spawnWith(g: Game, obj: Value, x: number, y: number, depth: number, layer: number, vars: Value): number {
@@ -257,4 +260,56 @@ define('ins_id_get', (g, s, t) => {
   let k = Math.trunc(n(s, t, 0));
   if (k >= 0) for (const i of g.instances) if (i.alive && i.active && k-- === 0) return i.id;
   return -4;
+});
+
+define('ins_object_set_persistent', (g, s, t) => { const o = g.a.objects[real(s[t])]; if (o) o.persistent = b(s, t, 1); return undefined; });
+define('ins_set_active_layer', (g, s, t) => {
+  const v = s[t - 1], l = g.layers.find(typeof v === 'string' ? v : real(v));
+  if (!l) return false;
+  for (const inst of g.instances) if (inst.alive && inst.layer === l.id) inst.active = s[t] === 'activate';
+  return true;
+});
+
+// mp_grid_* (runtime/mpgrid.ts). GM ignores calls on a missing grid id like other missing resources (assumed).
+const grids: (MpGrid | null)[] = [];
+const gridPts: number[] = [];
+const grid = (fn: (gr: MpGrid, g: Game, s: Value[], t: number) => Value, dflt: Value = undefined) =>
+  (g: Game, s: Value[], t: number) => { const gr = grids[real(s[t])]; return gr ? fn(gr, g, s, t) : dflt; };
+family('mov_mp_grid', 'mp_grid_', {
+  create: (_g, s, t) => grids.push(new MpGrid(n(s, t, 0), n(s, t, 1), Math.max(1, Math.trunc(n(s, t, 2))), Math.max(1, Math.trunc(n(s, t, 3))), n(s, t, 4), n(s, t, 5))) - 1,
+  destroy: (_g, s, t) => { grids[real(s[t])] = null; return undefined; },
+  clear_all: grid((gr) => { gr.cells.fill(0); return undefined; }),
+  add_cell: grid((gr, _g, s, t) => { gr.set(Math.trunc(n(s, t, 1)), Math.trunc(n(s, t, 2)), 1); return undefined; }),
+  clear_cell: grid((gr, _g, s, t) => { gr.set(Math.trunc(n(s, t, 1)), Math.trunc(n(s, t, 2)), 0); return undefined; }),
+  get_cell: grid((gr, _g, s, t) => { const h = Math.trunc(n(s, t, 1)), v = Math.trunc(n(s, t, 2)); return h < 0 || v < 0 || h >= gr.hc || v >= gr.vc ? -1 : -gr.cells[v * gr.hc + h]; }, -1),
+  add_rectangle: grid((gr, _g, s, t) => { gr.rect(n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), 1); return undefined; }),
+  clear_rectangle: grid((gr, _g, s, t) => { gr.rect(n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), 0); return undefined; }),
+  /** Forbids every cell an instance's bounding box overlaps (prec is treated as false). */
+  add_instances: grid((gr, g, s, t) => {
+    const o = real(s[t - 1]), q = g.sb;
+    for (const i of g.instances) {
+      if (!i.alive || !i.active || !(o === -3 || (o >= 100000 ? i.id === o : i.obj.isA.has(o)))) continue;
+      shape(i, i.x, i.y, q);
+      if (q[10] > q[8] && q[11] > q[9]) gr.rect(q[8], q[9], q[10] - 1e-6, q[11] - 1e-6, 1);
+    }
+    return undefined;
+  }),
+  /** mp_grid_path(grid, path, xstart, ystart, xgoal, ygoal, allowdiag): replaces the path's points; false if there's no way. */
+  path: grid((gr, g, s, t) => {
+    const pid = n(s, t, 1);
+    if (!g.paths.exists(pid) || !gr.path(n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), b(s, t, 6), gridPts)) return false;
+    const p = g.paths.get(pid, 'mp_grid_path');
+    p.pts.length = 0;
+    for (let k = 0; k < gridPts.length; k += 2) p.pts.push(gridPts[k], gridPts[k + 1], 100);
+    p.changed();
+    return true;
+  }, false),
+  /** Forbidden cells red, free ones green, at the draw alpha. */
+  draw: grid((gr, g) => {
+    for (let k = 0; k < gr.cells.length; k++) {
+      const x = gr.left + (k % gr.hc) * gr.cw, y = gr.top + Math.floor(k / gr.hc) * gr.ch, c = gr.cells[k] ? 0x0000ff : 0x00ff00;
+      rect(g, x, y, x + gr.cw - 1, y + gr.ch - 1, c, c, c, c, g.alpha, false);
+    }
+    return undefined;
+  }),
 });

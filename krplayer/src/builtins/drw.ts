@@ -100,6 +100,10 @@ define('drw_text_ext_colour', (g, s, t) => {
   text(g, n(s, t, 0), n(s, t, 1), s[t - 2], 1, 1, 0, n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), n(s, t, 7), n(s, t, 8), n(s, t, 9));
   return undefined;
 });
+define('drw_text_ext_transformed_colour', (g, s, t) => {
+  text(g, n(s, t, 0), n(s, t, 1), s[t - 2], n(s, t, 5), n(s, t, 6), n(s, t, 7), n(s, t, 3), n(s, t, 4), n(s, t, 8), n(s, t, 9), n(s, t, 10), n(s, t, 11), n(s, t, 12));
+  return undefined;
+});
 define('drw_text_transformed_colour', (g, s, t) => {
   text(g, n(s, t, 0), n(s, t, 1), s[t - 2], n(s, t, 3), n(s, t, 4), n(s, t, 5), -1, -1, n(s, t, 6), n(s, t, 7), n(s, t, 8), n(s, t, 9), n(s, t, 10));
   return undefined;
@@ -205,16 +209,23 @@ define('drw_colour_get', (_g, s, t) => {
 
 /** bm_normal 0, bm_add 1, bm_max 2, bm_subtract 3 -> factor pairs (GM bm_* factor constants). */
 const BLEND: Record<number, [number, number]> = { 0: [5, 6], 1: [5, 2], 2: [5, 4], 3: [1, 4] };
+/** Sets the renderer's blend factors and remembers them. */
+const setBlend = (g: Game, sc: number, dc: number, sa: number, da: number) => {
+  g.blendF[0] = sc; g.blendF[1] = dc; g.blendF[2] = sa; g.blendF[3] = da;
+  g.p.renderer.setBlend(sc, dc, sa, da);
+  return undefined;
+};
 define('drw_blendmode', (g, s, t) => {
   const m = BLEND[n(s, t, 0)];
   if (!m) throw new NotImplemented(`blend mode ${n(s, t, 0)} not supported`);
-  g.p.renderer.setBlend(m[0], m[1], m[0], m[1]);
-  return undefined;
+  g.blendMode = n(s, t, 0);
+  return setBlend(g, m[0], m[1], m[0], m[1]);
 });
+define('drw_blendmode_get', (g) => g.blendMode);
 family('drw_gpu', 'gpu_set_', {
-  blendmode_ext: (g, s, t) => { g.p.renderer.setBlend(n(s, t, 0), n(s, t, 1), n(s, t, 0), n(s, t, 1)); return undefined; },
-  blendmode_ext_sepalpha: (g, s, t) => { g.p.renderer.setBlend(n(s, t, 0), n(s, t, 1), n(s, t, 2), n(s, t, 3)); return undefined; },
-  blendenable: (g, s, t) => { if (b(s, t, 0)) g.p.renderer.setBlend(5, 6, 5, 6); else g.p.renderer.setBlend(2, 1, 2, 1); return undefined; },
+  blendmode_ext: (g, s, t) => setBlend(g, n(s, t, 0), n(s, t, 1), n(s, t, 0), n(s, t, 1)),
+  blendmode_ext_sepalpha: (g, s, t) => setBlend(g, n(s, t, 0), n(s, t, 1), n(s, t, 2), n(s, t, 3)),
+  blendenable: (g, s, t) => (b(s, t, 0) ? setBlend(g, 5, 6, 5, 6) : setBlend(g, 2, 1, 2, 1)),
   fog: (g, s, t) => { g.p.renderer.setFog(b(s, t, 0), n(s, t, 1)); return undefined; },
   texfilter: (g, s, t) => { g.p.renderer.setFilter(b(s, t, 0)); return undefined; },
   colorwriteenable: (g, s, t) => { g.p.renderer.setColorWrite(b(s, t, 0), b(s, t, 1), b(s, t, 2), b(s, t, 3)); return undefined; },
@@ -343,6 +354,48 @@ define('drw_surface_part', (g, s, t) => {
   g.p.renderer.drawImage(sf.tex, n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), 0, 0, 1, 1, 0, 0xffffff, g.alpha);
   return undefined;
 });
+define('drw_surface_part_ext', (g, s, t) => {
+  const sf = g.surface(s[t]);
+  g.p.renderer.drawImage(sf.tex, n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), 0, 0, n(s, t, 7), n(s, t, 8), 0, n(s, t, 9), n(s, t, 10));
+  return undefined;
+});
+define('drw_surface_stretched', (g, s, t) => {
+  const sf = g.surface(s[t]);
+  g.p.renderer.drawImage(sf.tex, 0, 0, sf.w, sf.h, n(s, t, 1), n(s, t, 2), 0, 0, n(s, t, 3) / sf.w, n(s, t, 4) / sf.h, 0, 0xffffff, g.alpha);
+  return undefined;
+});
+/** draw_surface_general: like draw_sprite_general (part, scaled, rotated about the part's top-left, corner colours). */
+define('drw_surface_general', (g, s, t) => {
+  const sf = g.surface(s[t]), [l, tp, w, h, x, y, xs, ys, rot] = Array.from({ length: 9 }, (_, k) => n(s, t, k + 1));
+  const c = Math.cos(rot * D2R), si = Math.sin(rot * D2R), W = w * xs, H = h * ys;
+  const px = (u: number, v: number) => x + u * c + v * si, py = (u: number, v: number) => y - u * si + v * c;
+  g.p.renderer.drawQuad(sf.tex, l, tp, w, h, px(0, 0), py(0, 0), px(W, 0), py(W, 0), px(W, H), py(W, H), px(0, H), py(0, H),
+    n(s, t, 10), n(s, t, 11), n(s, t, 12), n(s, t, 13), n(s, t, 14));
+  return undefined;
+});
+/** surface_copy(dest, x, y, src) / surface_copy_part(dest, x, y, src, xs, ys, ws, hs): replaces the pixels (blend one/zero). */
+define('drw_surface_copy', (g, s, t) => {
+  const dest = n(s, t, 1), src = g.surface(s[t - 4]), part = s[t] === 'copy_part';
+  g.surface(dest);
+  const [sx, sy, sw, sh] = part ? [n(s, t, 5), n(s, t, 6), n(s, t, 7), n(s, t, 8)] : [0, 0, src.w, src.h];
+  const f = g.blendF, keep = [f[0], f[1], f[2], f[3]];
+  g.pushTarget(dest);
+  g.p.renderer.setBlend(2, 1, 2, 1);
+  g.p.renderer.drawImage(src.tex, sx, sy, sw, sh, n(s, t, 2), n(s, t, 3), 0, 0, 1, 1, 0, 0xffffff, 1);
+  g.p.renderer.setBlend(keep[0], keep[1], keep[2], keep[3]);
+  g.popTarget();
+  return undefined;
+});
+define('drw_surface_resize', (g, s, t) => { g.resizeSurface(n(s, t, 0), Math.max(1, Math.trunc(n(s, t, 1))), Math.max(1, Math.trunc(n(s, t, 2)))); return true; });
+define('drw_surface_get_target', (g) => g.currentTarget());
+/** application_get_position: where the (letterboxed) application surface sits in the window. */
+define('drw_app_position', (g) => {
+  const [ww, wh] = g.p.renderer.windowSize(), app = g.surface(0), k = Math.min(ww / app.w, wh / app.h);
+  const x = (ww - app.w * k) / 2, y = (wh - app.h * k) / 2;
+  return [x, y, x + app.w * k, y + app.h * k] as GArray;
+});
+family('drw_video', 'video_', {});
+family('drw_gif', 'gif_', {});
 define('drw_app_surface', (g, s, t) => { if (s[t] === 'draw_enable') g.appSurfaceDraw = b(s, t, 1); return undefined; });
 define('drw_getpixel', () => 0);
 /** A surface pixel as BGR, or ABGR with alpha in the top byte (_ext). Reads the whole surface back, so it's slow. */
@@ -403,8 +456,9 @@ const shader = (g: Game, v: Value, fn: string) => {
   if (sh.handle < 0) throw new NotImplemented(`${fn}: shader ${sh.name} did not compile`);
   return sh.handle;
 };
-define('drw_shader_set', (g, s, t) => { g.p.renderer.setShader(shader(g, s[t], 'shader_set')); return undefined; });
-define('drw_shader_reset', (g) => { g.p.renderer.setShader(-1); return undefined; });
+define('drw_shader_set', (g, s, t) => { g.p.renderer.setShader(shader(g, s[t], 'shader_set')); g.shader = real(s[t]); return undefined; });
+define('drw_shader_reset', (g) => { g.p.renderer.setShader(-1); g.shader = -1; return undefined; });
+define('drw_shader_current', (g) => g.shader);
 define('drw_shader_uniform', (g, s, t) => g.p.renderer.shaderUniform(shader(g, s[t], 'shader_get_uniform'), str(s, t, 1)));
 define('drw_shader_sampler', (g, s, t) => g.p.renderer.shaderUniform(shader(g, s[t], 'shader_get_sampler_index'), str(s, t, 1)));
 define('drw_shader_uniform_f', (g, s, t, argc) => {

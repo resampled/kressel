@@ -25,6 +25,15 @@ define('cam_set_border', (g, s, t) => { const c = cam(g, s[t]); if (c) { c.bx = 
 define('cam_set_speed', (g, s, t) => { const c = cam(g, s[t]); if (c) { c.sx = n(s, t, 1); c.sy = n(s, t, 2); } return undefined; });
 define('cam_set_angle', (g, s, t) => { const c = cam(g, s[t]); if (c) c.angle = n(s, t, 1); return undefined; });
 define('cam_create', (g) => { const id = g.cameras.length; g.cameras.push(newCamera(id)); return id; });
+/** camera_create_view(x, y, w, h, angle, target, hspeed, vspeed, hborder, vborder) */
+define('cam_create_view', (g, s, t, argc) => {
+  const id = g.cameras.length, c = newCamera(id), o = (k: number, d: number) => (k < argc ? n(s, t, k) : d);
+  c.x = n(s, t, 0); c.y = n(s, t, 1); c.w = n(s, t, 2); c.h = n(s, t, 3);
+  c.angle = o(4, 0); c.target = o(5, -1); c.sx = o(6, -1); c.sy = o(7, -1); c.bx = o(8, 0); c.by = o(9, 0);
+  g.cameras.push(c);
+  return id;
+});
+define('cam_destroy', (g, s, t) => { const i = real(s[t]); if (g.cameras[i]) g.cameras[i] = null; return undefined; });
 define('cam_view_get', (g, s, t) => {
   const v = g.views[n(s, t, 1)];
   if (!v) throw new Unverified(`view ${String(s[t - 1])} out of range`);
@@ -87,7 +96,7 @@ define('sys_error', (g, s, t) => { throw new GmlError(`show_error: ${gstr(g, s[t
 define('sys_game_end', (g) => { g.ended = true; g.endMessage = 'Game ended.'; return undefined; });
 define('sys_game_restart', (g) => { g.ended = true; g.endMessage = 'game_restart is not supported yet: reload the page.'; return undefined; });
 define('sys_game_change', (g, s, t) => { g.ended = true; g.endMessage = `The game switched to ${str(s, t, 0)} ${str(s, t, 1)}: load that project to continue.`; return undefined; });
-define('sys_device', (g, s, t) => (s[t] === 'language' ? 'en' : g.data.maps.add(new DsMap())));
+define('sys_device', (g, s, t) => (s[t] === 'language' ? 'en' : s[t] === 'region' ? 'US' : g.data.maps.add(new DsMap())));
 define('sys_now', () => dateTime(new Date()));
 define('sys_date', (_g, s, t, argc) => {
   const d = argc > 1 ? fromDateTime(n(s, t, 1)) : new Date();
@@ -110,3 +119,4 @@ const EPOCH = Date.UTC(1899, 11, 30);
 function dateTime(d: Date): number { return (d.getTime() - d.getTimezoneOffset() * 60000 - EPOCH) / 86400000; }
 function fromDateTime(v: number): Date { const d = new Date(EPOCH + v * 86400000); return new Date(d.getTime() + d.getTimezoneOffset() * 60000); }
 define('cam_screen_save', () => { throw new NotImplemented('screen_save is not supported in krplayer (no file to write a PNG to)'); });
+define('cam_screen_save_part', () => { throw new NotImplemented('screen_save_part is not supported in krplayer (no file to write a PNG to)'); });

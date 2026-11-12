@@ -62,9 +62,13 @@ export class SoftRenderer implements Renderer {
     for (let i = 0; i < d.length; i += 4) { d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = a; }
   }
   setBlend(src: number, dst: number): void { this.src = src; this.dst = dst; }
+  /** Normal blending: a fully transparent pixel changes nothing, so it can be skipped. */
+  private normal(): boolean { return this.src === 5 && this.dst === 6; }
   setFog(on: boolean, color: number): void { this.fog = on; this.fogCol = color; }
   setAlphaTest(on: boolean, ref: number): void { this.at = on ? ref : -1; }
-  setColorWrite(): void {}
+  /** Colour write mask: bit 0 red, 1 green, 2 blue, 3 alpha. */
+  private cw = 15;
+  setColorWrite(r: boolean, g: boolean, b: boolean, a: boolean): void { this.cw = (r ? 1 : 0) | (g ? 2 : 0) | (b ? 4 : 0) | (a ? 8 : 0); }
   setFilter(): void {}
   systemText(): void {}
 
@@ -80,7 +84,7 @@ export class SoftRenderer implements Renderer {
     x3: number, y3: number, x4: number, y4: number, c1: number, _c2: number, _c3: number, _c4: number, alpha: number): void {
     this.draws++;
     const img = this.tex.get(t);
-    if (!this.enabled || !img || alpha <= 0) return;
+    if (!this.enabled || !img || (alpha <= 0 && this.normal())) return;
     const [X1, Y1] = this.w(x1, y1), [X2, Y2] = this.w(x2, y2), [X4, Y4] = this.w(x4, y4), [X3, Y3] = this.w(x3, y3);
     // Inverse of the affine map from (u, v) in [0,1]^2 to the parallelogram X1 + u(X2-X1) + v(X4-X1).
     const ax = X2 - X1, ay = Y2 - Y1, bx = X4 - X1, by = Y4 - Y1, det = ax * by - ay * bx;
@@ -95,7 +99,7 @@ export class SoftRenderer implements Renderer {
       const tx = Math.floor(sx + u * sw), ty = Math.floor(sy + v * sh);
       if (tx < 0 || ty < 0 || tx >= img.w || ty >= img.h) continue;
       const k = (ty * img.w + tx) * 4, a = (img.data[k + 3] / 255) * alpha;
-      if (a <= 0 || a * 255 <= this.at) continue;
+      if ((a <= 0 && this.normal()) || a * 255 <= this.at) continue;
       if (this.fog) this.blend(px, py, (this.fogCol & 255) / 255, ((this.fogCol >> 8) & 255) / 255, ((this.fogCol >> 16) & 255) / 255, a);
       else this.blend(px, py, (img.data[k] / 255) * tr, (img.data[k + 1] / 255) * tg, (img.data[k + 2] / 255) * tb, a);
     }
@@ -124,7 +128,7 @@ export class SoftRenderer implements Renderer {
   private tri(img: Pixels | null, x1: number, y1: number, u1: number, v1: number, c1: number, x2: number, y2: number, u2: number, v2: number, c2: number,
     x3: number, y3: number, u3: number, v3: number, c3: number, alpha: number): void {
     this.draws++;
-    if (!this.enabled || alpha <= 0) return;
+    if (!this.enabled || (alpha <= 0 && this.normal())) return;
     const [X1, Y1] = this.w(x1, y1), [X2, Y2] = this.w(x2, y2), [X3, Y3] = this.w(x3, y3);
     const det = (Y2 - Y3) * (X1 - X3) + (X3 - X2) * (Y1 - Y3);
     if (Math.abs(det) < 1e-9) return;
@@ -147,7 +151,7 @@ export class SoftRenderer implements Renderer {
         if (tx < 0 || ty < 0 || tx >= img.w || ty >= img.h) continue;
         const k = (ty * img.w + tx) * 4;
         tr = img.data[k] / 255; tg = img.data[k + 1] / 255; tb = img.data[k + 2] / 255; ta = img.data[k + 3] / 255;
-        if (ta <= 0) continue;
+        if (ta <= 0 && this.normal()) continue;
       }
       if (alpha * ta * 255 <= this.at) continue;
       const f = this.fog;
@@ -161,6 +165,12 @@ export class SoftRenderer implements Renderer {
   /** Blends one pixel with the current factors (GM bm_* numbering). */
   private blend(px: number, py: number, r: number, g: number, b: number, a: number): void {
     const d = this.target.data, k = (py * this.target.w + px) * 4;
+    if (this.cw !== 15) { // masked channels keep their value
+      const cw = this.cw, r0 = d[k], g0 = d[k + 1], b0 = d[k + 2], a0 = d[k + 3];
+      this.cw = 15; this.blend(px, py, r, g, b, a); this.cw = cw;
+      if (!(cw & 1)) d[k] = r0; if (!(cw & 2)) d[k + 1] = g0; if (!(cw & 4)) d[k + 2] = b0; if (!(cw & 8)) d[k + 3] = a0;
+      return;
+    }
     if (this.src === 5 && this.dst === 6) { // bm_normal, the common case
       const ia = 1 - a;
       d[k] = r * 255 * a + d[k] * ia; d[k + 1] = g * 255 * a + d[k + 1] * ia; d[k + 2] = b * 255 * a + d[k + 2] * ia; d[k + 3] = a * 255 * a + d[k + 3] * ia;

@@ -19,6 +19,8 @@ export class Scope {
 export class GmStruct extends Scope {
   /** Constructor function key, or null for literals / json_parse. */
   ctor: string | null;
+  /** The constructor's static struct: variables missing here are read from it (`static` methods). */
+  statics: GmStruct | null = null;
   constructor(ctor: string | null = null) { super(); this.ctor = ctor; }
 }
 

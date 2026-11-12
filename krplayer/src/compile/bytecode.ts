@@ -1,5 +1,7 @@
 // krplayer's internal bytecode. Flat Int32Array: [op, operands...]. Never saved; rebuilt at load.
 
+import type { GmStruct } from '../value.ts';
+
 export const Op = {
   CONST: 1,      // k              -> consts[k]
   GET: 2,        // scope id       (FIELD scopes pop the instance first)
@@ -34,6 +36,8 @@ export const Op = {
   ARRAY: 31,     // n              n items (first element deepest) -> array
   TRY_BEGIN: 32, // catch          pushes a handler; an error jumps to catch with the exception pushed
   TRY_END: 33,   //                pops the handler
+  SHAS: 34,      // id             -> whether the running block's static struct has variable id set
+  CALLB: 35,     // builtin ref    calls the builtin with this block's arguments (ref: const index or -1); a built-in as a function value
 } as const;
 
 /** Variable scopes for GET/SET/GETI/SETI. */
@@ -46,6 +50,7 @@ export const S = {
   BFIELD: 5,  // built-in instance variable on a popped instance/object
   BGLOBAL: 6, // built-in global (room, room_width...)
   ARG: 7,     // argumentN (id = N); argument[i] with GETI/SETI (id = -1)
+  STATIC: 8,  // user variable on the running block's static struct (`static`)
 } as const;
 
 export const BinOp = {
@@ -66,6 +71,8 @@ export interface Block {
   stmtPath: string[];
   /** Object events: the object that defined it and the event key (see evKey), for event_inherited. */
   owner?: number; ev?: number;
+  /** The function's static variables, made on first use (and the static struct of structs it constructs). */
+  statics?: GmStruct;
 }
 
 /** Event keys: simple events by EV slot; alarms, user, async, collision and key events offset. */

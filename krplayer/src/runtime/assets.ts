@@ -3,7 +3,9 @@
 
 import type { Hat, Krpj, Layer, Node, Path, RoomInstance, ScriptEntry, View } from '../krpj.ts';
 import type { Pixels, Platform, SoundId, TextureId } from '../platform/types.ts';
-import { EK, type Block } from '../compile/bytecode.ts';
+import { EK, Op, type Block } from '../compile/bytecode.ts';
+import { opcodeId } from '../opcodes.ts';
+import { IMPL } from '../builtins/registry.ts';
 import { compileScript, CompileError, type CompileEnv } from '../compile/compiler.ts';
 import { GmMethod } from '../value.ts';
 import '../builtins/index.ts';
@@ -157,14 +159,29 @@ export async function loadAssets(pj: Krpj, url: (path: string) => string, platfo
   const scriptOf = new Map<string, number>();
   (pj.scripts ?? []).forEach((f, i) => { if (f !== null && !scriptOf.has(f)) scriptOf.set(f, i); });
   const fnValues = new Map<string, unknown>();
+  /** A built-in opcode used as a function value: a function (after the project's own) that forwards its arguments. */
+  const builtinFn = (op: string, ref?: string): number | undefined => {
+    let id: number;
+    try { id = opcodeId(op, ''); } catch { return undefined; }
+    if (!IMPL[id]) return undefined;
+    const i = Math.max(fnEntries.length, functions.length), name = ref === undefined ? op : `${op}/${ref}`;
+    const block: Block = { code: Int32Array.of(Op.CALLB, id, ref === undefined ? -1 : 0, Op.RET), consts: ref === undefined ? [] : [ref], nLocals: 0, name, stmtPc: [0], stmtPath: [''] };
+    functions[i] = { index: i, name, block, argc: 0, ctor: false };
+    return i;
+  };
   let owners = 1 << 28;
   const env: CompileEnv = {
     asset: (n) => index.get(n),
     userVar: varSlot,
     func: (n) => fnIndex.get(n),
-    fnValue: (n) => {
-      let v = fnValues.get(n);
-      if (v === undefined) { v = scriptOf.get(n) ?? new GmMethod(fnIndex.get(n)!, null, n); fnValues.set(n, v); }
+    fnValue: (n, ref) => {
+      const key = ref === undefined ? n : `${n}/${ref}`;
+      let v = fnValues.get(key);
+      if (v !== undefined) return v;
+      const f = fnIndex.get(n) ?? builtinFn(n, ref);
+      if (f === undefined) return undefined;
+      v = scriptOf.get(n) ?? new GmMethod(f, null, n);
+      fnValues.set(key, v);
       return v;
     },
     owners: (n) => { const o = owners; owners += n; return o; },

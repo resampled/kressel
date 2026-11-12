@@ -65,6 +65,8 @@ export class VM {
     this.lp += b.nLocals;
     g.self = self; g.other = other; this.current = b;
     let sp = sp0, pc = 0;
+    // argumentN slots readable: all 16 in a call (invoke clears them, and `argument1 = v` defaults must stick), else only those passed
+    const argN = this.ap >= argBase + 16 ? 16 : argc;
     try {
       for (;;) try {
       for (;;) {
@@ -74,7 +76,7 @@ export class VM {
           case Op.GET: {
             const scope = code[pc + 1], id = code[pc + 2];
             if (scope === S.LOCAL) s[sp++] = L[lp + id];
-            else if (scope === S.ARG) s[sp++] = id >= 0 ? (id < argc ? A[argBase + id] : undefined) : id === -2 ? argc : A.slice(argBase, argBase + argc);
+            else if (scope === S.ARG) s[sp++] = id >= 0 ? (id < argN ? A[argBase + id] : undefined) : id === -2 ? argc : A.slice(argBase, argBase + argc);
             else if (scope === S.FIELD || scope === S.BFIELD) s[sp - 1] = this.getField(s[sp - 1], scope, id);
             else s[sp++] = this.getVar(scope, id, g.self);
             pc += 3; break;
@@ -90,6 +92,7 @@ export class VM {
           case Op.GETI: {
             const scope = code[pc + 1], id = code[pc + 2], index = s[--sp];
             if (scope === S.LOCAL) s[sp++] = elem(L[lp + id], index);
+            else if (scope === S.ARG && id >= 0) s[sp++] = elem(id < argN ? A[argBase + id] : undefined, index); // argumentN[i]
             else if (scope === S.ARG) {
               const i = Math.trunc(real(index));
               if (i < 0 || i >= argc) throw new Unverified(`argument index ${i} out of range (${argc} arguments)`);
@@ -101,6 +104,7 @@ export class VM {
           case Op.SETI: {
             const scope = code[pc + 1], id = code[pc + 2], own = code[pc + 3], index = s[--sp];
             if (scope === S.LOCAL) L[lp + id] = setElem(L[lp + id], index, s[--sp], own);
+            else if (scope === S.ARG && id >= 0) A[argBase + id] = setElem(A[argBase + id], index, s[--sp], own); // argumentN[i] = v
             else if (scope === S.ARG) {
               const i = Math.trunc(real(index));
               if (i < 0 || i >= 16) throw new Unverified(`argument index ${i} out of range`);
@@ -173,11 +177,22 @@ export class VM {
               if (fn < 0) throw new GmlError(`${typeName(f)} is not a constructor`);
             }
             this.sp = sp;
-            const st = new GmStruct(g.a.functions[fn].name);
+            const ctor = g.a.functions[fn], st = new GmStruct(ctor.name);
+            st.statics = ctor.block.statics ??= new GmStruct();
             this.invoke(fn, st, g.self, n);
             sp -= n; s[sp++] = st;
             pc += isV ? 2 : 3; break;
           }
+          case Op.CALLB: {
+            const ref = code[pc + 2], m = argc + (ref >= 0 ? 1 : 0);
+            for (let k = argc - 1; k >= 0; k--) s[sp++] = A[argBase + k];
+            if (ref >= 0) s[sp++] = consts[ref];
+            this.sp = sp;
+            const r = IMPL[code[pc + 1]]!(g, s, sp - 1, m);
+            sp -= m; s[sp++] = r;
+            pc += 3; break;
+          }
+          case Op.SHAS: s[sp++] = !!b.statics?.vars.has(code[pc + 1]); pc += 2; break;
           case Op.POP: sp--; pc++; break;
           case Op.DUP: { const n = code[pc + 1]; for (let i = 0; i < n; i++) s[sp + i] = s[sp - n + i]; sp += n; pc += 2; break; }
           case Op.SINK: {
@@ -296,10 +311,21 @@ export class VM {
     const g = this.g;
     let v: Value;
     switch (scope) {
-      case S.SELF: v = self.vars.get(id); if (v === undefined && !self.vars.has(id)) this.unset(self, id); break;
+      case S.SELF: {
+        v = self.vars.get(id);
+        if (v !== undefined || self.vars.has(id)) break;
+        // a struct falls back to its constructor's statics
+        let st = self instanceof GmStruct ? self.statics : null;
+        while (st && !st.vars.has(id)) st = st.statics;
+        if (!st) this.unset(self, id);
+        v = st.vars.get(id);
+        break;
+      }
       case S.GLOBAL: v = g.globalScope.vars.get(id); if (v === undefined && !g.globalScope.vars.has(id)) this.unset(g.globalScope, id); break;
-      case S.BSELF: if (!(self instanceof Instance)) throw new Unverified(`built-in variable ${g.ivName(id)} on a struct`); return g.getIV(self, id, index);
+      // a struct has no built-ins: `x` there is an ordinary variable (DR ch3 Vector2)
+      case S.BSELF: return self instanceof Instance ? g.getIV(self, id, index) : this.getVar(S.SELF, g.a.varSlot(g.ivName(id)), self, index);
       case S.BGLOBAL: return g.getGV(id, index);
+      case S.STATIC: v = this.statics().vars.get(id); break;
       default: throw new Error(`bad scope ${scope}`);
     }
     return index === NOI ? v : elem(v, index);
@@ -316,11 +342,15 @@ export class VM {
     switch (scope) {
       case S.SELF: self.vars.set(id, index === NOI ? v : setElem(self.vars.get(id), index, v, own)); return;
       case S.GLOBAL: { const m = g.globalScope.vars; m.set(id, index === NOI ? v : setElem(m.get(id), index, v, own)); return; }
-      case S.BSELF: if (!(self instanceof Instance)) throw new Unverified(`built-in variable ${g.ivName(id)} on a struct`); g.setIV(self, id, v, index); return;
+      case S.BSELF: if (self instanceof Instance) g.setIV(self, id, v, index); else this.setVar(S.SELF, g.a.varSlot(g.ivName(id)), self, v, index, own); return;
       case S.BGLOBAL: g.setGV(id, v, index); return;
+      case S.STATIC: { const m = this.statics().vars; m.set(id, index === NOI ? v : setElem(m.get(id), index, v, own)); return; }
     }
     throw new Error(`bad scope ${scope}`);
   }
+
+  /** The running block's static struct. */
+  private statics(): GmStruct { return (this.current!.statics ??= new GmStruct()); }
 
   /** inst.var / struct.var read: an instance id, an object (its first instance), a struct, or a keyword. */
   private getField(t: Value, scope: number, id: number, index: Value = NOI): Value {

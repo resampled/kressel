@@ -19,6 +19,8 @@ import { drawSprite, frameOf, quadC } from './draw.ts';
 
 const FIRST_ID = 100000;
 const APP_SURFACE = 0;
+/** Built-in instance variable names by id, filled on use. */
+const IV_BY_ID: string[] = [];
 
 /** mulberry32: deterministic by default like GM (fixed seed until randomize), but not GM's sequence. */
 export class Rng {
@@ -91,6 +93,10 @@ export class Game {
   fileFind: string[] = [];
   /** gpu_set_alphatestenable / gpu_set_alphatestref (0-255). */
   alphaTest = false; alphaRef = 0;
+  /** gpu_get_blendmode (the last gpu_set_blendmode mode) and shader_current (a shader asset index, or -1). */
+  blendMode = 0; shader = -1;
+  /** The blend factors set last (src, dst, srcA, dstA), so surface_copy can restore them. */
+  readonly blendF = [5, 6, 5, 6];
   asyncLoad = -1;
   private readonly asyncQueue: { kind: number; map: number }[] = [];
   /** Current event (for event_type / event_inherited); see EK. */
@@ -272,7 +278,7 @@ export class Game {
     return f;
   }
 
-  ivName(id: number): string { return Object.entries(IV).find(([, v]) => v === id)?.[0] ?? String(id); }
+  ivName(id: number): string { return (IV_BY_ID[id] ??= Object.entries(IV).find(([, v]) => v === id)?.[0] ?? String(id)); }
 
   // ---------------------------------------------------------------- built-in variables
 
@@ -791,6 +797,16 @@ export class Game {
     this.targetStack.push(id);
     this.p.renderer.setTarget(s.tex);
   }
+  /** surface_get_target: the surface being drawn into, or -1 for the default target. */
+  currentTarget(): number { return this.targetStack.at(-1) ?? -1; }
+  /** surface_resize: a new texture of the new size (the contents are lost, as in GM). */
+  resizeSurface(id: number, w: number, h: number): void {
+    const s = this.surface(id);
+    if (s.w === w && s.h === h) return;
+    this.p.renderer.freeSurface(s.tex);
+    s.tex = this.p.renderer.createSurface(w, h); s.w = w; s.h = h;
+    if (this.targetStack.includes(id)) this.restoreTarget();
+  }
   popTarget(): void {
     this.targetStack.pop();
     this.restoreTarget();
@@ -829,7 +845,7 @@ export class Game {
     const r = this.p.renderer, app = this.surface(APP_SURFACE), room = this.room;
     const [ww, wh] = r.windowSize();
     r.beginFrame();
-    r.setBlend(5, 6, 5, 6); r.setFog(false, 0);
+    r.setBlend(5, 6, 5, 6); r.setFog(false, 0); this.blendF[0] = this.blendF[2] = 5; this.blendF[1] = this.blendF[3] = 6; this.blendMode = 0;
     // Pre-draw goes straight to the window.
     this.setPass(WINDOW, 0, 0, ww, wh, 0, 0, 0, ww, wh);
     r.clear(0, 1);

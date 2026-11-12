@@ -246,3 +246,7 @@ family('snd_group', 'audio_group_', {
   set_gain: (g, s, t) => { g.snd.setGroupGain(n(s, t, 0), n(s, t, 1), n(s, t, 2)); return undefined; },
   stop_all: () => undefined,
 });
+
+define('lks_sprite_prefetch', () => 0);
+define('snd_exists', (g, s, t) => typeof s[t] === 'number' && g.snd.exists(s[t] as number));
+define('snd_name', (g, s, t) => g.snd.name(real(s[t])));

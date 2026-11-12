@@ -229,3 +229,29 @@ test('popenv\'s exit form is operand 0xf00000 (24 bits)', () => {
   const [i] = disassemble(buf, { name: 't', start: 0, length: 4, offset: 0, locals: 0, args: 0 }, { vars: new Map(), funcs: new Map() }, []);
   assert.equal(i.target, -1);
 });
+
+test('static block: isstaticok; bt E; static.k = v; E: setstatic  ->  var_static (DR ch3 Vector2)', () => {
+  assert.deepEqual(decompile([
+    { op: Op.brk, i16: Ext.isstaticok }, b(Op.bt, 4), pushi(3), pop('k', -16), { op: Op.brk, i16: Ext.setstatic }, pushi(1), pop('a'),
+  ]), [['var_static', 'k', 3], ['var_set', ['_lv', 'a'], 1]]);
+});
+
+test('switch whose default starts with popz (default: exit) is told apart by the dead b to the end (DR ch3 chefs)', () => {
+  // switch (s) { default: exit; case 0: a = 1; break; }
+  assert.deepEqual(decompile([
+    pushv('s'), dupv, pushi(0), cmp(3), b(Op.bt, 9), b(Op.b, 7), b(Op.b, 12), { op: Op.popz, t1: T.Var }, { op: Op.exit },
+    pushi(1), pop('a'), b(Op.b, 12), { op: Op.popz, t1: T.Var },
+  ]), [['ctr_switch', ['_lv', 's'], [['ctr_default'], ['ctr_exit'], ['ctr_case', 0], ['var_set', ['_lv', 'a'], 1]]]]);
+});
+
+test('break inside with jumps to an extra exit-form popenv (DR ch3 shutta photo controller)', () => {
+  // with (obj_b) { break; } a = 1;
+  assert.deepEqual(decompile([
+    pushi(1), { op: Op.pushenv, target: 3 }, b(Op.b, 5), { op: Op.popenv, target: 2 }, b(Op.b, 6), { op: Op.popenv, target: -1 }, pushi(1), pop('a'),
+  ]), [['ctr_with', ['_as', 'obj_b'], [['ctr_break']]], ['var_set', ['_lv', 'a'], 1]]);
+});
+
+test('a bare other; left on the stack is dropped; built-ins pushed as values become _fn opcodes', () => {
+  assert.deepEqual(decompile([call('@@Other@@', 0), pushi(0), call('event_user', 1), { op: Op.popz }]), decompile([pushi(0), call('event_user', 1), { op: Op.popz }]));
+  assert.deepEqual(decompile([{ op: Op.push, t1: T.Int32, fn: 'variable_instance_set', value: 0 }, pop('f')]), [['var_set', ['_lv', 'f'], ['_fn', 'var_inst_set']]]);
+});

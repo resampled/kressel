@@ -57,6 +57,11 @@ export class Sounds {
     s.destroyed = true;
   }
 
+  /** audio_get_name: a sound's name, or the name of a voice's sound. */
+  name(target: number): string {
+    const i = target >= VOICE_BASE ? this.voices.get(target)?.snd ?? -1 : target;
+    return this.sounds[i]?.name ?? '<undefined>';
+  }
   exists(i: number): boolean { return !!this.sounds[i] && !this.sounds[i].destroyed; }
   /** A live sound asset. GM ignores a missing or destroyed one: play gives -1, setters do nothing, gain reads 0 and pitch 1 (error_audit.md). */
   private snd(i: number): Snd | undefined {

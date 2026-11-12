@@ -16,8 +16,8 @@ export interface CompileEnv {
   userVar(name: string): number;
   /** Index of a user function by key. */
   func(name: string): number | undefined;
-  /** The value of a function reference (`_fn`): its script index, or a method. */
-  fnValue(name: string): unknown;
+  /** The value of a function reference (`_fn`): its script index, or a method; undefined if there's no such function. A built-in opcode (with its ref) gives a function that forwards to it. */
+  fnValue(name: string, ref?: string): unknown;
   /** A fresh range of n copy-on-write owner tokens (for a block's locals). */
   owners(n: number): number;
 }
@@ -58,6 +58,8 @@ class Compiler {
   private consts: unknown[] = [];
   private constIdx = new Map<unknown, number>();
   private locals = new Map<string, number>();
+  /** `static` names declared in this body. */
+  private statics = new Set<string>();
   private nLocals = 0;
   private localOwn = 0;
   private ctx: Ctx[] = [];
@@ -86,6 +88,7 @@ class Compiler {
     if (!Array.isArray(n)) return;
     if (n[0] === 'fnc_def') return;
     if (n[0] === 'var_local' && typeof n[1] === 'string' && !this.locals.has(n[1])) this.locals.set(n[1], this.nLocals++);
+    if (n[0] === 'var_static' && typeof n[1] === 'string') this.statics.add(n[1]);
     if (n[0] === 'ctr_try' && typeof n[2] === 'string' && !this.locals.has(n[2])) this.locals.set(n[2], this.nLocals++); // catch (e)
     for (const c of n) this.hoistLocals(c);
   }
@@ -126,6 +129,7 @@ class Compiler {
       if (typeof a !== 'string') this.fail(path, '_lv needs a name');
       const local = this.locals.get(a);
       if (local !== undefined) return this.simple(S.LOCAL, local, false, this.localOwn + local);
+      if (this.statics.has(a)) { const v = this.env.userVar(a); return this.simple(S.STATIC, v, false, OWN_INST + v); }
       const arg = ARG_N.exec(a);
       if (arg) return this.simple(S.ARG, Number(arg[1]), false, OWN_ARG + Number(arg[1]));
       if (a === 'argument') return this.simple(S.ARG, -1, false, OWN_ARG + 16);
@@ -218,6 +222,15 @@ class Compiler {
         const l = this.locals.get(a)!;
         this.emit(Op.SET, S.LOCAL, l, this.localOwn + l);
         return;
+      }
+      case 'var_static': { // initialised the first time the function reaches it
+        if (typeof a !== 'string') this.fail(path, 'var_static needs a name');
+        const v = this.env.userVar(a);
+        this.emit(Op.SHAS, v);
+        const jt = this.jump(Op.JT);
+        this.expr(b, path);
+        this.emit(Op.SET, S.STATIC, v, OWN_INST + v);
+        return this.patch(jt);
       }
       case 'ctr_if': {
         this.expr(a, path);
@@ -384,8 +397,9 @@ class Compiler {
         return this.konst(i);
       }
       case '_fn': {
-        if (typeof a !== 'string' || this.env.func(a) === undefined) this.fail(path, `unknown function ${JSON.stringify(a)}`);
-        return this.konst(this.env.fnValue(a));
+        const v = typeof a === 'string' ? this.env.fnValue(a, typeof b === 'string' ? b : undefined) : undefined;
+        if (v === undefined) this.fail(path, `unknown function ${JSON.stringify(a)}`);
+        return this.konst(v);
       }
       case '_cn':
         if (typeof a === 'string' && a in CONSTS) return this.konst(CONSTS[a]);

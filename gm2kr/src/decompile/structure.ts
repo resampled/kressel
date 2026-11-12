@@ -68,6 +68,8 @@ export class Decompiler {
   /** Branch target address -> indices of the backward branches to it (ascending). */
   private readonly backs = new Map<number, number[]>();
   readonly locals = new Set<string>();
+  /** Names accessed as statics (instance type -16). */
+  private readonly statics = new Set<string>();
 
   constructor(name: string, ins: Instr[], endAddr: number, assets: AssetNames, children: Set<number> = new Set()) {
     this.name = name; this.ins = ins; this.end = endAddr; this.assets = assets; this.children = children;
@@ -85,6 +87,8 @@ export class Decompiler {
     const last = this.ins[to - 1], end = this.addr(to);
     const implicit = last && last.op === Op.exit && !this.ins.some((x, k) => k >= from && k < to && x.target === end && (x.op === Op.b || x.op === Op.bt || x.op === Op.bf));
     const body = this.block(from, implicit ? to - 1 : to, stack, []);
+    // A bare `other;` statement is pushed and never popped (gm_gotchas.md); it has no effect.
+    while (stack.length && (isOp(stack.at(-1)!.e, '_kw') || !isOp(stack.at(-1)!.e))) stack.pop();
     if (stack.length) this.fail(to - 1, `${stack.length} values left on the stack`);
     return [...[...this.locals].map((n) => ['var_local', n]), ...body];
   }
@@ -137,6 +141,7 @@ export class Decompiler {
   private varRef(inst: Kr | null, ins: Instr): Kr {
     const name = ins.v!.name;
     if (ins.i16 === -7) this.locals.add(name);
+    if (ins.i16 === -16) this.statics.add(name);
     return inst === null ? ['_lv', name] : ['_iv', inst, name];
   }
   /** Target of a push/pop. */
@@ -206,7 +211,7 @@ export class Decompiler {
       switch (ins.op) {
         case Op.push: case Op.pushloc: case Op.pushglb: case Op.pushbltn: case Op.pushi:
           if (ins.t1 === T.Var) stack.push({ e: this.target(stack, ins, i), size: 16 });
-          else if (ins.fn) stack.push({ e: ['_fn', fnName(ins.fn)], size: SIZE[ins.t1] });
+          else if (ins.fn) stack.push({ e: this.fnRef(ins.fn), size: SIZE[ins.t1] });
           else stack.push({ e: this.constant(ins.value), size: SIZE[ins.t1], marker: ins.value === -9 && ins.op === Op.pushi });
           break;
         case Op.conv: {
@@ -283,7 +288,23 @@ export class Decompiler {
           stack.push({ e: ['fnc_m', f, ...args], size: 16 });
           break;
         }
-        case Op.brk: this.ext(ins, i, stack, out); break;
+        case Op.brk: {
+          // static init: isstaticok; bt E; <static.x = v ...>; E: setstatic. Each static.x = v becomes var_static.
+          if (ins.i16 === Ext.isstaticok) {
+            const bt = this.ins[i + 1], e = bt?.op === Op.bt ? this.idx(bt.target, i) : -1;
+            if (e < 0 || e > to || this.ins[e]?.op !== Op.brk || this.ins[e].i16 !== Ext.setstatic) this.fail(i, 'isstaticok without its static block');
+            const s: Item[] = [];
+            for (const st of this.block(i + 2, e, s, ctx)) {
+              if (!isOp(st, 'var_set') || !isOp(st[1], '_lv') || !this.statics.has(st[1][1] as string)) this.fail(i, 'static block holds more than static initialisers');
+              out.push(['var_static', st[1][1], st[2]]);
+            }
+            if (s.length) this.fail(i, 'static block leaves values on the stack');
+            i = e + 1;
+            continue;
+          }
+          this.ext(ins, i, stack, out);
+          break;
+        }
         case Op.ret: out.push(['ctr_return', this.pop(stack, i).e]); break;
         case Op.exit: out.push(['ctr_exit']); break;
         case Op.bf: case Op.bt: {
@@ -491,14 +512,20 @@ export class Decompiler {
     }
     if (!cases.length || this.ins[j]?.op !== Op.b) return cases.length ? this.fail(j, 'switch without a final jump') : -1;
     const value = this.pop(stack, i).e;
-    const d = this.idx(this.ins[j].target, j), bodyFrom = j + 1;
+    const d = this.idx(this.ins[j].target, j);
+    let bodyFrom = j + 1;
     const labels = new Map<number, Kr[]>();
     for (const [v, t] of cases) (labels.get(t) ?? labels.set(t, []).get(t)!).push(v);
+    const isEnd = (k: number) => this.ins[k]?.op === Op.popz && this.ins[k].t1 === T.Var;
+    // `b D; b E` (dead) names the end E outright: then D is a default even if it starts with popz (`default: exit`).
+    const dead = this.ins[bodyFrom]?.op === Op.b ? this.idx(this.ins[bodyFrom].target, bodyFrom) : -1;
+    const knownEnd = dead > d && cases.every(([, t]) => dead > t) && isEnd(dead) ? dead : -1;
+    if (knownEnd >= 0) bodyFrom++;
     // No default: the final jump goes straight to the end.
-    const noDefault = this.ins[d]?.op === Op.popz && this.ins[d].t1 === T.Var;
+    const noDefault = knownEnd < 0 && isEnd(d);
     if (!noDefault) (labels.get(d) ?? labels.set(d, []).get(d)!).push(undefined);
-    const sw: Switch = { labels, minEnd: Math.max(d, ...cases.map(([, t]) => t)), end: noDefault ? d : -1 };
-    const c: Ctx = { kind: 'switch', brk: noDefault ? this.addr(d) : -1, cont: -1, sw };
+    const sw: Switch = { labels, minEnd: Math.max(d, knownEnd, ...cases.map(([, t]) => t)), end: noDefault ? d : -1 };
+    const c: Ctx = { kind: 'switch', brk: noDefault ? this.addr(d) : knownEnd >= 0 ? this.addr(knownEnd) : -1, cont: -1, sw };
     const s: Item[] = [];
     const body = this.block(bodyFrom, to, s, [...ctx, c], sw);
     if (sw.end < 0) this.fail(i, 'switch end not found');
@@ -539,8 +566,11 @@ export class Decompiler {
     const ins = this.ins[i], inst = this.popInst(stack, i);
     const e = this.idx(ins.target, i), pe = this.ins[e];
     if (!pe || pe.op !== Op.popenv || (pe.target !== this.addr(i + 1) && pe.target !== pe.at)) this.fail(i, 'with without matching popenv');
-    out.push(['ctr_with', inst ?? ['_kw', 'self'], this.block(i + 1, e, [], [...ctx, { kind: 'with', brk: this.addr(e + 1), cont: pe.at }])]);
-    return e + 1;
+    // With a break inside: P: popenv body; b S; X: popenv (exit form); S:  and break jumps to X.
+    const skip = this.ins[e + 1], x = this.ins[e + 2];
+    const brkPop = skip?.op === Op.b && skip.target === this.addr(e + 3) && x?.op === Op.popenv && x.target === -1;
+    out.push(['ctr_with', inst ?? ['_kw', 'self'], this.block(i + 1, e, [], [...ctx, { kind: 'with', brk: this.addr(brkPop ? e + 2 : e + 1), cont: pe.at }])]);
+    return brkPop ? e + 3 : e + 1;
   }
 
   private assign(tgt: Kr, value: Kr): Kr {
@@ -563,7 +593,7 @@ export class Decompiler {
   private ext(ins: Instr, i: number, stack: Item[], out: Kr[]): void {
     switch (ins.i16) {
       case Ext.pushref: {
-        if (ins.fn) { stack.push({ e: ['_fn', fnName(ins.fn)], size: 16 }); return; }
+        if (ins.fn) { stack.push({ e: this.fnRef(ins.fn), size: 16 }); return; }
         if (typeof ins.value !== 'number') this.fail(i, 'pushref without operand');
         const kind = REF_KIND[ins.value >>> 24];
         if (!kind) this.fail(i, `pushref of unsupported asset type ${ins.value >>> 24}`);
@@ -588,6 +618,13 @@ export class Decompiler {
     this.fail(i, `extended opcode ${ins.i16} not supported yet`);
   }
 
+  /** A function as a value: a user function, or a built-in as its opcode (plus its ref for variant opcodes). */
+  private fnRef(fn: string): Kr {
+    const b = fn.startsWith(SCRIPT) || this.assets.scripts?.has(fn) ? undefined : lookupBuiltin(fn);
+    if (b) return b.ref === null ? ['_fn', b.op] : ['_fn', b.op, b.ref];
+    return ['_fn', fnName(fn)];
+  }
+
   private call(fn: string, args: Kr[], i: number): Kr {
     if (fn in PSEUDO) return PSEUDO[fn];
     if (fn.startsWith(SCRIPT) || this.assets.scripts?.has(fn)) return ['fnc_g', fnName(fn), ...args];
@@ -598,7 +635,8 @@ export class Decompiler {
         const f = isOp(ctor, 'var_method') && isOp(ctor[2], '_fn') ? ctor[2][1] : isOp(ctor, '_fn') ? ctor[1] : ctor;
         return ['fnc_new', f, ...rest];
       }
-      case 'method': return ['var_method', ...args];
+      // static f = function(){}: bound to the static scope (-16), which acts as unbound: self is the caller (gm_gotchas.md)
+      case 'method': return args[0] === -16 ? args[1] : ['var_method', ...args];
       case '@@GetInstance@@': return args[0]; // obj.method(): the object stands for its instance
     }
     const b = lookupBuiltin(fn);

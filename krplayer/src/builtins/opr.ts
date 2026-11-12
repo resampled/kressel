@@ -165,3 +165,5 @@ define('opr_is_type', (_g, s, t) => {
 });
 define('opr_typeof', (_g, s, t) => typeName(s[t]));
 define('opr_convert', (_g, s, t) => (s[t] === 'bool' ? real(s[t - 1]) > 0.5 : Math.trunc(real(s[t - 1]))));
+
+define('opr_point_distance_3d', (_g, s, t) => Math.hypot(n(s, t, 3) - n(s, t, 0), n(s, t, 4) - n(s, t, 1), n(s, t, 5) - n(s, t, 2)));

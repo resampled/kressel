@@ -180,7 +180,7 @@ Fields beyond the example above. All are optional unless noted; the types live i
 * `room_order`: room keys in game order (`room_goto_next` etc.). Defaults to the key order of `rooms`.
 * Asset keys (`sprites`, `fonts`, `objects`, `rooms`, `sounds`, `tilesets`, `paths`, `shaders`...) share one namespace, since `["_as", name]` names any of them. gm2kr uses the GameMaker asset names as keys, in GameMaker's order, so an asset's index within its kind is GM's index (imported code that uses raw asset numbers keeps working).
 * `global_init`: scripts (bare or placed, see Script layout) run once at game start, in order, before the first room, with `self` = the global scope (GameMaker 2.3+ script files' top-level code, which also defines their functions as global variables).
-* `scripts`: script asset index → function key (or `null`), for code that names scripts by number (`script_execute(n)`, `asset_get_index`). A function reference (`["_fn", key]`) evaluates to its script index when it has one, and to a method otherwise.
+* `scripts`: script asset index → function key (or `null`), for code that names scripts by number (`script_execute(n)`, `asset_get_index`). A function reference (`["_fn", key]`) evaluates to its script index when it has one, and to a method otherwise. `["_fn", opcode, ref?]` names a built-in (krpj_opcodes.md, Declarations).
 * `audio_groups`: audio group names by index (`sounds[k].group` indexes it).
 * `included_files`: path the game opens, relative to its working directory (`"lang/lang_en.json"`) → asset path (`"./files/lang/lang_en.json"`). Non-audio files are read up front (GML file functions are synchronous); audio is streamed when the game asks for it (`audio_create_stream`).
 

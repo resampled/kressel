@@ -23,8 +23,10 @@ for (const o of OPCODES) {
     for (const m of gml.matchAll(/`([a-z][a-z0-9_]*_)\*`/g)) families.push([m[1], o.name, REF_PREFIX[o.name] ?? m[1]]);
     continue;
   }
-  const names = [...o.gml.matchAll(/`([a-z][a-z0-9_]*)`/g)].map((m) => m[1]);
   const refVals = /^ref ((?:`\w+`\/?)+)/.exec(o.args ?? '')?.[1].match(/\w+/g) ?? null;
+  // `prefix_*` with a ref list (`colour_get_*`, `date_get_*`): one name per ref value
+  const star = /^`([a-z][a-z0-9_]*_)\*`$/.exec(o.gml)?.[1];
+  const names = star && refVals ? refVals.map((r) => star + r) : [...o.gml.matchAll(/`([a-z][a-z0-9_]*)`/g)].map((m) => m[1]);
   const refFree = /^ref \w/.test(o.args ?? '');
   names.forEach((n, i) => {
     if (exact.has(n)) return;

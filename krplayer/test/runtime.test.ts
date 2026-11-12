@@ -595,3 +595,48 @@ test('positional audio: emitters position their voices; vertex buffers submit as
   g.snd.falloff = 3; g.snd.emitterChanged(null);
   assert.deepEqual(pans.slice(2).map((x) => x[3]), [2, 2]);
 });
+
+test('static: initialised once per function; constructor statics are shared methods (DR ch3 Vector2)', async () => {
+  const v = await execFn([
+    ['fnc_g', 'tick'], ['var_set', ['_lv', 'n'], ['fnc_g', 'tick']],
+    ['var_set', ['_lv', 'v'], ['fnc_new', 'Vec', 1]],
+    ['fnc_m', ['_iv', ['_lv', 'v'], 'add'], 5],
+    ['var_set', ['_lv', 'x2'], ['_iv', ['_lv', 'v'], 'x']],
+    ['var_set', ['_lv', 'own'], ['var_struct_exists', ['_lv', 'v'], 'add']],
+  ], {
+    tick: { args: [], body: [['var_static', 'count', 0], ['var_inc', ['_lv', 'count']], ['ctr_return', ['_lv', 'count']]] },
+    Vec: { args: [], ctor: true, body: [['var_static', 'add', ['_fn', 'vadd']], ['var_set', ['_lv', 'x'], ['_lv', 'argument0']]] },
+    vadd: { args: [], body: [['var_change', '+', ['_lv', 'x'], ['_lv', 'argument0']]] },
+  });
+  assert.deepEqual([v.n, v.x2, v.own], [2, 6, false]);
+});
+
+test('argumentN defaults stick; argumentN[i] indexes argument N; built-ins work as function values', async () => {
+  const v = await execFn([
+    ['var_set', ['_lv', 'd'], ['fnc_g', 'dflt', 1]],
+    ['var_set', ['_lv', 'e'], ['fnc_g', 'second', 0, ['_ar', 5, 6]]],
+    ['var_set', ['_lv', 'dist'], ['ctr_script_execute', ['_fn', 'opr_point_distance'], 0, 0, 3, 4]],
+    ['var_set', ['_lv', 'sq'], ['ctr_script_execute', ['_fn', 'opr_mathop', 'sqrt'], 16]],
+  ], {
+    dflt: { args: [], body: [['ctr_if', ['opr_eq', ['_lv', 'argument1'], ['_lv', 'undefined']], [['var_set', ['_lv', 'argument1'], 7]]], ['ctr_return', ['_lv', 'argument1']]] },
+    second: { args: [], body: [['ctr_return', ['_ai', ['_lv', 'argument1'], 1]]] },
+  });
+  assert.deepEqual([v.d, v.e, v.dist, v.sq], [7, 6, 5, 4]);
+});
+
+test('mp_grid_path finds a way around forbidden cells (no corner cutting) and fails when walled off', async () => {
+  const g = ['_lv', 'g'], wall = (h: number, v: number) => ['mov_mp_grid', 'add_cell', g, h, v];
+  const v = await exec([
+    ['var_set', g, ['mov_mp_grid', 'create', 0, 0, 5, 5, 10, 10]], ['var_set', ['_lv', 'p'], ['mov_path', 'add']],
+    wall(2, 0), wall(2, 1), wall(2, 2), wall(2, 3),
+    ['var_set', ['_lv', 'ok'], ['mov_mp_grid', 'path', g, ['_lv', 'p'], 5, 5, 45, 5, true]],
+    ['var_set', ['_lv', 'n'], ['mov_path', 'get_number', ['_lv', 'p']]],
+    ['var_set', ['_lv', 'lastx'], ['mov_path', 'get_point_x', ['_lv', 'p'], ['opr_sub', ['_lv', 'n'], 1]]],
+    ['var_set', ['_lv', 'cell'], ['mov_mp_grid', 'get_cell', g, 2, 0]],
+    wall(2, 4),
+    ['var_set', ['_lv', 'blocked'], ['mov_mp_grid', 'path', g, ['_lv', 'p'], 5, 5, 45, 5, true]],
+  ]);
+  // the only way is under the wall (row 4), so the path has several cell centres between start and goal
+  assert.deepEqual([v.ok, v.lastx, v.cell, v.blocked], [true, 45, -1, false]);
+  assert.ok((v.n as number) >= 6);
+});

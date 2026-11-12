@@ -142,3 +142,32 @@ define('sen_distance_to_point', (g, s, t) => {
   const x = n(s, t, 0), y = n(s, t, 1), a = g.sa;
   return Math.hypot(Math.max(0, a[8] - x, x - a[10]), Math.max(0, a[9] - y, y - a[11]));
 });
+
+/**
+ * collision_rectangle_list(x1, y1, x2, y2, obj, prec, notme, list, ordered) / collision_circle_list(x, y, r, ...):
+ * appends every hit's id to the ds_list and returns how many. Ordered sorts by distance from the shape's centre.
+ */
+define('sen_collision_list', (g, s, t, argc) => {
+  const rect = s[t] === 'rectangle', k = rect ? 5 : 4; // index of obj
+  const a = n(s, t, 1), c = n(s, t, 2), d = n(s, t, 3);
+  const list = g.data.lists.get(s[t - k - 3], 'ds_list'), me = notMe(g, s[t - k - 2], argc, k + 2);
+  let cx: number, cy: number;
+  hits.length = 0;
+  if (rect) {
+    const e = n(s, t, 4);
+    cx = (a + d) / 2; cy = (c + e) / 2;
+    g.collideShape(box(g, Math.min(a, d), Math.min(c, e), Math.max(a, d) + 1, Math.max(c, e) + 1), real(s[t - k]), me, undefined, hits);
+  } else {
+    cx = a; cy = c;
+    box(g, a - d, c - d, a + d, c + d);
+    g.collideShape(1, real(s[t - k]), me, (o) => {
+      const q = g.sb;
+      shape(o, o.x, o.y, q);
+      const dx = a - Math.max(q[8], Math.min(a, q[10])), dy = c - Math.max(q[9], Math.min(c, q[11]));
+      return dx * dx + dy * dy <= d * d;
+    }, hits);
+  }
+  if (real(s[t - k - 4]) > 0.5) hits.sort((p, q) => (p.x - cx) ** 2 + (p.y - cy) ** 2 - (q.x - cx) ** 2 - (q.y - cy) ** 2);
+  for (const o of hits) list.a.push(o.id);
+  return hits.length;
+});

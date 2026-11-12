@@ -106,6 +106,9 @@ Can be used anywhere a variable ("var arg#") is expected - especially in `var_se
 > * ref arg1 = function name
 > * KRPJ: ["_fn","scr_on_hit"]
 > * GML: scr_on_hit
+> * A built-in used as a value names its opcode (plus the ref for a variant opcode); calling it forwards the arguments:
+> * KRPJ: ["_fn","var_inst_set"] / ["_fn","sys_date","year"]
+> * GML: variable_instance_set / date_get_year
 
 * `_cn` - special constant (hidden)
 > Only for values JSON can't hold.
@@ -428,6 +431,8 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `ins_object_name` (hidden) | obj obj | `object_get_name` | |
 | `ins_is_ancestor` | obj child, obj parent | `object_is_ancestor` | |
 | `ins_object_sprite` (hidden) | obj obj | `object_get_sprite` | |
+| `ins_object_set_persistent` (hidden) | obj obj, bool on | `object_set_persistent` | Affects instances created afterwards. |
+| `ins_set_active_layer` (hidden) | ref `activate`/`deactivate`, layer l | `instance_activate_layer` / `instance_deactivate_layer` | Returns whether the layer exists. |
 | `ins_id_get` (compat) | num n | `instance_id_get` | The nth active instance in instance order, or `noone`. |
 
 ## Movement
@@ -445,6 +450,7 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `mov_is_snapped` (hidden) | num hsnap, num vsnap | `place_snapped` | |
 | `mov_mp_linear_step` (hidden) | num x, num y, num speed, bool checkall | `mp_linear_step` | Returns whether the goal was reached. |
 | `mov_mp_potential_step` (hidden) | num x, num y, num speed, bool checkall | `mp_potential_step` | Same. |
+| `mov_mp_grid` (hidden, family) | ref fn, ... | `mp_grid_*` (`create`, `destroy`, `add_cell`, `clear_cell`, `get_cell`, `add_rectangle`, `clear_rectangle`, `clear_all`, `add_instances`, `path`, `draw`) | ref drops `mp_grid_`. `path` is A* over free cells (8 directions with allowdiag, no corner cutting), ending on the exact goal. |
 | `mov_path_start` | path path, num speed, num end_action, bool absolute | `path_start` | end_action: 0 stop, 1 restart, 2 continue, 3 reverse. Absolute follows the path's own coordinates; relative moves its first point to the instance. Paths are followed after built-in motion, and `evt_path_end` fires at each end. |
 | `mov_path_end` | - | `path_end` | |
 | `mov_path` (hidden, family) | ref fn, ... | `path_*` (`add`, `add_point`, `delete`, `exists`, `get_x`, `get_y`, `get_length`, `set_closed`, `set_kind`, `set_precision`...) | ref drops `path_`. Paths made with `path_add` get ids after the project's paths. |
@@ -465,6 +471,7 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `sen_collision_circle` | num x, num y, num r, inst obj, bool precise, bool notme | `collision_circle` | |
 | `sen_collision_line` | num x1, num y1, num x2, num y2, inst obj, bool precise, bool notme | `collision_line` | |
 | `sen_collision_ellipse` (hidden) | num x1, num y1, num x2, num y2, inst obj, bool precise, bool notme | `collision_ellipse` | |
+| `sen_collision_list` (hidden) | ref `rectangle`/`circle`, ... | `collision_rectangle_list` / `collision_circle_list` | Arguments as GML (shape, obj, precise, notme, ds list, ordered). Appends every hit to the list; returns the count. Ordered sorts by distance from the shape's centre. |
 | `sen_distance_to_object` | inst obj | `distance_to_object` | Bounding-box distance, not origin distance. |
 | `sen_distance_to_point` | num x, num y | `distance_to_point` | Bounding-box distance. |
 | `sen_key_held` | key key | `keyboard_check` | Dropdown lists `vk_*`, A-Z and 0-9; letters are stored as `ord()` codes (A = 65). Also accepts a reporter. |
@@ -496,6 +503,7 @@ Math, randomness, strings and type checks. GML's `+` doesn't turn numbers into t
 |---|---|---|---|
 | `opr_point_direction` | num x1, num y1, num x2, num y2 | `point_direction` | Degrees; 0 = right, counter-clockwise. |
 | `opr_point_distance` | num x1, num y1, num x2, num y2 | `point_distance` | |
+| `opr_point_distance_3d` (hidden) | num x1, num y1, num z1, num x2, num y2, num z2 | `point_distance_3d` | |
 | `opr_lengthdir` | ref `x`/`y`, num len, num dir | `lengthdir_x` / `lengthdir_y` | |
 | `opr_angle_difference` | num a, num b | `angle_difference` | |
 | `opr_point_in_rect` | num px, num py, num x1, num y1, num x2, num y2 | `point_in_rectangle` | |
@@ -601,6 +609,7 @@ Arrays are 0-based (unlike Scratch lists), and block labels say so. Array functi
 | `lks_sprite_uvs` (hidden) | spr s, num frame | `sprite_get_uvs` | `[left, top, right, bottom, x offset, y offset, width ratio, height ratio]` of the frame on its texture. krplayer frames are untrimmed textures of their own, so this is `[0, 0, 1, 1, 0, 0, 1, 1]`. |
 | `lks_sprite_collision_mask` (hidden) | spr s, bool sepmasks, num bboxmode, num left, num top, num right, num bottom, num kind, num tolerance | `sprite_collision_mask` | bboxmode 0 automatic, 1 full image, 2 manual; kind 0 precise, 1 rectangle, 2 ellipse, 3 diamond. Precise masks need the pixels, which krplayer only has for `sprite_add` sprites. |
 | `lks_sprite_texture` (hidden) | spr s, num frame | `sprite_get_texture` | A texture handle, only useful to `vertex_submit`. |
+| `lks_sprite_prefetch` (compat) | spr s | `sprite_prefetch` | No-op returning 0: every sprite is resident in krplayer. |
 | `lks_font_add` (hidden) | str file, num size, bool bold, bool italic, num first, num last | `font_add` | An included TTF/OTF, rasterized (antialiased) when called. Sizes are points at 96 DPI. Returns -1 (and logs) if the file isn't included. |
 
 ## Sound
@@ -624,6 +633,8 @@ Sound inputs take an `_as` sound or a voice id reporter (the value `snd_play` re
 | `snd_position` | snd voice | `audio_sound_get_track_position` | Seconds. |
 | `snd_seek` | snd voice, num seconds | `audio_sound_set_track_position` | |
 | `snd_length` | snd s | `audio_sound_length` | |
+| `snd_exists` (hidden) | snd s | `audio_exists` | Whether a sound asset (or stream) exists. |
+| `snd_name` (hidden) | snd s | `audio_get_name` | A sound's name, or the name of a voice's sound. |
 | `snd_loop` (hidden) | ref `enabled`/`start`/`end`, snd voice, bool/num value | `audio_sound_loop` / `audio_sound_loop_start` / `audio_sound_loop_end` | GM 2023+. |
 | `snd_stream_create` (hidden) | str path | `audio_create_stream` | The path is resolved against the project's CDN path. |
 | `snd_stream_destroy` (hidden) | snd stream | `audio_destroy_stream` | |
@@ -654,6 +665,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_text_ext_colour` (hidden) | as GML | `draw_text_ext_colour` | |
 | `drw_text_ext_transformed` (hidden) | as GML | `draw_text_ext_transformed` | |
 | `drw_text_transformed_colour` (hidden) | as GML | `draw_text_transformed_colour` | |
+| `drw_text_ext_transformed_colour` (hidden) | as GML | `draw_text_ext_transformed_colour` | |
 | `drw_text_size` | ref `width`/`height`, str text | `string_width` / `string_height` | Uses the current font. |
 | `drw_set_font` | fnt f | `draw_set_font` | |
 | `drw_set_colour` | col c | `draw_set_colour` / `draw_set_color` | |
@@ -685,6 +697,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_merge_colour` | col c1, col c2, num t | `merge_colour` | |
 | `drw_colour_get` (hidden) | ref `red`/`green`/`blue`/`hue`/`saturation`/`value`, col c | `colour_get_*` | |
 | `drw_blendmode` (hidden) | num mode | `gpu_set_blendmode` | |
+| `drw_blendmode_get` (hidden) | - | `gpu_get_blendmode` | The last `gpu_set_blendmode` mode. |
 | `drw_gpu` (compat, family) | ref fn, ... | `gpu_set_*` (`blendmode_ext`, `alphatestenable`, `colorwriteenable`, `fog`...) | ref drops `gpu_set_`. |
 | `drw_surface_create` (hidden) | num w, num h | `surface_create` | The editor calls surfaces 'canvases'. |
 | `drw_surface_free` (hidden) | num surf | `surface_free` | |
@@ -694,10 +707,20 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_surface` (hidden) | num surf, num x, num y | `draw_surface` | |
 | `drw_surface_ext` (hidden) | as GML | `draw_surface_ext` | |
 | `drw_surface_part` (hidden) | as GML | `draw_surface_part` | |
+| `drw_surface_part_ext` (hidden) | as GML | `draw_surface_part_ext` | |
+| `drw_surface_stretched` (hidden) | as GML | `draw_surface_stretched` | |
+| `drw_surface_general` (hidden) | as GML | `draw_surface_general` | |
+| `drw_surface_copy` (hidden) | ref `copy`/`copy_part`, num dest, num x, num y, num src, num? xs, num? ys, num? ws, num? hs | `surface_copy` / `surface_copy_part` | Replaces the destination pixels (no blending). |
+| `drw_surface_resize` (hidden) | num surf, num w, num h | `surface_resize` | The contents are lost. |
+| `drw_surface_get_target` (hidden) | - | `surface_get_target` | -1 when drawing to the default target. |
 | `drw_surface_size` (hidden) | ref `width`/`height`, num surf | `surface_get_width` / `surface_get_height` | |
 | `drw_app_surface` (compat) | ref `enable`/`draw_enable`, bool on | `application_surface_enable` / `application_surface_draw_enable` | |
+| `drw_app_position` (compat) | - | `application_get_position` | `[x1, y1, x2, y2]` of the application surface in the window. |
+| `drw_video` (compat, family) | ref fn, ... | `video_*` | ref drops `video_`. No video playback yet: calling one fails. |
+| `drw_gif` (compat, family) | ref fn, ... | `gif_*` | GIF recording. Not supported: calling one fails. |
 | `drw_shader_set` (hidden) | shd s | `shader_set` | Pairs with `drw_shader_reset` like surfaces. |
 | `drw_shader_reset` (hidden) | - | `shader_reset` | |
+| `drw_shader_current` (hidden) | - | `shader_current` | -1 when no shader is set. |
 | `drw_shader_uniform` (hidden) | shd s, str name | `shader_get_uniform` | |
 | `drw_shader_uniform_f` (hidden) | num uniform, num... | `shader_set_uniform_f` | |
 | `drw_shader_sampler` (hidden) | shd s, str name | `shader_get_sampler_index` | |
@@ -766,6 +789,8 @@ Camera inputs default to `["_ai",["_lv","view_camera"],0]`.
 | `cam_set_speed` (hidden) | num cam, num hspeed, num vspeed | `camera_set_view_speed` | |
 | `cam_set_angle` (hidden) | num cam, num angle | `camera_set_view_angle` | |
 | `cam_create` (hidden) | - | `camera_create` | |
+| `cam_create_view` (hidden) | as GML | `camera_create_view` | |
+| `cam_destroy` (hidden) | num cam | `camera_destroy` | |
 | `cam_view_get` (hidden) | ref `visible`/`camera`/`xport`/`yport`/`wport`/`hport`/`surface_id`, num view | `view_get_visible` / `view_get_camera` / `view_get_xport` / `view_get_yport` / `view_get_wport` / `view_get_hport` / `view_get_surface_id` | |
 | `cam_view_set` (hidden) | ref `visible`/`camera`/`xport`/`yport`/`wport`/`hport`/`surface_id`, num view, any value | `view_set_visible` / `view_set_camera` / `view_set_xport` / `view_set_yport` / `view_set_wport` / `view_set_hport` / `view_set_surface_id` | |
 | `cam_legacy_view_get` (compat) | num what, num view | `__view_get` | GMS1-to-GMS2 compatibility scripts, common in older imports. |
@@ -783,6 +808,7 @@ Camera inputs default to `["_ai",["_lv","view_camera"],0]`.
 | `cam_window_center` (hidden) | - | `window_center` | No-op: the window is the canvas. |
 | `cam_window_borderless` (compat) | bool on | `window_enable_borderless_fullscreen` | No-op. |
 | `cam_screen_save` (compat) | str file | `screen_save` | Not supported: fails when called. |
+| `cam_screen_save_part` (compat) | as GML | `screen_save_part` | Not supported: fails when called. |
 
 ## Control (functions)
 Alarms, timing and dynamic calls. Timelines have no opcode: `timeline_index`/`timeline_running`/`timeline_position` are built-in variables set with `var_set` (the 'start timeline' block is sugar for that).
@@ -885,7 +911,7 @@ Arrays and structs (Variables) are better for visual scripts; `ds_*` mainly exis
 | `sys_error` (hidden) | str text, bool abort | `show_error` | Cap. |
 | `sys_game_end` | - | `game_end` | Cap. Returns to the player menu. |
 | `sys_game_restart` | - | `game_restart` | Cap. |
-| `sys_device` (hidden) | ref `language`/`info` | `os_get_language` / `os_get_info` | `os_type`/`os_browser` are built-in variables (`_lv`), shown in the same dropdown. |
+| `sys_device` (hidden) | ref `language`/`info`/`region` | `os_get_language` / `os_get_info` / `os_get_region` | `os_type`/`os_browser` are built-in variables (`_lv`), shown in the same dropdown. |
 | `sys_now` | - | `date_current_datetime` | |
 | `sys_date` | ref `year`/`month`/`day`/`hour`/`minute`/`second`/`weekday`, num? datetime | `date_get_*` | Scratch 'current [year]'. Leaving out datetime = now; gm2kr folds `date_get_*(date_current_datetime())` into that form. |
 | `sys_url_open` (hidden) | str url | `url_open` | Opens a new tab after a confirmation. |
