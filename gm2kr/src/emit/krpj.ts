@@ -54,22 +54,29 @@ function hat(e: GmEvent, assets: AssetNames, where: string): Hat {
 /** Files of the game folder other than data.win, by path relative to it ("mus/x.ogg"). Read on demand. */
 export type GameFiles = Map<string, () => Promise<Uint8Array>>;
 export interface Converted { krpj: Krpj; files: Map<string, Uint8Array> }
+/** Reports how far a long step has got (`done` of `total`), for a status line. Called often: keep it cheap. */
+export type Progress = (step: string, done: number, total: number) => void;
 
-export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (msg: string) => void = () => {}): Promise<Converted> {
+export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (msg: string) => void = () => {}, progress: Progress = () => {}): Promise<Converted> {
   const files = new Map<string, Uint8Array>();
   const name = (list: { name: string }[], i: number) => (i >= 0 && i < list.length ? list[i].name : null);
   const assets = assetNames(m);
-  const code = decompileAll(m);
+  const code = decompileAll(m, undefined, (i, n) => progress('Decompiling code', i, n));
   const script = (codeId: number, where: string): Script => {
     const c = m.code[codeId], d = c && code.get(c.name);
     if (!d) throw new Error(`${where}: code entry ${codeId} missing`);
     return d.body as Script;
   };
 
-  const pages: Image[] = await Promise.all(m.textures.map((t, i) => decodePage(t.data, i)));
+  const pages: Image[] = [];
+  for (const [i, t] of m.textures.entries()) {
+    progress('Decoding texture pages', i, m.textures.length);
+    pages.push(await decodePage(t.data, i));
+  }
 
   const sprites: Record<string, Sprite> = {};
-  for (const s of m.sprites) {
+  for (const [n, s] of m.sprites.entries()) {
+    progress('Encoding sprites', n, m.sprites.length);
     const frames: string[] = [];
     for (const [i, p] of s.frames.entries()) {
       const path = `sprites/${s.name}/${i}.png`;
@@ -95,7 +102,8 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
   log(`${m.sprites.length} sprites`);
 
   const tilesets: Record<string, Tileset> = {};
-  for (const t of m.tilesets) {
+  for (const [n, t] of m.tilesets.entries()) {
+    progress('Encoding tile sets', n, m.tilesets.length);
     if (!t.tpag) continue;
     const path = `tilesets/${t.name}.png`;
     files.set(path, await encodePng(cropItem(pages, tpagAt(m.tpag, t.tpag, `tileset ${t.name}`), `tileset ${t.name}`)));
@@ -114,7 +122,8 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
   for (const s of m.shaders) shaders[s.name] = { vertex: s.vertex, fragment: s.fragment };
 
   const fonts: Record<string, Font> = {};
-  for (const f of m.fonts) {
+  for (const [n, f] of m.fonts.entries()) {
+    progress('Encoding fonts', n, m.fonts.length);
     const path = `fonts/${f.name}.png`;
     files.set(path, await encodePng(sourceRect(pages, tpagAt(m.tpag, f.tpag, `font ${f.name}`), `font ${f.name}`)));
     const glyphs: Font['glyphs'] = {}, kerning: NonNullable<Font['kerning']> = {};
@@ -134,7 +143,8 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
   // Sounds: group 0 is embedded in data.win, group N in audiogroupN.dat, audio id -1 is a file next to the game.
   const groupAudio = new Map<number, Uint8Array[]>([[0, m.audio]]);
   const sounds: Record<string, Sound> = {};
-  for (const s of m.sounds) {
+  for (const [n, s] of m.sounds.entries()) {
+    progress('Reading sounds', n, m.sounds.length);
     let data: Uint8Array;
     if (s.audio < 0 && s.flags & 1) {
       // Embedded, but with no audio data (e.g. a dangling entry left by a mod tool): GM plays nothing.
@@ -174,7 +184,9 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
   const stems = [...named].filter((s) => s.length >= 4 && /^[a-z0-9_]+$/.test(s));
   const builtName = (base: string) => named.has(base.slice(base.lastIndexOf('.'))) && stems.some((s) => base.startsWith(s));
   const included: Record<string, string> = {};
+  let done = 0;
   for (const [path, read] of extra) {
+    progress('Reading included files', done++, extra.size);
     if (RUNNER_FILE.test(path) || m.sounds.some((s) => s.audio < 0 && s.file === path)) continue;
     const base = path.slice(path.lastIndexOf('/') + 1).toLowerCase();
     if (AUDIO_EXT.test(path) && !named.has(base) && !named.has(path.toLowerCase()) && !builtName(base)) continue;
@@ -182,6 +194,7 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
     included[path] = `./files/${path}`;
   }
 
+  progress('Building objects and rooms', 0, 1);
   const functions: Record<string, KrFunction> = {};
   const ctors = new Set(m.scripts.filter((s) => s.ctor).map((s) => m.code[s.code]?.name));
   for (const [entry, d] of code) {

@@ -24,9 +24,10 @@ gm2kr/src/
                     child functions); builtins.ts (GML name → opcode, derived from the opcode table)
   emit/             krpj.ts, textures.ts (QOI → RGBA → PNG), zip.ts, ogg.ts (optional .ogg → Ogg Opus pass over the
                     output files; the encoder is passed in)
-  convert.ts        data.win + game folder → { krpj, files }, no DOM
+  convert.ts        data.win + game folder → { krpj, files }, no DOM; optional progress callback
   opus_web.ts       the page's Opus encoder (WebAudio decode + WebCodecs), browser only
-  index.ts          UI only
+  index.ts          entry: the one bundle runs as the page (page.ts, UI only) or as its worker (worker.ts)
+  worker.ts         runs convert + zip off the page's thread, relaying log/progress messages
 
 krplayer/src/
   krpj.ts           shared format types (imported by gm2kr/kreditor)

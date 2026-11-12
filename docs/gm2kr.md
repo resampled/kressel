@@ -3,6 +3,8 @@ gm2kr, when built, creates a page that converts a GameMaker game folder (data.wi
 
 The player URL for that button comes from `<meta name="gm2kr-player-url">` in the page (dev: `http://localhost:8000/`).
 
+Converting and zipping run in a Web Worker, so the page stays responsive; a status line with a progress bar shows the current step (decompiling, texture pages, sprites, sounds, ...). The worker is the page's own script (`gm2kr.js`, which checks whether it is running in a worker), so the build still makes one file; if that script is on another origin (a CDN), the worker loads it with `importScripts`. The .ogg option runs on the page because it needs WebAudio, which waits on the browser between files rather than blocking.
+
 ## What converts today
 Verified on a GM 2024 (bytecode 17) game (asteroids), on Deltarune Chapters 1 and 2 (bytecode 17, GMS2.3+ compiler) and on ch1_ribbit_mod (bytecode 16, GMS2 pre-2.3: a mod of the 2018 Chapter 1 with PNG texture pages, 2D arrays, scripts called by name and runtime-loaded sprites/fonts from `spr/`):
 * **Code:** every code entry, including GMS2.3+ functions (child entries), try/catch, global script init code (GLOB), methods, struct literals and constructors, `switch`, `repeat`, `for`/`continue`, `with`, multi-dimensional arrays and `callv` method calls. Script assets (SCPT) keep their indices.

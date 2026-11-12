@@ -26,11 +26,13 @@ export function assetNames(m: GmModel): AssetNames {
  * Decompiles every code entry, keyed by entry name. With onError, failures are reported and
  * skipped (for surveying a game); without it, the first failure throws.
  */
-export function decompileAll(m: GmModel, onError?: (name: string, e: Error) => void): Map<string, Decompiled> {
+export function decompileAll(m: GmModel, onError?: (name: string, e: Error) => void, progress?: (done: number, total: number) => void): Map<string, Decompiled> {
   const assets = assetNames(m), out = new Map<string, Decompiled>();
   const blocks = new Map<number, typeof m.code>();
   for (const c of m.code) (blocks.get(c.start) ?? blocks.set(c.start, []).get(c.start)!).push(c);
+  let done = 0;
   for (const entries of blocks.values()) {
+    progress?.(done++, blocks.size);
     // An empty pre-2.3 script is a zero-length entry starting where the next script does (gm_gotchas.md),
     // so the head is the longest offset-0 entry and zero-length entries are empty.
     const head = entries.reduce((a, c) => (c.offset === 0 && (a.offset !== 0 || c.length > a.length) ? c : a));

@@ -2,19 +2,23 @@
 // passed in (WebCodecs on the page, ffmpeg from the command line), so this file has no DOM dependency.
 
 import { concat } from './textures.ts';
+import type { Progress } from './krpj.ts';
 
 export type OggEncoder = (ogg: Uint8Array) => Promise<Uint8Array>;
 
 /** A copy of `files` with each .ogg re-encoded. An original is kept when the result isn't smaller or can't be made. */
-export async function compressOggs(files: Map<string, Uint8Array>, encode: OggEncoder, log: (msg: string) => void = () => {}): Promise<Map<string, Uint8Array>> {
+export async function compressOggs(
+  files: Map<string, Uint8Array>, encode: OggEncoder, log: (msg: string) => void = () => {},
+  progress: Progress = (_, i, n) => { if (i && i % 50 === 0) log(`  compressed ${i}/${n} .ogg files`); },
+): Promise<Map<string, Uint8Array>> {
   const out = new Map(files), oggs = [...files].filter(([path]) => /\.ogg$/i.test(path));
   let before = 0, after = 0;
   for (const [i, [path, data]] of oggs.entries()) {
+    progress('Compressing .ogg audio', i, oggs.length);
     let small = data;
     try { small = await encode(data); } catch (e) { log(`${path}: not compressed (${(e as Error).message})`); }
     if (small.length < data.length) out.set(path, small);
     before += data.length; after += Math.min(small.length, data.length);
-    if ((i + 1) % 50 === 0) log(`  compressed ${i + 1}/${oggs.length} .ogg files`);
   }
   const mb = (n: number) => (n / 2 ** 20).toFixed(1);
   log(`${oggs.length} .ogg files: ${mb(before)} MB -> ${mb(after)} MB`);

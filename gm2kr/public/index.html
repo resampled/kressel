@@ -9,6 +9,7 @@
   <style>
     body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
     .actions { margin: 12px 0; display: flex; gap: 8px; }
+    .status { min-height: 1.5em; display: flex; align-items: center; gap: 8px; }
   </style>
 </head>
 <body>
@@ -23,6 +24,7 @@
     <button id="download" disabled>Download .krpj</button>
     <button id="play" disabled>Play in krplayer</button>
   </div>
+  <p class="status"><progress id="bar" hidden></progress> <span id="status"></span></p>
   <pre id="log"></pre>
   <script src="./gm2kr.js"></script>
 </body>
