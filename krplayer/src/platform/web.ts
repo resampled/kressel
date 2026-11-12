@@ -45,6 +45,9 @@ class GLRenderer implements Renderer {
   /** world -> target pixels */
   private m = [1, 0, 0, 1, 0, 0];
   private filter = false;
+  /** bm_normal: an alpha-0 draw changes nothing and can be skipped. Under any other blend (or blending off, which
+   *  is bm_one/bm_zero) it still writes, e.g. alpha 0 into a dest-alpha mask. */
+  private normal = true;
   /** GameMaker shaders (compileShader handles index this), the one in use (-1: default), and uniform handles. */
   private readonly shaders: { p: WebGLProgram; wvp: WebGLUniformLocation | null; at: WebGLUniformLocation | null; atRef: WebGLUniformLocation | null; units: number }[] = [];
   private shader = -1;
@@ -282,6 +285,7 @@ class GLRenderer implements Renderer {
   }
   setBlend(src: number, dst: number, srcA: number, dstA: number): void {
     this.flush();
+    this.normal = src === 5 && dst === 6 && srcA === 5 && dstA === 6;
     const gl = this.gl;
     gl.blendFuncSeparate(factor(gl, src), factor(gl, dst), factor(gl, srcA), factor(gl, dstA));
   }
@@ -320,7 +324,7 @@ class GLRenderer implements Renderer {
 
   drawImage(t: TextureId, sx: number, sy: number, sw: number, sh: number, x: number, y: number, ox: number, oy: number,
     xs: number, ys: number, rot: number, color: number, alpha: number): void {
-    if (alpha <= 0) return;
+    if (alpha <= 0 && this.normal) return;
     const tx = this.use(t);
     if (!tx) return;
     const c = Math.cos(rot * D2R), s = Math.sin(rot * D2R), col = rgba(color, alpha);
@@ -333,7 +337,7 @@ class GLRenderer implements Renderer {
   }
   drawQuad(t: TextureId, sx: number, sy: number, sw: number, sh: number, x1: number, y1: number, x2: number, y2: number,
     x3: number, y3: number, x4: number, y4: number, c1: number, c2: number, c3: number, c4: number, alpha: number): void {
-    if (alpha <= 0) return;
+    if (alpha <= 0 && this.normal) return;
     const tx = this.use(t);
     if (!tx) return;
     const u0 = sx / tx.w, v0 = sy / tx.h, u1 = (sx + sw) / tx.w, v1 = (sy + sh) / tx.h;
@@ -342,12 +346,12 @@ class GLRenderer implements Renderer {
     this.vert(x1, y1, u0, v0, k1); this.vert(x3, y3, u1, v1, k3); this.vert(x4, y4, u0, v1, k4);
   }
   triangle(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, c1: number, c2: number, c3: number, alpha: number): void {
-    if (alpha <= 0 || !this.use(this.white)) return;
+    if ((alpha <= 0 && this.normal) || !this.use(this.white)) return;
     this.vert(x1, y1, 0.5, 0.5, rgba(c1, alpha)); this.vert(x2, y2, 0.5, 0.5, rgba(c2, alpha)); this.vert(x3, y3, 0.5, 0.5, rgba(c3, alpha));
   }
   triangleTex(t: TextureId, x1: number, y1: number, u1: number, v1: number, c1: number, x2: number, y2: number, u2: number, v2: number, c2: number,
     x3: number, y3: number, u3: number, v3: number, c3: number, alpha: number): void {
-    if (alpha <= 0 || !this.use(t)) return;
+    if ((alpha <= 0 && this.normal) || !this.use(t)) return;
     this.vert(x1, y1, u1, v1, rgba(c1, alpha)); this.vert(x2, y2, u2, v2, rgba(c2, alpha)); this.vert(x3, y3, u3, v3, rgba(c3, alpha));
   }
 
