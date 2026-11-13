@@ -5,7 +5,7 @@ import type { Node, Script } from '../krpj.ts';
 import { opcodeId } from '../opcodes.ts';
 import { IMPL } from '../builtins/registry.ts';
 import { BinOp, Op, S, UnOp, type Block } from './bytecode.ts';
-import { GV_NAMES, GV_READONLY, IV_NAMES, IV_READONLY } from './names.ts';
+import { GV_NAMES, GV_READONLY, IV_NAMES } from './names.ts';
 
 export class CompileError extends Error {}
 
@@ -137,7 +137,8 @@ class Compiler {
       if (a === 'argument') return this.simple(S.ARG, -1, false, OWN_ARG + 16);
       if (a === 'argument_count') return this.simple(S.ARG, -2, true, 0);
       const iv = IV_NAMES.get(a);
-      if (iv !== undefined) return this.simple(S.BSELF, iv, IV_READONLY.has(iv), 0);
+      // Read-only built-ins are checked when written (setIV): on a struct self they're plain members.
+      if (iv !== undefined) return this.simple(S.BSELF, iv, false, 0);
       const gv = GV_NAMES.get(a);
       if (gv !== undefined) return this.simple(S.BGLOBAL, gv, GV_READONLY.has(gv), 0);
       const v = this.env.userVar(a);
@@ -148,8 +149,8 @@ class Compiler {
       const kw = isOp(a) && a[0] === '_kw' ? a[1] : null;
       if (kw === 'global') { const v = this.env.userVar(b); return this.simple(S.GLOBAL, v, false, OWN_GLOBAL + v); }
       const iv = IV_NAMES.get(b);
-      if (kw === 'self') return iv !== undefined ? this.simple(S.BSELF, iv, IV_READONLY.has(iv), 0) : this.ref(['_lv', b], path);
-      if (iv !== undefined) return this.simple(S.BFIELD, iv, IV_READONLY.has(iv), 0, a);
+      if (kw === 'self') return iv !== undefined ? this.simple(S.BSELF, iv, false, 0) : this.ref(['_lv', b], path);
+      if (iv !== undefined) return this.simple(S.BFIELD, iv, false, 0, a);
       const v = this.env.userVar(b);
       return this.simple(S.FIELD, v, false, OWN_INST + v, a);
     }
@@ -425,6 +426,16 @@ class Compiler {
         const jend = this.jump(Op.JMP);
         this.patch(j);
         this.konst(head === 'opr_or');
+        return this.patch(jend);
+      }
+      case 'opr_nullish': { // a; dup; is_undefined; jf E; pop; b; E:
+        this.expr(a, path);
+        this.emit(Op.DUP, 1);
+        this.konst('undefined');
+        this.emit(Op.CALL, opcodeId('opr_is_type', path), 2);
+        const jend = this.jump(Op.JF);
+        this.emit(Op.POP);
+        this.expr(b, path);
         return this.patch(jend);
       }
       case 'opr_cond': {

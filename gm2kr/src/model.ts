@@ -13,7 +13,7 @@ import { readObjt, type GmObject } from './chunks/objt.ts';
 import { readRoom, type GmRoom } from './chunks/room.ts';
 import { readCode, readRefs, type GmCode, type GmRefs } from './chunks/code.ts';
 import { readAgrp, readAudo, readSond, type GmSound } from './chunks/audio.ts';
-import { readBgnd, readGlob, readPath, readScpt, readShdr, type GmPath, type GmScript, type GmShader, type GmTileset } from './chunks/misc.ts';
+import { readAcrv, readBgnd, readGlob, readPath, readScpt, readShdr, type GmAnimCurve, type GmPath, type GmScript, type GmShader, type GmTileset } from './chunks/misc.ts';
 
 export interface GmModel {
   buf: ArrayBuffer;
@@ -37,6 +37,7 @@ export interface GmModel {
   audio: Uint8Array[];
   tilesets: GmTileset[];
   paths: GmPath[];
+  animcurves: GmAnimCurve[];
   shaders: GmShader[];
 }
 
@@ -81,6 +82,7 @@ export function readModel(buf: ArrayBuffer): GmModel {
     audio: opt('AUDO', readAudo),
     tilesets: opt('BGND', readBgnd),
     paths: opt('PATH', readPath),
+    animcurves: opt('ACRV', readAcrv),
     shaders: opt('SHDR', readShdr),
   };
 }

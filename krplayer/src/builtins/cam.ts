@@ -6,6 +6,7 @@ import { newCamera, type Camera } from '../runtime/layers.ts';
 import type { Game } from '../runtime/game.ts';
 import { gstr } from './opr.ts';
 import { DsMap } from '../runtime/data.ts';
+import { ortho, viewMat2d } from '../runtime/matrix.ts';
 
 /** A camera, or undefined. GM never errors on a missing one: getters give -1, setters do nothing (HTML5 CameraManager; error_audit.md). */
 const cam = (g: Game, v: unknown): Camera | undefined => g.cameras[real(v as number)] ?? undefined;
@@ -34,6 +35,30 @@ define('cam_create_view', (g, s, t, argc) => {
   return id;
 });
 define('cam_apply', (g, s, t) => { const c = cam(g, s[t]); if (c) g.applyCamera(c); return undefined; });
+define('cam_special', (g, s, t) => (s[t] === 'active' ? g.activeCamera : g.defaultCamera));
+define('cam_get_mat', (g, s, t) => {
+  const c = cam(g, s[t - 1]);
+  if (!c) return -1;
+  const m = s[t] === 'view' ? c.view ?? viewMat2d(c.x, c.y, c.w, c.h, c.angle) : c.proj ?? ortho(c.w, c.h, 1, 32000);
+  return [...m];
+});
+/**
+ * camera_set_view_mat / camera_set_proj_mat. krplayer draws through the view rectangle, so a matrix must show the
+ * same thing: the view's own look-at (any eye z), or an ortho projection of its size (any z range).
+ */
+define('cam_set_mat', (g, s, t) => {
+  const c = cam(g, s[t - 1]), v = s[t - 2], view = s[t] === 'view';
+  if (!c) return undefined;
+  if (!Array.isArray(v) || v.length < 16) throw new Unverified(`camera_set_${String(s[t])}_mat: not a matrix`);
+  const m = v.slice(0, 16).map((x) => real(x));
+  const want = view ? viewMat2d(c.x, c.y, c.w, c.h, c.angle) : ortho(c.w, c.h, 1, 32000);
+  const skip = view ? [14] : [10, 14]; // depth only
+  if (m.some((x, k) => !skip.includes(k) && Math.abs(x - want[k]) > 1e-4 * Math.max(1, Math.abs(want[k])))) {
+    throw new NotImplemented(`camera_set_${String(s[t])}_mat: krplayer draws in 2D and only takes matrices matching the camera's view (camera ${c.id})`);
+  }
+  if (view) c.view = m; else c.proj = m;
+  return undefined;
+});
 define('ctr_call_later', () => { throw new NotImplemented('call_later is not implemented in krplayer yet'); });
 define('cam_destroy', (g, s, t) => { const i = real(s[t]); if (g.cameras[i]) g.cameras[i] = null; return undefined; });
 define('cam_view_get', (g, s, t) => {

@@ -10,6 +10,7 @@ import {
   drawSprite, drawSpriteGeneral, drawSpritePart, drawSpriteTiled, drawText, ellipse, line, mix, rect, roundrect, textSize, triangle,
 } from '../runtime/draw.ts';
 import { gstr } from './opr.ts';
+import { lookAt, ortho, perspective, perspectiveFov } from '../runtime/matrix.ts';
 
 const D2R = Math.PI / 180;
 
@@ -257,6 +258,7 @@ family('drw_texture', 'texture_', {
   get_texel_width: (g, s, t) => { const w = g.p.renderer.textureSize(n(s, t, 0))[0]; return w ? 1 / w : 0; },
   get_texel_height: (g, s, t) => { const h = g.p.renderer.textureSize(n(s, t, 0))[1]; return h ? 1 / h : 0; },
   get_width: () => 1, get_height: () => 1, // krplayer textures are whole frames, so the frame fills its texture
+  get_uvs: () => [0, 0, 1, 1, 0, 0, 1, 1], // as sprite_get_uvs
   set_stage: (g, s, t) => { g.p.renderer.setSampler(n(s, t, 0), n(s, t, 1)); return undefined; },
 });
 family('drw_texturegroup', 'texturegroup_', { get_textures: () => [], load: () => 0, unload: () => undefined, get_status: () => 3 });
@@ -341,6 +343,10 @@ family('drw_matrix', 'matrix_', {
     m[12] = x; m[13] = y; m[14] = z;
     return m;
   },
+  build_lookat: (_g, s, t) => lookAt(n(s, t, 0), n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6), n(s, t, 7), n(s, t, 8)),
+  build_projection_ortho: (_g, s, t) => ortho(n(s, t, 0), n(s, t, 1), n(s, t, 2), n(s, t, 3)),
+  build_projection_perspective: (_g, s, t) => perspective(n(s, t, 0), n(s, t, 1), n(s, t, 2), n(s, t, 3)),
+  build_projection_perspective_fov: (_g, s, t) => perspectiveFov(n(s, t, 0), n(s, t, 1), n(s, t, 2), n(s, t, 3)),
   multiply: (_g, s, t) => matMul(matrix(s[t], 'matrix_multiply'), matrix(s[t - 1], 'matrix_multiply')),
   get: (g, s, t) => [...(g.matrices[n(s, t, 0)] ?? IDENTITY)] as GArray,
   set: (g, s, t) => {
@@ -352,7 +358,14 @@ family('drw_matrix', 'matrix_', {
   },
 });
 
+define('drw_lighting', (_g, s, t) => {
+  if (b(s, t, 0)) throw new NotImplemented('draw_set_lighting: krplayer draws in 2D and has no 3D lighting');
+  return undefined;
+});
+
 // ---------------------------------------------------------------- surfaces
+
+define('drw_surface_depth_disable', (g, s, t) => { g.surfaceDepthDisable = b(s, t, 0); return undefined; });
 
 define('drw_surface_create', (g, s, t) => g.createSurface(Math.max(1, Math.trunc(n(s, t, 0))), Math.max(1, Math.trunc(n(s, t, 1)))));
 define('drw_surface_free', (g, s, t) => { g.freeSurface(n(s, t, 0)); return undefined; });
@@ -379,6 +392,11 @@ define('drw_surface_part_ext', (g, s, t) => {
 define('drw_surface_stretched', (g, s, t) => {
   const sf = g.surface(s[t]);
   g.p.renderer.drawImage(sf.tex, 0, 0, sf.w, sf.h, n(s, t, 1), n(s, t, 2), 0, 0, n(s, t, 3) / sf.w, n(s, t, 4) / sf.h, 0, 0xffffff, g.alpha);
+  return undefined;
+});
+define('drw_surface_stretched_ext', (g, s, t) => {
+  const sf = g.surface(s[t]);
+  g.p.renderer.drawImage(sf.tex, 0, 0, sf.w, sf.h, n(s, t, 1), n(s, t, 2), 0, 0, n(s, t, 3) / sf.w, n(s, t, 4) / sf.h, 0, n(s, t, 5), n(s, t, 6));
   return undefined;
 });
 /** draw_surface_general: like draw_sprite_general (part, scaled, rotated about the part's top-left, corner colours). */
@@ -495,6 +513,27 @@ define('drw_shader_sampler', (g, s, t) => g.p.renderer.shaderUniform(shader(g, s
 define('drw_shader_uniform_f', (g, s, t, argc) => {
   const k = argc - 1, v = (i: number) => (i < k ? n(s, t, i + 1) : 0);
   g.p.renderer.setUniformF(n(s, t, 0), k, v(0), v(1), v(2), v(3));
+  return undefined;
+});
+define('drw_shader_uniform_i', (g, s, t, argc) => {
+  const k = argc - 1, v = (i: number) => (i < k ? Math.trunc(n(s, t, i + 1)) : 0);
+  g.p.renderer.setUniformI(n(s, t, 0), k, v(0), v(1), v(2), v(3));
+  return undefined;
+});
+let uniformData = new Float32Array(64);
+define('drw_shader_uniform_f_array', (g, s, t) => {
+  const a = s[t - 1];
+  if (!Array.isArray(a)) throw new Unverified('shader_set_uniform_f_array: not an array');
+  if (a.length > uniformData.length) uniformData = new Float32Array(a.length * 2);
+  for (let i = 0; i < a.length; i++) uniformData[i] = real(a[i]);
+  g.p.renderer.setUniformFArray(n(s, t, 0), uniformData, a.length);
+  return undefined;
+});
+/** draw_tile(tileset, tiledata, frame, x, y) */
+define('drw_tile', (g, s, t) => {
+  const ts = g.a.tilesets[n(s, t, 0)];
+  if (!ts) throw new Unverified(`draw_tile: tileset ${String(s[t])} does not exist`);
+  g.drawTile(ts, Math.trunc(n(s, t, 1)), Math.trunc(n(s, t, 2)), n(s, t, 3), n(s, t, 4));
   return undefined;
 });
 define('drw_tilemap', (g, s, t) => {

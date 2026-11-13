@@ -123,6 +123,8 @@ export class SoftRenderer implements Renderer {
   }
   shaderUniform(): number { return this.next++; }
   setUniformF(): void {}
+  setUniformI(): void {}
+  setUniformFArray(): void {}
   setSampler(): void {}
 
   /** Rasterizes a triangle: per-vertex colours, optionally modulating a texture sampled at interpolated u/v. */

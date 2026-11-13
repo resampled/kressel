@@ -1,7 +1,7 @@
 // Loads a project (game.json): compiles every script, resolves names to indices and loads textures.
 // The result is what the runtime works with; the JSON tree is not touched again.
 
-import type { Hat, Krpj, Layer, Node, Path, RoomInstance, ScriptEntry, View } from '../krpj.ts';
+import type { AnimCurve, Hat, Krpj, Layer, Node, Path, RoomInstance, ScriptEntry, View } from '../krpj.ts';
 import type { Pixels, Platform, SoundId, TextureId } from '../platform/types.ts';
 import { EK, Op, type Block } from '../compile/bytecode.ts';
 import { opcodeId } from '../opcodes.ts';
@@ -102,6 +102,8 @@ export interface Assets {
   sprites: SpriteDef[]; fonts: FontDef[]; objects: ObjectDef[]; rooms: RoomDef[]; sounds: SoundDef[]; tilesets: TilesetDef[];
   /** The project's paths (path ids index this, then runtime path_add paths). */
   paths: Path[];
+  /** Animation curves by index (animcurve_get_channel). */
+  animcurves: (AnimCurve & { name: string })[];
   /** Shaders: renderer handle (-1: didn't compile) and name, by index. */
   shaders: { name: string; handle: number }[];
   functions: FuncDef[];
@@ -204,6 +206,8 @@ export async function loadAssets(pj: Krpj, url: (path: string) => string, platfo
   tsEntries.forEach(([k], i) => claim(k, i));
   const pathEntries = Object.entries(pj.paths ?? {});
   pathEntries.forEach(([k], i) => claim(k, i));
+  const curveEntries = Object.entries(pj.animcurves ?? {});
+  curveEntries.forEach(([k], i) => claim(k, i));
   const shaderEntries = Object.entries(pj.shaders ?? {});
   shaderEntries.forEach(([k], i) => claim(k, i));
   const shaders = shaderEntries.map(([name, s]) => ({ name, handle: platform.renderer.compileShader(s.vertex, s.fragment) }));
@@ -350,6 +354,7 @@ export async function loadAssets(pj: Krpj, url: (path: string) => string, platfo
   scriptOf.forEach((i, n) => { if (!assetIndex.has(n)) assetIndex.set(n, i); });
   return {
     sprites, fonts, objects, rooms, sounds, tilesets, functions, globalInit, paths: pathEntries.map(([, p]) => p), shaders,
+    animcurves: curveEntries.map(([name, c]) => ({ name, ...c })),
     scripts: (pj.scripts ?? []).map((f) => (f === null ? -1 : fnIndex.get(f) ?? -1)),
     objectByName: new Map(objects.map((o) => [o.name, o])), assetIndex, varNames, varSlot, initRoom, fps: d.fps,
     width: d.width === 'default' ? first.width : d.width, height: d.height === 'default' ? first.height : d.height,

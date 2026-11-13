@@ -31,9 +31,11 @@ export const GV = {
   health: 64, score: 65, lives: 66,
   // GMS1 view arrays: still builtins in GMS2 runners, read and write the view camera's position/size/target.
   view_xview: 67, view_yview: 68, view_wview: 69, view_hview: 70, view_object: 71, view_angle: 72,
+  // Math constants the 2023+ compiler reads as built-ins (pushbltn infinity), like undefined.
+  infinity: 73, NaN: 74, pi: 75,
 } as const;
 export const GV_READONLY = new Set<number>([
-  GV.room_width, GV.room_height, GV.fps, GV.current_time, GV.mouse_x, GV.mouse_y, GV.instance_count, GV.undefined,
+  GV.room_width, GV.room_height, GV.fps, GV.current_time, GV.mouse_x, GV.mouse_y, GV.instance_count, GV.undefined, GV.infinity, GV.NaN, GV.pi,
   GV.application_surface, GV.async_load, GV.event_type, GV.event_number, GV.event_object, GV.os_type, GV.os_browser,
   GV.view_current, GV.working_directory, GV.program_directory, GV.temp_directory, GV.game_save_id, GV.fps_real, GV.delta_time,
   GV.debug_mode, GV.game_display_name, GV.room_first, GV.room_last, GV.os_device, GV.os_version, GV.browser_width,

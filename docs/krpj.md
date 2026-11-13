@@ -178,9 +178,9 @@ Fields beyond the example above. All are optional unless noted; the types live i
 * `cfg_gm_compat.imported_from`: `null`, or `{ "tool": "gm2kr", "game": <GM project name>, "bytecode": <15-17>, "gm_version": [major, minor, release, build] }`.
 * `cfg_defaults.width` / `height`: `"default"` means the size of `init_room`.
 * `room_order`: room keys in game order (`room_goto_next` etc.). Defaults to the key order of `rooms`.
-* Asset keys (`sprites`, `fonts`, `objects`, `rooms`, `sounds`, `tilesets`, `paths`, `shaders`...) share one namespace, since `["_as", name]` names any of them. gm2kr uses the GameMaker asset names as keys, in GameMaker's order, so an asset's index within its kind is GM's index (imported code that uses raw asset numbers keeps working).
+* Asset keys (`sprites`, `fonts`, `objects`, `rooms`, `sounds`, `tilesets`, `paths`, `animcurves`, `shaders`...) share one namespace, since `["_as", name]` names any of them. gm2kr uses the GameMaker asset names as keys, in GameMaker's order, so an asset's index within its kind is GM's index (imported code that uses raw asset numbers keeps working).
 * `global_init`: scripts (bare or placed, see Script layout) run once at game start, in order, before the first room, with `self` = the global scope (GameMaker 2.3+ script files' top-level code, which also defines their functions as global variables).
-* `scripts`: script asset index → function key (or `null`), for code that names scripts by number (`script_execute(n)`, `asset_get_index`). A function reference (`["_fn", key]`) evaluates to its script index when it has one, and to a method otherwise. `["_fn", opcode, ref?]` names a built-in (krpj_opcodes.md, Declarations).
+* `scripts`: script asset index → function key (or `null`), for code that names scripts by number (`script_execute(n)`, `asset_get_index`). gm2kr maps a GameMaker 2.3+ script asset to a function `gml_GlobalScript_<asset>` that runs the script file's top-level code again (as calling the asset does in GameMaker). A function reference (`["_fn", key]`) evaluates to its script index when it has one, and to a method otherwise. `["_fn", opcode, ref?]` names a built-in (krpj_opcodes.md, Declarations).
 * `audio_groups`: audio group names by index (`sounds[k].group` indexes it).
 * `included_files`: path the game opens, relative to its working directory (`"lang/lang_en.json"`) → asset path (`"./files/lang/lang_en.json"`). Non-audio files are read up front (GML file functions are synchronous); audio is streamed when the game asks for it (`audio_create_stream`).
 
@@ -204,6 +204,8 @@ A hat with an empty block list (`["evt_step", []]`) is a real, empty event: like
 **Fonts**: `size`, `bold`, `italic`, `antialias`, `line_height`, `ranges` and `glyphs` (`"code": [x, y, w, h, shift, offset]` in the atlas) as in the example; `kerning` is optional.
 
 **Paths** (`paths`): `points` is a list of `[x, y, speed]` (speed is a percentage of the path speed, 100 = normal); `smooth` (curved instead of straight segments), `closed` (the last point joins the first) and `precision` (curve subdivision, 1-8, default 4) are optional. Like other assets, a path's index within `paths` is its id.
+
+**Animation curves** (`animcurves`, optional): each is `{ "channels": [{ "name", "type", "iterations", "points" }] }`. `type` is 0 linear, 1 smooth (Catmull-Rom) or 2 bezier; `iterations` is the number of samples per segment for smooth/bezier. `points` are `[x, value]` with x from 0 to 1, and bezier points add their in- and out-handle offsets: `[x, value, in_dx, in_dy, out_dx, out_dy]`. A curve's index within `animcurves` is its id.
 
 **Shaders** (`shaders`): `vertex` and `fragment` are GLSL ES 1.00 sources written for GameMaker's conventions: attributes `in_Position`, `in_Colour`, `in_TextureCoord`; uniforms `gm_BaseTexture` and `gm_Matrices[5]` (index 4 is world-view-projection). gm2kr keeps GameMaker's own prelude in the source.
 

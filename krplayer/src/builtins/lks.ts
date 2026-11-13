@@ -1,7 +1,7 @@
 // Looks (lks_*) and sound (snd_*).
 
 import { define, family, n, b, str, opt } from './registry.ts';
-import { NotImplemented, real, Unverified } from '../value.ts';
+import { GmStruct, NotImplemented, real, Unverified, type Value } from '../value.ts';
 import { spriteOrThrow } from '../runtime/draw.ts';
 import type { SpriteDef } from '../runtime/assets.ts';
 import { Files } from '../runtime/data.ts';
@@ -10,13 +10,14 @@ import type { Pixels } from '../platform/types.ts';
 import { DsMap } from '../runtime/data.ts';
 import { newEmitter, type Emitter } from '../runtime/sound.ts';
 
-const SPRITE_INFO: Record<string, true> = { width: true, height: true, number: true, xoffset: true, yoffset: true };
+const SPRITE_INFO: Record<string, true> = { width: true, height: true, number: true, xoffset: true, yoffset: true, speed: true, speed_type: true };
 define('lks_sprite_info', (g, s, t) => {
   const sp = g.a.sprites[n(s, t, 1)];
   if (!sp) { if (String(s[t]) in SPRITE_INFO) return 0; } // GM: 0 for a missing sprite (error_audit.md)
   else switch (s[t]) {
     case 'width': return sp.width; case 'height': return sp.height; case 'number': return sp.frames.length;
     case 'xoffset': return sp.ox; case 'yoffset': return sp.oy;
+    case 'speed': return sp.speed; case 'speed_type': return sp.fpsDiv ? 0 : 1; // spritespeed_framespersecond / _framespergameframe
   }
   throw new NotImplemented(`sprite_get_${String(s[t])} unknown`);
 });
@@ -123,6 +124,31 @@ define('lks_sprite_assign', (g, s, t) => {
 define('lks_sprite_set_offset', (g, s, t) => { const sp = g.a.sprites[n(s, t, 0)]; if (!sp) return undefined; sp.ox = n(s, t, 1); sp.oy = n(s, t, 2); return undefined; });
 const BBOX: Record<string, number> = { left: 0, top: 1, right: 2, bottom: 3 };
 define('lks_sprite_bbox', (g, s, t) => g.a.sprites[n(s, t, 1)]?.bbox[BBOX[String(s[t])]] ?? 0);
+/** sprite_get_info: GM's struct. krplayer frames are whole untrimmed textures. */
+define('lks_sprite_get_info', (g, s, t) => {
+  const sp = spriteOrThrow(g, n(s, t, 0)), [l, tp, r, bt] = sp.bbox, w = sp.width, h = sp.height;
+  const frames = sp.frames.map((tex) => struct(g, { x: 0, y: 0, w, h, texture: tex, original_width: w, original_height: h, crop_width: w, crop_height: h, x_offset: 0, y_offset: 0 }));
+  return struct(g, {
+    width: w, height: h, xoffset: sp.ox, yoffset: sp.oy, transparent: true, smooth: true, preload: true, type: 0, name: sp.name,
+    bbox_left: l, bbox_top: tp, bbox_right: r, bbox_bottom: bt, bbox_mode: 0, num_subimages: sp.frames.length,
+    use_mask: sp.bits !== null, frame_speed: sp.speed, frame_type: sp.fpsDiv ? 0 : 1, frames,
+  });
+});
+const struct = (g: Game, o: Record<string, Value>): GmStruct => {
+  const st = new GmStruct();
+  for (const k in o) st.vars.set(g.a.varSlot(k), o[k]);
+  return st;
+};
+/** sprite_set_bbox_mode: 0 automatic, 1 full image, 2 manual (the box stays as set). */
+define('lks_sprite_bbox_mode', (g, s, t) => {
+  const sp = spriteOrThrow(g, n(s, t, 0)), mode = n(s, t, 1);
+  if (mode === 1) sp.bbox = [0, 0, sp.width - 1, sp.height - 1];
+  else if (mode === 0) {
+    if (!sp.pixels) throw new NotImplemented(`sprite_set_bbox_mode: automatic boxes need pixels, which krplayer only keeps for sprite_add sprites (${sp.name})`);
+    sp.bbox = autoBBox(sp.pixels, 0);
+  } else if (mode !== 2) throw new Unverified(`sprite_set_bbox_mode: unknown mode ${mode}`);
+  return undefined;
+});
 define('lks_sprite_set_bbox', (g, s, t) => { spriteOrThrow(g, n(s, t, 0)).bbox = [n(s, t, 1), n(s, t, 2), n(s, t, 3), n(s, t, 4)]; return undefined; });
 /** sprite_duplicate: a new sprite sharing the frames (textures are never changed in place). */
 define('lks_sprite_duplicate', (g, s, t) => {

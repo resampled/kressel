@@ -146,16 +146,25 @@ define('sen_distance_to_point', (g, s, t) => {
 });
 
 /**
- * collision_rectangle_list(x1, y1, x2, y2, obj, prec, notme, list, ordered) / collision_circle_list(x, y, r, ...):
- * appends every hit's id to the ds_list and returns how many. Ordered sorts by distance from the shape's centre.
+ * collision_rectangle_list / collision_line_list(x1, y1, x2, y2, obj, prec, notme, list, ordered) / collision_circle_list(x, y, r, ...):
+ * appends every hit's id to the ds_list and returns how many. Ordered sorts by distance from the shape's centre (a line's first point).
  */
 define('sen_collision_list', (g, s, t, argc) => {
-  const rect = s[t] === 'rectangle', k = rect ? 5 : 4; // index of obj
+  const rect = s[t] === 'rectangle', line = s[t] === 'line', k = rect || line ? 5 : 4; // index of obj
   const a = n(s, t, 1), c = n(s, t, 2), d = n(s, t, 3);
   const list = g.data.lists.get(s[t - k - 3], 'ds_list'), me = notMe(g, s[t - k - 2], argc, k + 2);
   let cx: number, cy: number;
   hits.length = 0;
-  if (rect) {
+  if (line) {
+    const e = n(s, t, 4);
+    cx = a; cy = c;
+    box(g, a, c, d, e);
+    g.collideShape(1, real(s[t - k]), me, (o) => {
+      const q = g.sb;
+      shape(o, o.x, o.y, q);
+      return segmentHitsBox(a, c, d, e, q[8], q[9], q[10], q[11]);
+    }, hits);
+  } else if (rect) {
     const e = n(s, t, 4);
     cx = (a + d) / 2; cy = (c + e) / 2;
     g.collideShape(box(g, Math.min(a, d), Math.min(c, e), Math.max(a, d) + 1, Math.max(c, e) + 1), real(s[t - k]), me, undefined, hits);

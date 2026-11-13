@@ -1,7 +1,7 @@
 // Rooms (rom_*) and layers. Room changes take effect at the end of the step.
 
 import { define, family, n, b, str, type BuiltinFn } from './registry.ts';
-import { GmlError, NotImplemented, real, Unverified, type GArray, type Value } from '../value.ts';
+import { GmlError, GmStruct, NotImplemented, real, Unverified, type GArray, type Value } from '../value.ts';
 import { ELEM, type Element } from '../runtime/layers.ts';
 import type { Game } from '../runtime/game.ts';
 
@@ -218,15 +218,34 @@ family('rom_tilemap', 'tilemap_', {
   get_width: elGet(TMAP, -1, (e) => e.w),
   get_height: elGet(TMAP, -1, (e) => e.h),
   get_tileset: elGet(TMAP, -1, (e) => e.asset),
+  /** The tile size of the map's tile set (-1 for a missing map). */
+  get_tile_width: (g, s, t) => { const e = elOf(g, s[t], TMAP); return (e && g.a.tilesets[e.asset]?.tw) ?? -1; },
+  get_tile_height: (g, s, t) => { const e = elOf(g, s[t], TMAP); return (e && g.a.tilesets[e.asset]?.th) ?? -1; },
   tileset: elSet(TMAP, (e, s, t) => { e.asset = n(s, t, 1); }),
   get: (g, s, t) => { const e = elOf(g, s[t], TMAP); return e ? cell(e, Math.floor(n(s, t, 1)), Math.floor(n(s, t, 2))) : -1; },
   /** Pixel position in the room; the tile map sits at its layer's offset plus its own, as it draws. */
+  /** tilemap_set(tilemap, tiledata, cell_x, cell_y): false outside the map. */
+  set: (g, s, t) => {
+    const e = elOf(g, s[t], TMAP), col = Math.floor(n(s, t, 2)), row = Math.floor(n(s, t, 3));
+    if (!e?.cells || col < 0 || row < 0 || col >= e.w || row >= e.h) return false;
+    e.cells[row * e.w + col] = Math.trunc(n(s, t, 1));
+    return true;
+  },
   get_at_pixel: (g, s, t) => {
     const e = elOf(g, s[t], TMAP), ts = e && g.a.tilesets[e.asset];
     if (!e || !ts) return -1;
     return cell(e, Math.floor((n(s, t, 1) - e.layer.x - e.x) / ts.tw), Math.floor((n(s, t, 2) - e.layer.y - e.y) / ts.th));
   },
+  /** The column / row under a room pixel, or -1 outside the map. */
+  get_cell_x_at_pixel: (g, s, t) => cellAt(g, s, t, true),
+  get_cell_y_at_pixel: (g, s, t) => cellAt(g, s, t, false),
 });
+function cellAt(g: Game, s: Value[], t: number, x: boolean): number {
+  const e = elOf(g, s[t], TMAP), ts = e && g.a.tilesets[e.asset];
+  if (!e || !ts) return -1;
+  const c = Math.floor((n(s, t, 1) - e.layer.x - e.x) / ts.tw), r = Math.floor((n(s, t, 2) - e.layer.y - e.y) / ts.th);
+  return c >= 0 && r >= 0 && c < e.w && r < e.h ? (x ? c : r) : -1;
+}
 /** A tile map cell's tile data, or -1 outside the map. */
 const cell = (e: Element, col: number, row: number) => (e.cells && col >= 0 && row >= 0 && col < e.w && row < e.h ? e.cells[row * e.w + col] : -1);
 /** tile_get_*: fields of a tile data value (krpj.ts TileLayer: index bits 0-18, mirror 28, flip 29, rotate 30). */
@@ -235,13 +254,117 @@ define('rom_tile_data', (_g, s, t) => {
   switch (s[t]) { case 'index': return d & 0x7ffff; case 'mirror': return ((d >> 28) & 1) === 1; case 'flip': return ((d >> 29) & 1) === 1; case 'rotate': return ((d >> 30) & 1) === 1; }
   throw new NotImplemented(`tile_get_${String(s[t])} unknown`);
 });
-// Animation curves aren't imported yet (no ACRV chunk in gm2kr): calling any animcurve_* fails.
-family('rom_animcurve', 'animcurve_', {});
+/** tile_set_*(tiledata, value): the tile data with that field changed. */
+define('rom_tile_set_data', (_g, s, t) => {
+  const d = Math.trunc(n(s, t, 1)), bit = (k: number) => (b(s, t, 2) ? d | (1 << k) : d & ~(1 << k));
+  switch (s[t]) { case 'index': return (d & ~0x7ffff) | (Math.trunc(n(s, t, 2)) & 0x7ffff); case 'mirror': return bit(28); case 'flip': return bit(29); case 'rotate': return bit(30); }
+  throw new NotImplemented(`tile_set_${String(s[t])} unknown`);
+});
+// ---------------------------------------------------------------- animation curves
+// A channel is GM's struct { name, type, iterations, points: [{ posx, value }] }. Imported channels keep their
+// curve sampled as a polyline (smooth/bezier: `iterations` samples per segment), which evaluate interpolates.
+
+/** Channel struct -> [x0, y0, x1, y1, ...] samples. Structs the game builds itself evaluate linearly. */
+const samples = new WeakMap<GmStruct, Float64Array>();
+const channelCache = new WeakMap<Game, Map<number, GmStruct>>();
+
+function sampleChannel(type: number, iterations: number, pts: number[][]): Float64Array {
+  if (type === 0 || pts.length < 2) return Float64Array.from(pts.flatMap((p) => [p[0], p[1]]));
+  const it = Math.max(1, iterations), out: number[] = [];
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i], d = pts[i + 1];
+    for (let k = 0; k < it; k++) {
+      const u = k / it, v = 1 - u;
+      if (type === 2) { // cubic bezier: a, a + out handle, d + in handle, d
+        const b0 = v * v * v, b1 = 3 * v * v * u, b2 = 3 * v * u * u, b3 = u * u * u;
+        out.push(b0 * a[0] + b1 * (a[0] + a[4]) + b2 * (d[0] + d[2]) + b3 * d[0], b0 * a[1] + b1 * (a[1] + a[5]) + b2 * (d[1] + d[3]) + b3 * d[1]);
+      } else { // Catmull-Rom through the neighbours (ends repeated)
+        const p0 = pts[Math.max(0, i - 1)], p3 = pts[Math.min(pts.length - 1, i + 2)];
+        const cr = (j: number) => 0.5 * (2 * a[j] + (d[j] - p0[j]) * u + (2 * p0[j] - 5 * a[j] + 4 * d[j] - p3[j]) * u * u + (3 * a[j] - p0[j] - 3 * d[j] + p3[j]) * u * u * u);
+        out.push(cr(0), cr(1));
+      }
+    }
+  }
+  const last = pts[pts.length - 1];
+  out.push(last[0], last[1]);
+  return Float64Array.from(out);
+}
+
+function channelStruct(g: Game, curve: number, k: number): GmStruct {
+  let cache = channelCache.get(g);
+  if (!cache) channelCache.set(g, (cache = new Map()));
+  const key = curve * 4096 + k, hit = cache.get(key);
+  if (hit) return hit;
+  const ch = g.a.animcurves[curve].channels[k], st = new GmStruct(), slot = (n: string) => g.a.varSlot(n);
+  st.vars.set(slot('name'), ch.name); st.vars.set(slot('type'), ch.type); st.vars.set(slot('iterations'), ch.iterations);
+  st.vars.set(slot('points'), ch.points.map((p) => {
+    const pt = new GmStruct();
+    pt.vars.set(slot('posx'), p[0]); pt.vars.set(slot('value'), p[1]);
+    return pt;
+  }));
+  samples.set(st, sampleChannel(ch.type, ch.iterations, ch.points));
+  cache.set(key, st);
+  return st;
+}
+
+const curveOf = (g: Game, v: Value, fn: string) => {
+  const c = g.a.animcurves[real(v)];
+  if (!c) throw new Unverified(`${fn}: animation curve ${String(v)} does not exist`);
+  return c;
+};
+
+family('rom_animcurve', 'animcurve_', {
+  get: (g, s, t) => {
+    const i = real(s[t]), c = curveOf(g, i, 'animcurve_get'), st = new GmStruct();
+    st.vars.set(g.a.varSlot('name'), c.name);
+    st.vars.set(g.a.varSlot('channels'), c.channels.map((_, k) => channelStruct(g, i, k)));
+    return st;
+  },
+  /** animcurve_get_channel(curve, name or index) */
+  get_channel: (g, s, t) => {
+    const i = real(s[t]), c = curveOf(g, i, 'animcurve_get_channel'), w = s[t - 1];
+    const k = typeof w === 'string' ? c.channels.findIndex((ch) => ch.name === w) : Math.trunc(real(w));
+    if (!c.channels[k]) throw new Unverified(`animcurve_get_channel: ${c.name} has no channel ${String(w)}`);
+    return channelStruct(g, i, k);
+  },
+  get_channel_index: (g, s, t) => curveOf(g, s[t], 'animcurve_get_channel_index').channels.findIndex((ch) => ch.name === str(s, t, 1)),
+  exists: (g, s, t) => g.a.animcurves[real(s[t])] !== undefined,
+  /** animcurve_channel_evaluate(channel, pos): before the first point / after the last, their values. */
+  channel_evaluate: (g, s, t) => {
+    const st = s[t], x = n(s, t, 1);
+    if (!(st instanceof GmStruct)) throw new Unverified('animcurve_channel_evaluate: not a channel');
+    let d = samples.get(st);
+    if (!d) {
+      const pts = st.vars.get(g.a.varSlot('points'));
+      if (!Array.isArray(pts)) throw new Unverified('animcurve_channel_evaluate: channel has no points');
+      const px = g.a.varSlot('posx'), pv = g.a.varSlot('value');
+      d = Float64Array.from(pts.flatMap((p) => (p instanceof GmStruct ? [real(p.vars.get(px)), real(p.vars.get(pv))] : [])));
+    }
+    if (d.length < 2) return 0;
+    if (x <= d[0]) return d[1];
+    for (let j = 2; j < d.length; j += 2) {
+      if (x <= d[j]) { const x0 = d[j - 2], span = d[j] - x0; return span > 0 ? d[j - 1] + ((x - x0) / span) * (d[j + 1] - d[j - 1]) : d[j + 1]; }
+    }
+    return d[d.length - 1];
+  },
+});
 define('rom_layer_tilemap', (g, s, t) => firstOf(g, s[t], TMAP));
 define('rom_layer_at_depth', (g, s, t) => {
   const d = n(s, t, 0), out: GArray = g.layers.list.filter((l) => l.depth === d).map((l) => l.id);
   return out.length ? out : [-1];
 });
+define('rom_layer_shader', (g, s, t) => {
+  const l = layer(g, s[t]), sh = real(s[t - 1]);
+  if (!l) return undefined;
+  if (sh >= 0) {
+    const d = g.a.shaders[sh];
+    if (!d) throw new Unverified(`layer_shader: shader ${sh} does not exist`);
+    if (d.handle < 0) throw new NotImplemented(`layer_shader: shader ${d.name} did not compile`);
+  }
+  l.shader = sh;
+  return undefined;
+});
+define('rom_camera', (g, s, t) => (real(s[t]) === g.roomIndex ? g.views[n(s, t, 1)]?.camera ?? -1 : -1));
 define('rom_layer_script', (g, s, t) => {
   const l = layer(g, s[t - 1]), f = s[t - 2], none = typeof f === 'number' && f < 0;
   if (!l) return undefined;

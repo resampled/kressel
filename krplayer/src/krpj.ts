@@ -53,6 +53,11 @@ export interface Tileset {
 }
 /** A path: points [x, y, speed %], straight or smooth (curved), open or closed. */
 export interface Path { points: [number, number, number][]; smooth?: boolean; closed?: boolean; precision?: number }
+/**
+ * An animation curve's channels. type: 0 linear, 1 smooth (Catmull-Rom), 2 bezier; iterations: samples per
+ * segment for smooth/bezier. points: [x (0-1), value] or, for bezier, [x, value, in-handle dx, dy, out-handle dx, dy].
+ */
+export interface AnimCurve { channels: { name: string; type: number; iterations: number; points: number[][] }[] }
 /** A GLSL ES shader pair, GameMaker conventions (in_Position/in_Colour/in_TextureCoord, gm_BaseTexture, gm_Matrices). */
 export interface Shader { vertex: string; fragment: string }
 export interface KrFunction {
@@ -155,6 +160,7 @@ export interface Krpj {
   fonts: Record<string, Font>;
   tilesets?: Record<string, Tileset>;
   paths?: Record<string, Path>;
+  animcurves?: Record<string, AnimCurve>;
   shaders?: Record<string, Shader>;
   functions?: Record<string, KrFunction>;
   objects?: Record<string, KrObject>;

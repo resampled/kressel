@@ -484,7 +484,7 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `sen_collision_circle` (hidden) | num x, num y, num r, inst obj, bool precise, bool notme | `collision_circle` | |
 | `sen_collision_line` (hidden) | num x1, num y1, num x2, num y2, inst obj, bool precise, bool notme | `collision_line` | |
 | `sen_collision_ellipse` (hidden) | num x1, num y1, num x2, num y2, inst obj, bool precise, bool notme | `collision_ellipse` | |
-| `sen_collision_list` (hidden) | ref `rectangle`/`circle`, ... | `collision_rectangle_list` / `collision_circle_list` | Arguments as GML (shape, obj, precise, notme, ds list, ordered). Appends every hit to the list; returns the count. Ordered sorts by distance from the shape's centre. |
+| `sen_collision_list` (hidden) | ref `rectangle`/`circle`/`line`, ... | `collision_rectangle_list` / `collision_circle_list` / `collision_line_list` | Arguments as GML (shape, obj, precise, notme, ds list, ordered). Appends every hit to the list; returns the count. Ordered sorts by distance from the shape's centre (a line's first point). |
 | `sen_distance_to_object` | inst obj | `distance_to_object` | Bounding-box distance, not origin distance. |
 | `sen_distance_to_point` (hidden) | num x, num y | `distance_to_point` | Bounding-box distance. |
 | `sen_key_held` | key key | `keyboard_check` | Dropdown lists `vk_*`, A-Z and 0-9; letters are stored as `ord()` codes (A = 65). Also accepts a reporter. |
@@ -519,6 +519,7 @@ Math, randomness, strings and type checks. GML's `+` doesn't turn numbers into t
 | `opr_point_direction` | num x1, num y1, num x2, num y2 | `point_direction` | Degrees; 0 = right, counter-clockwise. |
 | `opr_point_distance` | num x1, num y1, num x2, num y2 | `point_distance` | |
 | `opr_point_distance_3d` (hidden) | num x1, num y1, num z1, num x2, num y2, num z2 | `point_distance_3d` | |
+| `opr_dot_product` (hidden) | num x1, num y1, num x2, num y2 | `dot_product` | |
 | `opr_lengthdir` | ref `x`/`y`, num len, num dir | `lengthdir_x` / `lengthdir_y` | |
 | `opr_angle_difference` (hidden) | num a, num b | `angle_difference` | |
 | `opr_point_in_rect` (hidden) | num px, num py, num x1, num y1, num x2, num y2 | `point_in_rectangle` | |
@@ -572,8 +573,9 @@ Arrays are 0-based (unlike Scratch lists), and block labels say so. Array functi
 
 | Opcode | Arguments | GML | Notes |
 |---|---|---|---|
-| `var_arr_length` | arr a | `array_length` / `array_length_1d` | |
+| `var_arr_length` | arr a | `array_length` / `array_length_1d` | 0 for anything that isn't an array. |
 | `var_arr_get` (hidden) | arr a, num index | `array_get` | |
+| `var_arr_set` (hidden) | arr a, num index, any value | `array_set` | Writes into the array itself (no copy-on-write); past the end it grows, padding with 0. |
 | `var_arr_2d` (compat) | ref `height`/`length`, arr a, num? row | `array_height_2d` / `array_length_2d` | Height is the outer length; length is row `row`'s length (0 if it isn't an array). |
 | `var_arr_create` (hidden) | num n, any? value | `array_create` | |
 | `var_arr_push` | arr a, any... | `array_push` | Scratch 'add (thing) to [list]'. |
@@ -606,7 +608,8 @@ Arrays are 0-based (unlike Scratch lists), and block labels say so. Array functi
 ## Looks
 | Opcode | Arguments | GML | Notes |
 |---|---|---|---|
-| `lks_sprite_info` | ref `width`/`height`/`number`/`xoffset`/`yoffset`, spr s | `sprite_get_width` / `sprite_get_height` / `sprite_get_number` / `sprite_get_xoffset` / `sprite_get_yoffset` | |
+| `lks_sprite_info` | ref `width`/`height`/`number`/`xoffset`/`yoffset`/`speed`/`speed_type`, spr s | `sprite_get_width` / `sprite_get_height` / `sprite_get_number` / `sprite_get_xoffset` / `sprite_get_yoffset` / `sprite_get_speed` / `sprite_get_speed_type` | |
+| `lks_sprite_get_info` (hidden) | spr s | `sprite_get_info` | A struct (width, height, xoffset, yoffset, num_subimages, frame_speed, frame_type, bbox_*, name, frames...). krplayer frames are untrimmed, so each frame is `{x: 0, y: 0, w: width, h: height, x_offset: 0, y_offset: 0, ...}`. |
 | `lks_sprite_name` (hidden) | spr s | `sprite_get_name` | |
 | `lks_sprite_exists` (hidden) | spr s | `sprite_exists` | |
 | `lks_asset_named` (hidden) | str name | `asset_get_index` | Looks an asset up by name at runtime, so gm2kr has to keep the original asset names findable. |
@@ -620,6 +623,7 @@ Arrays are 0-based (unlike Scratch lists), and block labels say so. Array functi
 | `lks_sprite_set_offset` (hidden) | spr s, num x, num y | `sprite_set_offset` | |
 | `lks_sprite_bbox` (hidden) | ref `left`/`top`/`right`/`bottom`, spr s | `sprite_get_bbox_left` / `sprite_get_bbox_top` / `sprite_get_bbox_right` / `sprite_get_bbox_bottom` | |
 | `lks_sprite_set_bbox` (hidden) | spr s, num left, num top, num right, num bottom | `sprite_set_bbox` | |
+| `lks_sprite_bbox_mode` (hidden) | spr s, num mode | `sprite_set_bbox_mode` | 0 automatic, 1 full image, 2 manual (keeps the current box). Automatic needs pixels, which krplayer only keeps for `sprite_add` sprites. |
 | `lks_sprite_duplicate` (hidden) | spr s | `sprite_duplicate` | A new sprite sharing the frames; returns its index. |
 | `lks_sprite_uvs` (hidden) | spr s, num frame | `sprite_get_uvs` | `[left, top, right, bottom, x offset, y offset, width ratio, height ratio]` of the frame on its texture. krplayer frames are untrimmed textures of their own, so this is `[0, 0, 1, 1, 0, 0, 1, 1]`. |
 | `lks_sprite_collision_mask` (hidden) | spr s, bool sepmasks, num bboxmode, num left, num top, num right, num bottom, num kind, num tolerance | `sprite_collision_mask` | bboxmode 0 automatic, 1 full image, 2 manual; kind 0 precise, 1 rectangle, 2 ellipse, 3 diamond. Precise masks need the pixels, which krplayer only has for `sprite_add` sprites. |
@@ -717,6 +721,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_gpu_get` (compat, family) | ref fn | `gpu_get_*` (`blendenable`, `colorwriteenable`, `alphatestenable`, `alphatestref`, `tex_repeat`, `texfilter`) | ref drops `gpu_get_`. The state the matching `gpu_set_*` left. |
 | `drw_gpu` (compat, family) | ref fn, ... | `gpu_set_*` (`blendmode_ext`, `alphatestenable`, `colorwriteenable`, `fog`...) | ref drops `gpu_set_`. |
 | `drw_surface_create` (hidden) | num w, num h | `surface_create` | The editor calls surfaces 'canvases'. |
+| `drw_surface_depth_disable` (compat) | bool disable | `surface_depth_disable` | krplayer surfaces never have a depth buffer, so this only records the flag. |
 | `drw_surface_free` (hidden) | num surf | `surface_free` | |
 | `drw_surface_exists` (hidden) | num surf | `surface_exists` | Check every frame; surfaces can be lost. |
 | `drw_surface_target` (hidden) | num surf | `surface_set_target` | Shown together with `drw_surface_reset` as one 'draw onto canvas' C-block, but saved as two opcodes. Calls that aren't paired show as plain commands. |
@@ -726,6 +731,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_surface_part` (hidden) | as GML | `draw_surface_part` | |
 | `drw_surface_part_ext` (hidden) | as GML | `draw_surface_part_ext` | |
 | `drw_surface_stretched` (hidden) | as GML | `draw_surface_stretched` | |
+| `drw_surface_stretched_ext` (hidden) | as GML | `draw_surface_stretched_ext` | |
 | `drw_surface_general` (hidden) | as GML | `draw_surface_general` | |
 | `drw_surface_tiled` (hidden) | num surf, num x, num y | `draw_surface_tiled` | Tiles the surface over the whole view. |
 | `drw_surface_tiled_ext` (hidden) | num surf, num x, num y, num xscale, num yscale, col colour, num alpha | `draw_surface_tiled_ext` | |
@@ -743,6 +749,8 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_shader_current` (hidden) | - | `shader_current` | -1 when no shader is set. |
 | `drw_shader_uniform` (hidden) | shd s, str name | `shader_get_uniform` | |
 | `drw_shader_uniform_f` (hidden) | num uniform, num... | `shader_set_uniform_f` | |
+| `drw_shader_uniform_i` (hidden) | num uniform, num... | `shader_set_uniform_i` | |
+| `drw_shader_uniform_f_array` (hidden) | num uniform, arr values | `shader_set_uniform_f_array` | Fills a `float`/`vec`/`mat` uniform (or an array of them) from a flat array. |
 | `drw_shader_sampler` (hidden) | shd s, str name | `shader_get_sampler_index` | |
 | `drw_getpixel` (compat) | num x, num y | `draw_getpixel` | Stubbed. |
 | `drw_surface_getpixel` (compat) | num surf, num x, num y | `surface_getpixel` | BGR. Reads the surface back, so it's slow. |
@@ -756,12 +764,14 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_prim_vertex_texture_colour` (hidden) | num x, num y, num u, num v, col c, num alpha | `draw_vertex_texture_colour` | |
 | `drw_primitive_end` (hidden) | - | `draw_primitive_end` | Draws the vertices since `drw_primitive_begin`. |
 | `drw_tilemap` (hidden) | num tilemap, num x, num y | `draw_tilemap` | |
+| `drw_tile` (hidden) | num tileset, num tiledata, num frame, num x, num y | `draw_tile` | One tile (index, mirror and flip from the tile data) at its top-left; frame picks the animation frame. |
 | `drw_effect` (hidden) | ref `above`/`below`, num kind, num x, num y, num size, col colour | `effect_create_above` / `effect_create_below` | Built-in one-shot effects. kind: `ef_explosion` = 0, `ef_ring` 1, `ef_ellipse` 2, `ef_firework` 3, `ef_smoke` 4, `ef_smokeup` 5, `ef_star` 6, `ef_spark` 7, `ef_flare` 8, `ef_cloud` 9, `ef_rain` 10, `ef_snow` 11; size 0-2 (small/medium/large). Drawn by krplayer as an approximation, not GM's exact particles. |
 | `drw_part` (hidden, family) | ref fn, ... | `part_*` | ref drops `part_` (`["drw_part","particles_create",ps,x,y,pt,10]`). Only `system_create`, `particles_create` and `system_destroy` get custom labels. No particle systems in krplayer yet: calling one fails. |
-| `drw_texture` (compat, family) | ref fn, ... | `texture_*` | Texture paging hints (`prefetch`, `is_ready`...); ref drops `texture_`. |
+| `drw_texture` (compat, family) | ref fn, ... | `texture_*` | Texture paging hints (`prefetch`, `is_ready`...) and texture info (`get_uvs`, `get_texel_width`...); ref drops `texture_`. krplayer textures are whole frames, so `get_uvs` is `[0, 0, 1, 1, 0, 0, 1, 1]`. |
 | `drw_texturegroup` (compat, family) | ref fn, ... | `texturegroup_*` | ref drops `texturegroup_`. |
 | `drw_vertex` (hidden, family) | ref fn, ... | `vertex_*` | Vertex formats and buffers; ref drops `vertex_`. |
-| `drw_matrix` (hidden, family) | ref fn, ... | `matrix_*` (`build`, `build_identity`, `multiply`, `get`, `set`) | 16-element arrays. krplayer draws in 2D, so `matrix_set` fails unless the matrix is the identity. |
+| `drw_matrix` (hidden, family) | ref fn, ... | `matrix_*` (`build`, `build_identity`, `build_lookat`, `build_projection_ortho`, `build_projection_perspective`, `build_projection_perspective_fov`, `multiply`, `get`, `set`) | 16-element arrays (row vectors, left-handed, as D3DX). krplayer draws in 2D, so `matrix_set` fails unless the matrix is the identity. |
+| `drw_lighting` (compat) | bool enable | `draw_set_lighting` | 3D lighting: turning it off does nothing, turning it on fails (krplayer draws in 2D). |
 
 ## Rooms
 | Opcode | Arguments | GML | Notes |
@@ -784,6 +794,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `rom_layer_all` (hidden) | - | `layer_get_all` | Array of layer ids. |
 | `rom_layer_at_depth` (hidden) | num depth | `layer_get_id_at_depth` | Array of the ids of layers at that depth (`[-1]` if none). |
 | `rom_layer_script` (hidden) | ref `begin`/`end`, layer l, fn script | `layer_script_begin` / `layer_script_end` | Called before / after the layer draws, with self = the calling instance at the time (-1 clears). On an instance layer, the scripts wrap each run of its instances in the depth-sorted draw order. |
+| `rom_layer_shader` (hidden) | layer l, shd s | `layer_shader` | The layer draws with this shader (-1 none): set after the begin script, reset before the end script. A missing layer is ignored. |
 | `rom_layer_tilemap` (hidden) | layer l | `layer_tilemap_get_id` | The layer's tile map element, or -1. |
 | `rom_layer_elements` (hidden) | layer l | `layer_get_all_elements` | Array of element ids. |
 | `rom_element_type` (hidden) | num element | `layer_get_element_type` | |
@@ -796,8 +807,10 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `rom_sprite` (hidden, family) | ref fn, ... | `layer_sprite_*` | Sprites in asset layers; ref drops `layer_sprite_`. |
 | `rom_tilemap` (hidden, family) | ref fn, ... | `tilemap_*` | ref drops `tilemap_`. |
 | `rom_tile_data` (hidden) | ref `index`/`flip`/`mirror`/`rotate`, num tiledata | `tile_get_index` / `tile_get_flip` / `tile_get_mirror` / `tile_get_rotate` | Fields of a tile data value (`tilemap_get`): index is bits 0-18, mirror bit 28, flip bit 29, rotate bit 30. |
+| `rom_tile_set_data` (hidden) | ref `index`/`flip`/`mirror`/`rotate`, num tiledata, any value | `tile_set_index` / `tile_set_flip` / `tile_set_mirror` / `tile_set_rotate` | Returns the changed tile data (same bits as `rom_tile_data`). |
+| `rom_camera` (hidden) | room r, num view | `room_get_camera` | The current room's view camera; -1 for other rooms (krplayer makes view cameras when a room starts). |
 | `rom_sequence` (hidden, family) | ref fn, ... | `layer_sequence_*` | ref drops `layer_sequence_`. |
-| `rom_animcurve` (hidden, family) | ref fn, ... | `animcurve_*` | ref drops `animcurve_`. Animation curves aren't imported yet: calling one fails. |
+| `rom_animcurve` (hidden, family) | ref fn, ... | `animcurve_*` (`get`, `get_channel`, `get_channel_index`, `exists`, `channel_evaluate`) | ref drops `animcurve_`. Channels are GM's struct (`name`, `type`, `iterations`, `points` of `{posx, value}`); evaluate clamps to the first/last point. Smooth and bezier channels are sampled at `iterations` points per segment and interpolated linearly between them. |
 
 ## Camera
 Camera inputs default to `["_ai",["_lv","view_camera"],0]`.
@@ -815,6 +828,9 @@ Camera inputs default to `["_ai",["_lv","view_camera"],0]`.
 | `cam_create_view` (hidden) | as GML | `camera_create_view` | |
 | `cam_destroy` (hidden) | num cam | `camera_destroy` | |
 | `cam_apply` (hidden) | num cam | `camera_apply` | Draws through the camera's view onto the whole current target, until the target or view pass changes. |
+| `cam_special` (hidden) | ref `active`/`default` | `camera_get_active` / `camera_get_default` | Active: the camera of the view being drawn, or the last `camera_apply`; -1 otherwise. Default: the camera used when views are off (covers the room). |
+| `cam_get_mat` (hidden) | ref `view`/`proj`, num cam | `camera_get_view_mat` / `camera_get_proj_mat` | The matrix last set, else GM's 2D ones built from the view (look-at from z -16000 at the view's centre; ortho w x h, z 1-32000). |
+| `cam_set_mat` (hidden) | ref `view`/`proj`, num cam, arr matrix | `camera_set_view_mat` / `camera_set_proj_mat` | krplayer draws in 2D: a matrix must show what the camera's view already shows (any z range; an ortho projection of the view's size), else it fails. |
 | `cam_view_get` (hidden) | ref `visible`/`camera`/`xport`/`yport`/`wport`/`hport`/`surface_id`, num view | `view_get_visible` / `view_get_camera` / `view_get_xport` / `view_get_yport` / `view_get_wport` / `view_get_hport` / `view_get_surface_id` | |
 | `cam_view_set` (hidden) | ref `visible`/`camera`/`xport`/`yport`/`wport`/`hport`/`surface_id`, num view, any value | `view_set_visible` / `view_set_camera` / `view_set_xport` / `view_set_yport` / `view_set_wport` / `view_set_hport` / `view_set_surface_id` | |
 | `cam_legacy_view_get` (compat) | num what, num view | `__view_get` | GMS1-to-GMS2 compatibility scripts, common in older imports. |

@@ -9,7 +9,7 @@ import type { GmModel } from '../src/model.ts';
 type Spec = Partial<Instr> & { op: number };
 const assets = { objects: ['obj_a', 'obj_b'], sprites: ['spr_a'], sounds: [], rooms: [], fonts: [] };
 
-function decompile(specs: Spec[], names: typeof assets & { scripts?: Set<string> } = assets): unknown[] {
+function decompile(specs: Spec[], names: typeof assets & { scripts?: Set<string>; scriptAssets?: Set<string> } = assets): unknown[] {
   let at = 0;
   const ins = specs.map((s): Instr => {
     const i: Instr = { at, t1: T.Int32, t2: T.Int32, i16: 0, b1: 0, target: -1, value: null, v: null, vkind: 0, fn: null, ...s };
@@ -261,4 +261,30 @@ test('break inside with jumps to an extra exit-form popenv (DR ch3 shutta photo 
 test('a bare other; left on the stack is dropped; built-ins pushed as values become _fn opcodes', () => {
   assert.deepEqual(decompile([call('@@Other@@', 0), pushi(0), call('event_user', 1), { op: Op.popz }]), decompile([pushi(0), call('event_user', 1), { op: Op.popz }]));
   assert.deepEqual(decompile([{ op: Op.push, t1: T.Int32, fn: 'variable_instance_set', value: 0 }, pop('f')]), [['var_set', ['_lv', 'f'], ['_fn', 'var_inst_set']]]);
+});
+
+test('a ?? b: a; chknullish; bf E; popz; b; E: (DR ch5 scr_plat_makeactor_fromasset)', () => {
+  assert.deepEqual(decompile([pushv('a'), { op: Op.brk, i16: Ext.chknullish }, { op: Op.bf, target: 5 }, { op: Op.popz, t1: T.Var }, pushv('b'), pop('x')]), [
+    ['var_set', ['_lv', 'x'], ['opr_nullish', ['_lv', 'a'], ['_lv', 'b']]],
+  ]);
+});
+
+test('switches with no cases: only a default, or empty (DR ch5 obj_flower_spawner, vending_get_item_description)', () => {
+  const popzv = { op: Op.popz, t1: T.Var };
+  // switch (s) { default: a = 1; }
+  assert.deepEqual(decompile([pushv('s'), { op: Op.b, target: 3 }, { op: Op.b, target: 6 }, pushi(1), pop('a'), { op: Op.b, target: 6 }, popzv]), [
+    ['ctr_switch', ['_lv', 's'], [['ctr_default'], ['var_set', ['_lv', 'a'], 1]]],
+  ]);
+  // switch (s) {}
+  assert.deepEqual(decompile([pushv('s'), { op: Op.b, target: 3 }, { op: Op.b, target: 4 }, { op: Op.b, target: 4 }, popzv]), [
+    ['ctr_switch', ['_lv', 's'], [['ctr_default']]],
+  ]);
+});
+
+test('f() where the function value is dup\'ed as its own self (DR ch5 obj_npc_wrapper choices[i]())', () => {
+  assert.deepEqual(decompile([pushv('f'), { op: Op.dup, t1: T.Var, i16: 0 }, { op: Op.callv, i16: 0 }, { op: Op.popz }]), [['fnc_m', ['_lv', 'f']]]);
+});
+
+test('2.3: calling a script asset by its own name (DR ch5 scr_round_to_multiple)', () => {
+  assert.deepEqual(decompile([pushi(2), pushi(5), call('scr_round', 2), { op: Op.popz }], { ...assets, scriptAssets: new Set(['scr_round']) }), [['fnc_g', 'gml_GlobalScript_scr_round', 5, 2]]);
 });

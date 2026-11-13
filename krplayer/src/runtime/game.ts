@@ -4,7 +4,7 @@
 import { WINDOW, type Platform } from '../platform/types.ts';
 import type { RoomInstance } from '../krpj.ts';
 import { EK, type Block } from '../compile/bytecode.ts';
-import { GV, IV } from '../compile/names.ts';
+import { GV, IV, IV_READONLY } from '../compile/names.ts';
 import { GmlError, GmStruct, real, Scope, truthy, NotImplemented, Unverified, type GArray, type Value } from '../value.ts';
 import { VM } from '../vm/vm.ts';
 import { ASYNC, EV, emptyEvents, type Assets, type Events, type ObjectDef } from './assets.ts';
@@ -12,6 +12,7 @@ import { Instance, NOI } from './instance.ts';
 import { newShape, overlaps, shape } from './collision.ts';
 import { Effects } from './effects.ts';
 import { Layers, ELEM, newCamera, viewFrom, type Camera, type Element, type RtLayer, type RtView } from './layers.ts';
+import type { TilesetDef } from './assets.ts';
 import { Sounds } from './sound.ts';
 import { Paths } from './paths.ts';
 import { Data, DsMap, Files, type Ini, type TextFile } from './data.ts';
@@ -76,6 +77,10 @@ export class Game {
   cameras: (Camera | null)[] = [];
   views: RtView[] = [];
   viewCurrent = 0;
+  /** camera_get_active: the camera being drawn through (-1 none). camera_get_default: the camera for rooms without views. */
+  activeCamera = -1; defaultCamera = -1;
+  /** surface_depth_disable (krplayer surfaces have no depth buffer either way). */
+  surfaceDepthDisable = false;
   viewsEnabled = false;
   // surfaces (0 is the application surface)
   readonly surfaces = new Map<number, Surface>();
@@ -220,13 +225,12 @@ export class Game {
     if (!inst.alive) return;
     if (runDestroy) this.event(inst, EV.destroy, null);
     this.event(inst, EV.cleanup, null);
-    inst.alive = false;
-    this.byId.delete(inst.id);
+    inst.alive = false; // stays addressable by id until the end of the step (addressable(), compact())
   }
 
   /** An instance id, object (first instance), or self/other keyword -> instance. */
   first(t: number): Instance | null {
-    if (t >= FIRST_ID) { const i = this.byId.get(t); return i && i.active ? i : null; }
+    if (t >= FIRST_ID) { const i = this.byId.get(t); return i && i.alive && i.active ? i : null; }
     if (t === -1) return this.self instanceof Instance ? this.self : null;
     if (t === -2) return this.other instanceof Instance ? this.other : null;
     if (t < 0 && t !== -3) return null;
@@ -234,7 +238,16 @@ export class Game {
     return null;
   }
   /** The instance with this id even if deactivated (instance_activate_object etc.). */
-  byIdAny(id: number): Instance | undefined { return this.byId.get(id); }
+  byIdAny(id: number): Instance | undefined { const i = this.byId.get(id); return i?.alive ? i : undefined; }
+  /**
+   * Like first(), but an id also finds an instance destroyed earlier this step: GM keeps it addressable until the
+   * end of the step (Ch5 obj_flower_enmparent reads its own variables after instance_destroy(); gm_gotchas.md).
+   */
+  addressable(t: number): Instance | null {
+    if (t < FIRST_ID) return this.first(t);
+    const i = this.byId.get(t);
+    return i && i.active ? i : null;
+  }
 
   /** Instances (or a struct) matching a `with`/target value, in iteration order, into out. */
   collect(t: Value, out: Scope[]): void {
@@ -306,6 +319,7 @@ export class Game {
       return;
     }
     if (id === IV.depth) { inst.depth = real(v); inst.layer = -1; return; }
+    if (IV_RO[id]) throw new GmlError(`unable to set read-only variable ${this.ivName(id)}`);
     inst.set(id, v, this.a.sprites);
   }
 
@@ -349,6 +363,9 @@ export class Game {
       case GV.mouse_y: return this.p.input.mouseY;
       case GV.instance_count: { let n = 0; for (const i of this.instances) if (i.alive && i.active) n++; return n; }
       case GV.undefined: return undefined;
+      case GV.infinity: return Infinity;
+      case GV.NaN: return NaN;
+      case GV.pi: return Math.PI;
       case GV.application_surface: return APP_SURFACE;
       case GV.async_load: return this.asyncLoad;
       case GV.event_type: return gmEventType(this.eventKey);
@@ -612,12 +629,18 @@ export class Game {
       v.camera = i;
       this.views.push(v);
     }
+    if (this.defaultCamera < 0) this.defaultCamera = this.cameras.push(newCamera(this.cameras.length)) - 1;
+    const dc = this.cameras[this.defaultCamera];
+    if (dc) { dc.w = room.width; dc.h = room.height; }
     // The application surface keeps its size across rooms (see gm_gotchas.md); draw() stretches the first port to fill it.
   }
 
   private compact(): void {
     let w = 0;
-    for (const inst of this.instances) if (inst.alive) this.instances[w++] = inst;
+    for (const inst of this.instances) {
+      if (inst.alive) this.instances[w++] = inst;
+      else if (this.byId.get(inst.id) === inst) this.byId.delete(inst.id);
+    }
     this.instances.length = w;
   }
 
@@ -833,6 +856,7 @@ export class Game {
   viewRect(): readonly number[] { return this.vr; }
   /** camera_apply: draws through the camera onto the whole current target, until the target or the view pass changes. */
   applyCamera(c: Camera): void {
+    this.activeCamera = c.id;
     const top = this.targetStack.at(-1), s = top === undefined ? null : this.surface(top), p = this.viewPort;
     this.p.renderer.setView(c.x, c.y, c.w, c.h, c.angle, s ? 0 : p[0], s ? 0 : p[1], s ? s.w : p[2], s ? s.h : p[3]);
   }
@@ -863,15 +887,16 @@ export class Game {
     r.setTarget(app.tex);
     r.clear(room.showColour ? room.colour : 0, 1);
     const passes = this.viewsEnabled ? this.views.map((v, i) => [v, i] as const).filter(([v]) => v.visible) : [];
+    this.activeCamera = this.defaultCamera;
     if (!passes.length) this.drawRoom(app.tex, 0, 0, room.width, room.height, 0, 0, 0, app.w, app.h);
     for (const [v, i] of passes) {
       const c = this.cameras[v.camera] ?? newCamera(-1);
-      this.viewCurrent = i;
+      this.viewCurrent = i; this.activeCamera = v.camera;
       // Ports are in window coordinates, scaled so the first port fills the app surface (even if their aspects differ).
       const sx = app.w / (passes[0][0].pw || app.w), sy = app.h / (passes[0][0].ph || app.h);
       this.drawRoom(app.tex, c.x, c.y, c.w, c.h, c.angle, (v.px - passes[0][0].px) * sx, (v.py - passes[0][0].py) * sy, v.pw * sx, v.ph * sy);
     }
-    this.viewCurrent = 0;
+    this.viewCurrent = 0; this.activeCamera = -1;
 
     // Post-draw, then the application surface onto the window (letterboxed), then the GUI.
     this.setPass(WINDOW, 0, 0, ww, wh, 0, 0, 0, ww, wh);
@@ -903,7 +928,7 @@ export class Game {
     for (const l of this.layers.list) if (l.visible && l.elements.length && !l.instances) layers.push(l);
     layers.sort((a, b) => b.depth - a.depth);
     let li = 0, scripted = false;
-    for (const l of this.layers.list) if (l.instances && (l.scriptBegin != null || l.scriptEnd != null)) scripted = true;
+    for (const l of this.layers.list) if (l.instances && wrapped(l)) scripted = true;
     // Instance layer scripts wrap each run of that layer's instances in the depth-sorted draw list.
     let open: RtLayer | null = null;
     this.fx.draw(this.p.renderer, false);
@@ -913,10 +938,7 @@ export class Game {
       if (scripted && open?.id !== inst.layer) {
         open = this.endLayer(open);
         const l = this.layers.find(inst.layer);
-        if (l?.instances && (l.scriptBegin != null || l.scriptEnd != null)) {
-          open = l;
-          if (l.scriptBegin != null) this.vm.callValue(l.scriptBegin, this.globalScope, NO_ARGS);
-        }
+        if (l?.instances && wrapped(l)) { open = l; this.beginLayer(l); }
       }
       if (inst.obj.hasDraw) this.run(inst.obj.ev.simple[EV.draw], inst, null);
       else this.drawSelf(inst);
@@ -933,16 +955,25 @@ export class Game {
     drawSprite(this, spr, inst.image_index, inst.x, inst.y, inst.image_xscale, inst.image_yscale, inst.image_angle, inst.image_blend, inst.image_alpha * this.alpha);
   }
 
-  /** Runs an open instance layer's end script; returns null (nothing open). */
+  /** A layer's begin script, then its shader (layer_shader). */
+  private beginLayer(l: RtLayer): void {
+    if (l.scriptBegin != null) this.vm.callValue(l.scriptBegin, this.globalScope, NO_ARGS);
+    const sh = l.shader !== undefined && l.shader >= 0 ? this.a.shaders[l.shader] : undefined;
+    if (sh) { this.p.renderer.setShader(sh.handle); this.shader = l.shader!; }
+  }
+
+  /** Ends an open layer: resets its shader, then runs its end script; returns null (nothing open). */
   private endLayer(l: RtLayer | null): null {
-    if (l?.scriptEnd != null) this.vm.callValue(l.scriptEnd, this.globalScope, NO_ARGS);
+    if (!l) return null;
+    if (l.shader !== undefined && l.shader >= 0) { this.p.renderer.setShader(-1); this.shader = -1; }
+    if (l.scriptEnd != null) this.vm.callValue(l.scriptEnd, this.globalScope, NO_ARGS);
     return null;
   }
 
   private drawLayer(l: RtLayer): void {
-    if (l.scriptBegin != null) this.vm.callValue(l.scriptBegin, this.globalScope, NO_ARGS);
+    this.beginLayer(l);
     for (const e of l.elements) if (e.visible) this.drawElement(e, l);
-    if (l.scriptEnd != null) this.vm.callValue(l.scriptEnd, this.globalScope, NO_ARGS);
+    this.endLayer(l);
   }
 
   private drawElement(e: Element, l: RtLayer): void {
@@ -990,23 +1021,30 @@ export class Game {
   drawTilemap(e: Element, ox: number, oy: number): void {
     const ts = this.a.tilesets[e.asset], cells = e.cells;
     if (!ts || !cells) return;
-    const r = this.p.renderer, [vx, vy, vw, vh] = this.vr;
+    const [vx, vy, vw, vh] = this.vr;
     const c0 = Math.max(0, Math.floor((vx - ox) / ts.tw)), c1 = Math.min(e.w, Math.ceil((vx + vw - ox) / ts.tw));
     const r0 = Math.max(0, Math.floor((vy - oy) / ts.th)), r1 = Math.min(e.h, Math.ceil((vy + vh - oy) / ts.th));
     const frame = ts.frames > 1 && ts.frameTime > 0 ? Math.floor(((this.p.now() - this.startTime) * 1000) / ts.frameTime) % ts.frames : 0;
-    for (let row = r0; row < r1; row++) for (let col = c0; col < c1; col++) {
-      const cell = cells[row * e.w + col], t0 = cell & 0x7ffff;
-      if (!t0) continue;
-      const t = ts.ids && ts.frames > 1 ? ts.ids[t0 * ts.frames + frame] ?? t0 : t0;
-      const sx = (t % ts.columns) * (ts.tw + 2 * ts.bx) + ts.bx, sy = Math.floor(t / ts.columns) * (ts.th + 2 * ts.by) + ts.by;
-      const mirror = (cell >> 28) & 1, flip = (cell >> 29) & 1;
-      const x = ox + col * ts.tw + (mirror ? ts.tw : 0), y = oy + row * ts.th + (flip ? ts.th : 0);
-      r.drawImage(ts.tex, sx, sy, ts.tw, ts.th, x, y, 0, 0, mirror ? -1 : 1, flip ? -1 : 1, 0, 0xffffff, 1);
-    }
+    for (let row = r0; row < r1; row++) for (let col = c0; col < c1; col++) this.drawTile(ts, cells[row * e.w + col], frame, ox + col * ts.tw, oy + row * ts.th);
+  }
+
+  /** One tile's data (index, mirror, flip) with its top-left at (x, y); frame picks the animation frame. Index 0 is empty. */
+  drawTile(ts: TilesetDef, cell: number, frame: number, x: number, y: number): void {
+    const t0 = cell & 0x7ffff;
+    if (!t0) return;
+    const t = ts.ids && ts.frames > 1 ? ts.ids[t0 * ts.frames + (((frame % ts.frames) + ts.frames) % ts.frames)] ?? t0 : t0;
+    const sx = (t % ts.columns) * (ts.tw + 2 * ts.bx) + ts.bx, sy = Math.floor(t / ts.columns) * (ts.th + 2 * ts.by) + ts.by;
+    const mirror = (cell >> 28) & 1, flip = (cell >> 29) & 1;
+    this.p.renderer.drawImage(ts.tex, sx, sy, ts.tw, ts.th, x + (mirror ? ts.tw : 0), y + (flip ? ts.th : 0), 0, 0, mirror ? -1 : 1, flip ? -1 : 1, 0, 0xffffff, 1);
   }
 }
 
 const NO_ARGS: Value[] = [];
+/** Read-only built-in instance variables, by id (a flag table: setIV is on the hot path). */
+const IV_RO = Uint8Array.from({ length: Math.max(...IV_READONLY) + 1 }, (_, k) => +IV_READONLY.has(k));
+
+/** Whether a layer wraps its drawing (scripts or a shader). */
+const wrapped = (l: RtLayer) => l.scriptBegin != null || l.scriptEnd != null || (l.shader !== undefined && l.shader >= 0);
 
 /** Deepest first; at equal depth the newest instance draws first (GM adds new layer elements at the front). */
 const byDepth = (a: Instance, b: Instance) => b.depth - a.depth || b.order - a.order;

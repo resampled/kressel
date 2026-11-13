@@ -14,11 +14,17 @@ export interface Decompiled {
   child: boolean;
 }
 
+/** 2.3+ script assets callable by their own name: global scripts that no function shares the name of. */
+export function scriptAssets(m: GmModel): Set<string> {
+  const fns = new Set(m.code.map((c) => c.name));
+  return new Set(m.scripts.filter((s) => m.code[s.code]?.name === `gml_GlobalScript_${s.name}` && !fns.has(`gml_Script_${s.name}`)).map((s) => s.name));
+}
+
 export function assetNames(m: GmModel): AssetNames {
   return {
     objects: m.objects.map((o) => o.name), sprites: m.sprites.map((s) => s.name), sounds: m.sounds.map((s) => s.name),
     rooms: m.rooms.map((r) => r.name), fonts: m.fonts.map((f) => f.name),
-    ...(m.fmt.gms23 ? {} : { scripts: new Set(m.scripts.map((s) => s.name)) }),
+    ...(m.fmt.gms23 ? { scriptAssets: scriptAssets(m) } : { scripts: new Set(m.scripts.map((s) => s.name)) }),
   };
 }
 

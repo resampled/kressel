@@ -37,7 +37,7 @@ export function createHeadless(textureSize: (url: string) => [number, number] = 
     copyTexture: (_t, _x, _y, w, h) => { const id = nextId++; sizes.set(id, [w, h]); return id; },
     setTarget() {}, setView() {}, clear() {}, setBlend() {}, setFog() {}, setAlphaTest() {}, setColorWrite() {}, setFilter() {}, setRepeat() {},
     drawImage() { stats.draws++; }, drawQuad() { stats.draws++; }, triangle() { stats.draws++; }, triangleTex() { stats.draws++; }, systemText() {},
-    compileShader: () => nextId++, setShader() {}, shaderUniform: () => nextId++, setUniformF() {}, setSampler() {},
+    compileShader: () => nextId++, setShader() {}, shaderUniform: () => nextId++, setUniformF() {}, setUniformI() {}, setUniformFArray() {}, setSampler() {},
   };
   const soft = decode ? new SoftRenderer(decode) : null;
   if (soft) { const end = soft.endFrame.bind(soft); soft.endFrame = () => { stats.frames++; stats.draws += soft.draws; end(); }; }

@@ -1,11 +1,12 @@
 // GmModel -> game.json + asset files (zipped together, they make a .krpj).
 
 import type {
-  AssetLayer, Font, Hat, KrFunction, KrObject, Krpj, Layer, LegacyTile, Path, Room, Script, Shader, Sound, Sprite, Tileset, View,
+  AnimCurve, AssetLayer, Font, Hat, KrFunction, KrObject, Krpj, Layer, LegacyTile, Path, Room, Script, Shader, Sound, Sprite, Tileset, View,
 } from '../../../krplayer/src/krpj.ts';
 import type { GmModel } from '../model.ts';
 import type { GmEvent } from '../chunks/objt.ts';
 import { decompileAll, assetNames } from '../decompile/program.ts';
+import { GLOBAL_SCRIPT } from '../decompile/structure.ts';
 import { fnName, type AssetNames } from '../decompile/structure.ts';
 import { tpagAt } from '../chunks/tpag.ts';
 import { audioExt, readAudioGroupFile } from '../chunks/audio.ts';
@@ -118,6 +119,14 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
   for (const p of m.paths) {
     paths[p.name] = { points: p.points, ...(p.smooth ? { smooth: true } : {}), ...(p.closed ? { closed: true } : {}), precision: p.precision };
   }
+  const animcurves: Record<string, AnimCurve> = {};
+  const f32 = (x: number) => Math.round(x * 1e6) / 1e6; // stored as float32: drop the float noise
+  for (const c of m.animcurves) {
+    animcurves[c.name] = { channels: c.channels.map((ch) => ({
+      name: ch.name, type: ch.type, iterations: ch.iterations,
+      points: ch.points.map((p) => (ch.type === 2 ? p : p.slice(0, 2)).map(f32)),
+    })) };
+  }
   const shaders: Record<string, Shader> = {};
   for (const s of m.shaders) shaders[s.name] = { vertex: s.vertex, fragment: s.fragment };
 
@@ -198,7 +207,8 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
   const functions: Record<string, KrFunction> = {};
   const ctors = new Set(m.scripts.filter((s) => s.ctor).map((s) => m.code[s.code]?.name));
   for (const [entry, d] of code) {
-    if (!d.child) continue;
+    // 2.3+: child functions, plus standalone gml_Script_ entries (extension GML functions, e.g. Ch5 shader_replace_simple)
+    if (!d.child && !(m.fmt.gms23 && entry.startsWith('gml_Script_'))) continue;
     functions[fnName(entry)] = { args: [], body: d.body as Script, ...(d.args ? { argc: d.args } : {}), ...(ctors.has(entry) ? { ctor: true } : {}) };
   }
   // Pre-2.3 scripts are top-level entries (gml_Script_<name>), called by the script's name.
@@ -206,9 +216,15 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
     const c = m.code[s.code], d = c && code.get(c.name);
     if (d && !d.child) functions[s.name] = { args: [], body: d.body as Script };
   }
+  // 2.3+ script assets (a global script's body) run that body again when called by index or by the asset's
+  // name (AssetNames.scriptAssets): each is a function named after its gml_GlobalScript_ entry.
+  if (m.fmt.gms23) for (const s of m.scripts) {
+    const c = m.code[s.code], d = c && code.get(c.name);
+    if (d && !d.child && c.name.startsWith(GLOBAL_SCRIPT)) functions[c.name] = { args: [], body: d.body as Script };
+  }
   const scripts = m.scripts.map((s) => {
     const c = m.code[s.code], d = c && code.get(c.name);
-    return d?.child ? fnName(c.name) : d && !m.fmt.gms23 ? s.name : null;
+    return d?.child ? fnName(c.name) : !d ? null : !m.fmt.gms23 ? s.name : c.name.startsWith(GLOBAL_SCRIPT) ? c.name : null;
   });
 
   const objects: Record<string, KrObject> = {};
@@ -270,9 +286,11 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
           return [out];
         }
       }
-      return [{ ...base, type: 'instances', instances: l.instances.map((id) => {
-        const i = byId.get(id);
-        if (!i) throw new Error(`room ${r.name}: layer ${l.name} lists unknown instance ${id}`);
+      // A layer can list ids the room has no instance for (Ch5 room_dw_cliff_finaldash): the runner only creates
+      // the room's instances, so those ids are dropped.
+      const known = l.instances.filter((id) => byId.has(id) || (log(`room ${r.name}: layer ${l.name} lists unknown instance ${id}; skipped`), false));
+      return [{ ...base, type: 'instances', instances: known.map((id) => {
+        const i = byId.get(id)!;
         const object = name(m.objects, i.object);
         if (!object) throw new Error(`room ${r.name}: instance ${id} has bad object ${i.object}`);
         const alpha = (i.color >>> 24) / 255, colour = i.color & 0xffffff;
@@ -308,7 +326,7 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
     cfg_gm_compat: { imported_from: { tool: 'gm2kr', game: g.name, bytecode: g.bytecodeVersion, gm_version: g.version } },
     cfg_defaults: { width: g.windowWidth, height: g.windowHeight, fps, window_title: g.displayName || g.name },
     cfg_project: { init_room: roomOrder[0] ?? null },
-    sprites, sounds, fonts, tilesets, paths, shaders, functions, objects, rooms, room_order: roomOrder,
+    sprites, sounds, fonts, tilesets, paths, ...(m.animcurves.length ? { animcurves } : {}), shaders, functions, objects, rooms, room_order: roomOrder,
     global_init: m.globalInit.map((id) => script(id, 'global init')),
     scripts, audio_groups: m.audioGroups, included_files: included,
   };

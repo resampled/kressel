@@ -33,12 +33,16 @@ export interface RtLayer {
   instances: boolean;
   /** layer_script_begin/end: a function value run before/after the layer draws. */
   scriptBegin?: Value | null; scriptEnd?: Value | null;
+  /** layer_shader: a shader asset index, or -1 / absent. */
+  shader?: number;
 }
 
 export interface Camera {
   id: number; x: number; y: number; w: number; h: number; angle: number;
   /** Followed object/instance (-1 none), border and max speed (-1 unlimited). */
   target: number; bx: number; by: number; sx: number; sy: number;
+  /** camera_set_view_mat / camera_set_proj_mat: the matrices last set (null: built from the view). */
+  view: number[] | null; proj: number[] | null;
 }
 
 export interface RtView { visible: boolean; camera: number; px: number; py: number; pw: number; ph: number; surface: number }
@@ -143,7 +147,7 @@ export class Layers {
 }
 
 export function newCamera(id: number): Camera {
-  return { id, x: 0, y: 0, w: 640, h: 480, angle: 0, target: -1, bx: 0, by: 0, sx: -1, sy: -1 };
+  return { id, x: 0, y: 0, w: 640, h: 480, angle: 0, target: -1, bx: 0, by: 0, sx: -1, sy: -1, view: null, proj: null };
 }
 
 export function viewFrom(v: View | undefined): RtView {

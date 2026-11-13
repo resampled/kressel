@@ -52,7 +52,8 @@ class GLRenderer implements Renderer {
   /** GameMaker shaders (compileShader handles index this), the one in use (-1: default), and uniform handles. */
   private readonly shaders: { p: WebGLProgram; wvp: WebGLUniformLocation | null; at: WebGLUniformLocation | null; atRef: WebGLUniformLocation | null; units: number }[] = [];
   private shader = -1;
-  private readonly uniforms: { sh: number; loc: WebGLUniformLocation; unit: number }[] = [];
+  /** type: the GL type of the uniform (gl.FLOAT_VEC2...), for shader_set_uniform_f_array. */
+  private readonly uniforms: { sh: number; loc: WebGLUniformLocation; unit: number; type: number }[] = [];
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -245,7 +246,10 @@ class GLRenderer implements Renderer {
   shaderUniform(sh: number, name: string): number {
     const s = this.shaders[sh], loc = s && this.gl.getUniformLocation(s.p, name);
     if (!loc) return -1;
-    this.uniforms.push({ sh, loc, unit: -1 });
+    const gl = this.gl, k = gl.getProgramParameter(s.p, gl.ACTIVE_UNIFORMS) as number;
+    let type: number = gl.FLOAT;
+    for (let i = 0; i < k; i++) { const u = gl.getActiveUniform(s.p, i); if (u && u.name.replace(/\[0\]$/, '') === name) type = u.type; }
+    this.uniforms.push({ sh, loc, unit: -1, type });
     return this.uniforms.length - 1;
   }
   setUniformF(u: number, n: number, x: number, y: number, z: number, w: number): void {
@@ -254,6 +258,28 @@ class GLRenderer implements Renderer {
     this.flush();
     const gl = this.gl;
     if (n === 1) gl.uniform1f(un.loc, x); else if (n === 2) gl.uniform2f(un.loc, x, y); else if (n === 3) gl.uniform3f(un.loc, x, y, z); else gl.uniform4f(un.loc, x, y, z, w);
+  }
+  setUniformI(u: number, n: number, x: number, y: number, z: number, w: number): void {
+    const un = this.uniforms[u];
+    if (!un || un.sh !== this.shader) return;
+    this.flush();
+    const gl = this.gl;
+    if (n === 1) gl.uniform1i(un.loc, x); else if (n === 2) gl.uniform2i(un.loc, x, y); else if (n === 3) gl.uniform3i(un.loc, x, y, z); else gl.uniform4i(un.loc, x, y, z, w);
+  }
+  setUniformFArray(u: number, d: Float32Array, len: number): void {
+    const un = this.uniforms[u];
+    if (!un || un.sh !== this.shader || !len) return;
+    this.flush();
+    const gl = this.gl;
+    switch (un.type) {
+      case gl.FLOAT_VEC2: return gl.uniform2fv(un.loc, d, 0, len - (len % 2));
+      case gl.FLOAT_VEC3: return gl.uniform3fv(un.loc, d, 0, len - (len % 3));
+      case gl.FLOAT_VEC4: return gl.uniform4fv(un.loc, d, 0, len - (len % 4));
+      case gl.FLOAT_MAT2: return gl.uniformMatrix2fv(un.loc, false, d, 0, len - (len % 4));
+      case gl.FLOAT_MAT3: return gl.uniformMatrix3fv(un.loc, false, d, 0, len - (len % 9));
+      case gl.FLOAT_MAT4: return gl.uniformMatrix4fv(un.loc, false, d, 0, len - (len % 16));
+      default: return gl.uniform1fv(un.loc, d, 0, len);
+    }
   }
   setSampler(u: number, t: TextureId): void {
     const un = this.uniforms[u], x = this.tex[t];

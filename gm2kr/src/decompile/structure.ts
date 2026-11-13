@@ -24,8 +24,13 @@ export interface AssetNames {
    * gml_Script_ function. Pre-2.3 code also encodes `a[i, j]` as index `i * 32000 + j`.
    */
   scripts?: Set<string>;
+  /**
+   * 2.3+ script assets that aren't also function names. Calling one (`call scr_x`) runs the script's global
+   * body again and returns undefined (gm_gotchas.md): a call to the function gml_GlobalScript_<asset>.
+   */
+  scriptAssets?: Set<string>;
 }
-type AssetKind = Exclude<keyof AssetNames, 'scripts'>;
+type AssetKind = Exclude<keyof AssetNames, 'scripts' | 'scriptAssets'>;
 
 export class DecompileError extends Error {
   /** For an unstructured branch: where it jumps (lets loops retry with a for/continue target). */
@@ -283,7 +288,8 @@ export class Decompiler {
           const f = this.pop(stack, i).e, self = this.pop(stack, i).e, args: Kr[] = [];
           for (let k = 0; k < ins.i16; k++) args.push(this.pop(stack, i).e);
           const bound = isOp(f, '_iv') ? f[1] === self || (typeof self === 'number' && isOp(f[1], '_as') && f[1][1] === this.assets.objects[self])
-            : isOp(self, '_kw') && self[1] === 'self';
+            // a[i](): the function value is dup'ed as its own self, so it runs bound, or on the current self (gm_gotchas.md)
+            : (isOp(self, '_kw') && self[1] === 'self') || self === f;
           if (!bound) this.fail(i, 'method call on an instance other than the one holding the method');
           stack.push({ e: ['fnc_m', f, ...args], size: 16 });
           break;
@@ -302,6 +308,15 @@ export class Decompiler {
             i = e + 1;
             continue;
           }
+          // a ?? b (and a ??= b, which stores the result back into a): a; chknullish; bf E; popz; b; E:
+          if (ins.i16 === Ext.chknullish) {
+            const bf = this.ins[i + 1], e = bf?.op === Op.bf ? this.idx(bf.target, i) : -1;
+            if (e < 0 || e > to || this.ins[i + 2]?.op !== Op.popz) this.fail(i, 'chknullish without its ?? pattern');
+            const a = this.pop(stack, i).e;
+            stack.push({ e: ['opr_nullish', a, this.expr(i + 3, e, ctx).e], size: 16 });
+            i = e;
+            continue;
+          }
           this.ext(ins, i, stack, out);
           break;
         }
@@ -315,6 +330,9 @@ export class Decompiler {
         case Op.b: {
           if (ins.target > ins.at && this.children.has(this.addr(i + 1))) { i = this.idx(ins.target, i); continue; }
           if (ins.target === this.addr(i + 1)) break; // empty else {}
+          // A switch with no cases (only a default, or empty): v; b D; b E; D: body; E: popz.v
+          const es = stack.length ? this.caselessSwitch(i, to, stack, out, ctx) : -1;
+          if (es >= 0) { i = es; continue; }
           const c = this.jumpKind(ins.target, ctx);
           if (!c) this.fail(i, `unstructured branch to 0x${ins.target.toString(16)}`, ins.target);
           out.push([c]);
@@ -494,6 +512,20 @@ export class Decompiler {
     return e + 1;
   }
 
+  /** A switch with no cases whose `b D` is at i (see the `b` case): the next index, or -1 if it isn't one. */
+  private caselessSwitch(i: number, to: number, stack: Item[], out: Kr[], ctx: Ctx[]): number {
+    const dead = this.ins[i + 1];
+    if (dead?.op !== Op.b || dead.target <= dead.at || this.ins[i].target !== this.addr(i + 2)) return -1;
+    const e = this.at.get(dead.target);
+    if (e === undefined || e > to || this.ins[e].op !== Op.popz || this.ins[e].t1 !== T.Var) return -1;
+    const sw: Switch = { labels: new Map([[i + 2, [undefined]]]), minEnd: e, end: e }, s: Item[] = [];
+    const value = this.pop(stack, i).e, body = this.block(i + 2, e, s, [...ctx, { kind: 'switch', brk: dead.target, cont: -1, sw }], sw);
+    if (s.length) this.fail(e, 'switch body leaves values on the stack');
+    if (i + 2 === e) body.push(['ctr_default']);
+    out.push(['ctr_switch', value, body]);
+    return e + 1;
+  }
+
   /** v; (dup.v 0; case; cmp eq; bt Lk)*; b D; bodies; E: popz.v. Returns the next index, or -1 if not a switch. */
   private switchStmt(i: number, to: number, stack: Item[], out: Kr[], ctx: Ctx[]): number {
     const cases: [Kr, number][] = [];
@@ -621,13 +653,14 @@ export class Decompiler {
 
   /** A function as a value: a user function, or a built-in as its opcode (plus its ref for variant opcodes). */
   private fnRef(fn: string): Kr {
-    const b = fn.startsWith(SCRIPT) || this.assets.scripts?.has(fn) ? undefined : lookupBuiltin(fn);
+    const b = fn.startsWith(SCRIPT) || this.assets.scripts?.has(fn) || this.assets.scriptAssets?.has(fn) ? undefined : lookupBuiltin(fn);
     if (b) return b.ref === null ? ['_fn', b.op] : ['_fn', b.op, b.ref];
     return ['_fn', fnName(fn)];
   }
 
   private call(fn: string, args: Kr[], i: number): Kr {
     if (fn in PSEUDO) return PSEUDO[fn];
+    if (this.assets.scriptAssets?.has(fn)) return ['fnc_g', GLOBAL_SCRIPT + fn, ...args];
     if (fn.startsWith(SCRIPT) || this.assets.scripts?.has(fn)) return ['fnc_g', fnName(fn), ...args];
     switch (fn) {
       case '@@NewGMLArray@@': return ['_ar', ...args];
@@ -647,6 +680,8 @@ export class Decompiler {
 }
 
 /** Function key in krpj: the GM function name without the gml_Script_ prefix. */
+/** 2.3+ script assets' code entries (their global body), also the krpj function running that body again. */
+export const GLOBAL_SCRIPT = 'gml_GlobalScript_';
 export const fnName = (fn: string) => (fn.startsWith(SCRIPT) ? fn.slice(SCRIPT.length) : fn);
 
 /**

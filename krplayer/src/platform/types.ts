@@ -75,6 +75,9 @@ export interface Renderer {
   setShader(shader: number): void;
   shaderUniform(shader: number, name: string): number;
   setUniformF(uniform: number, n: number, x: number, y: number, z: number, w: number): void;
+  setUniformI(uniform: number, n: number, x: number, y: number, z: number, w: number): void;
+  /** Fills a float/vec/mat uniform (or an array of them) from the first len values (shader_set_uniform_f_array). */
+  setUniformFArray(uniform: number, data: Float32Array, len: number): void;
   /** Binds a texture to a sampler uniform (texture_set_stage). */
   setSampler(uniform: number, tex: TextureId): void;
   /** Text in a built-in fallback font (GM's default font when none is set). */

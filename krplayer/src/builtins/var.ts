@@ -11,11 +11,19 @@ const arr = (v: Value, fn: string): GArray => {
   return v;
 };
 
-define('var_arr_length', (_g, s, t) => arr(s[t], 'array_length').length);
+// A non-array has length 0: Ch5 obj_parallax_cliffs Room Start runs array_length("") in room_dw_cliff_finaldash (gm_gotchas.md).
+define('var_arr_length', (_g, s, t) => (Array.isArray(s[t]) ? (s[t] as GArray).length : 0));
 define('var_arr_get', (_g, s, t) => {
   const a = arr(s[t], 'array_get'), i = Math.trunc(n(s, t, 1));
   if (i < 0 || i >= a.length) throw new GmlError(`array_get: index ${i} out of range (length ${a.length})`);
   return a[i];
+});
+define('var_arr_set', (_g, s, t) => {
+  const a = arr(s[t], 'array_set'), i = Math.trunc(n(s, t, 1));
+  if (i < 0) throw new GmlError(`array_set: index ${i} out of range`);
+  while (a.length < i) a.push(0);
+  a[i] = s[t - 2];
+  return undefined;
 });
 /** Pre-2.3 2D helpers: height is the outer length, length_2d a row's length (0 if that row isn't an array). */
 define('var_arr_2d', (_g, s, t) => {
@@ -115,13 +123,13 @@ define('var_inst_set', (g, s, t) => {
   return undefined;
 });
 define('var_inst_exists', (g, s, t) => {
-  const inst = g.first(real(s[t]));
+  const inst = g.addressable(real(s[t]));
   if (!inst) return false;
   const name = str(s, t, 1);
   return IV_NAMES.has(name) || inst.vars.has(g.a.varSlot(name));
 });
 define('var_inst_names', (g, s, t) => {
-  const inst = g.first(real(s[t]));
+  const inst = g.addressable(real(s[t]));
   if (!inst) throw new Unverified(`variable_instance_get_names: instance ${String(s[t])} does not exist`);
   return [...inst.vars.keys()].map((k) => g.a.varNames[k]);
 });

@@ -1,4 +1,4 @@
-// SCPT (script assets), GLOB (global init scripts) and BGND (GMS2 tilesets).
+// SCPT (script assets), GLOB (global init scripts), BGND (GMS2 tilesets), PATH, ACRV (animation curves), SHDR.
 
 import { FormatError, type Reader } from '../io/reader.ts';
 
@@ -57,6 +57,28 @@ export function readPath(r: Reader): GmPath[] {
     const n = e.count(1 << 16), points: [number, number, number][] = [];
     for (let i = 0; i < n; i++) points.push([e.f32(), e.f32(), e.f32()]);
     return { name, smooth, closed, precision, points };
+  });
+}
+
+export interface GmAnimCurve { name: string; channels: GmCurveChannel[] }
+/** A channel: type 0 linear, 1 smooth (Catmull-Rom), 2 bezier; points are [x, value, bezier x0, y0, x1, y1]. */
+export interface GmCurveChannel { name: string; type: number; iterations: number; points: number[][] }
+
+/** ACRV (GMS2.3+): a version word (1), then curves: name, graph type, inline channels of inline points. */
+export function readAcrv(r: Reader): GmAnimCurve[] {
+  const version = r.u32();
+  if (version !== 1) throw new FormatError(`ACRV: unknown version ${version}`, 0);
+  return r.ptrList(1 << 14).map((p) => {
+    const e = r.at(p), name = e.strPtr();
+    e.u32(); // graph type (editor only)
+    const channels: GmCurveChannel[] = [];
+    for (let n = e.count(1 << 10), i = 0; i < n; i++) {
+      const cname = e.strPtr(), type = e.u32(), iterations = e.u32(), points: number[][] = [];
+      if (type > 2) throw new FormatError(`animcurve ${name}.${cname}: unknown curve type ${type}`, p);
+      for (let k = e.count(1 << 16), j = 0; j < k; j++) points.push([e.f32(), e.f32(), e.f32(), e.f32(), e.f32(), e.f32()]);
+      channels.push({ name: cname, type, iterations, points });
+    }
+    return { name, channels };
   });
 }
 

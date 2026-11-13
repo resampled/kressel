@@ -43,7 +43,8 @@ define('ins_destroy', (g, s, t, argc) => {
   for (const inst of [...targets(g, s[t], scratch)]) g.destroy(inst, run);
   return undefined;
 });
-define('ins_exists', (g, s, t) => g.count(real(s[t])) > 0);
+// A struct isn't an instance (Ch5 obj_plat_targethelper passes the ripple struct scr_make_ripple returns; gm_gotchas.md).
+define('ins_exists', (g, s, t) => !(s[t] instanceof GmStruct) && g.count(real(s[t])) > 0);
 define('ins_number', (g, s, t) => g.count(real(s[t])));
 define('ins_find', (g, s, t) => {
   const k = Math.trunc(n(s, t, 1)), list = targets(g, s[t], scratch);

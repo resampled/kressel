@@ -69,6 +69,59 @@ test('shader_replace_simple DLL acts as not loaded (DR ch5 shader_replace_simple
   assert.notEqual(v.raw, ''); // shader_replace_simple_auto treats "" as success
 });
 
+test('DR ch5 runtime quirks: ??, with (undefined), array_length of a non-array, infinity, built-in names on structs', async () => {
+  const v = await execFn([
+    ['var_set', ['_lv', 'n'], ['opr_nullish', ['_lv', 'undefined'], 5]],
+    ['var_set', ['_lv', 'm'], ['opr_nullish', 0, ['opr_div', 1, 0]]], // b isn't evaluated
+    ['var_set', ['_lv', 'w'], 0],
+    ['ctr_with', ['_lv', 'undefined'], [['var_set', ['_iv', ['_kw', 'other'], 'w'], 1]]],
+    ['var_set', ['_lv', 'len'], ['var_arr_length', '']],
+    ['var_set', ['_lv', 'inf'], ['_lv', 'infinity']],
+    ['var_set', ['_lv', 'sw'], ['_iv', ['fnc_new', 'Info', 7], 'sprite_width']],
+    ['var_set', ['_lv', 'dot'], ['opr_dot_product', 1, 2, 3, 4]],
+    ['var_set', ['_lv', 'tile'], ['rom_tile_set_data', 'flip', ['rom_tile_set_data', 'index', 0, 5], true]],
+  ], { Info: { args: [], body: [['var_set', ['_lv', 'sprite_width'], ['_lv', 'argument0']]], ctor: true } }); // DR ch5 findspriteinfo_layer
+  assert.deepEqual([v.n, v.m, v.w, v.len, v.inf, v.sw, v.dot, v.tile], [5, 0, 0, 0, Infinity, 7, 11, 5 | (1 << 29)]);
+  await assert.rejects(exec([['var_set', ['_lv', 'sprite_width'], 1]]), /read-only variable sprite_width/);
+});
+
+test('animation curves: channels by name or index, evaluate clamps; a just-destroyed instance stays addressable this step (DR ch5)', async () => {
+  const body = [
+    ['var_set', ['_lv', 'ch'], ['rom_animcurve', 'get_channel', ['_as', 'ac'], 'lin']],
+    ['var_set', ['_lv', 'mid'], ['rom_animcurve', 'channel_evaluate', ['_lv', 'ch'], 0.25]],
+    ['var_set', ['_lv', 'lo'], ['rom_animcurve', 'channel_evaluate', ['_lv', 'ch'], -1]],
+    ['var_set', ['_lv', 'bz'], ['rom_animcurve', 'channel_evaluate', ['rom_animcurve', 'get_channel', ['_as', 'ac'], 1], 0.5]],
+    ['var_set', ['_lv', 'same'], ['opr_eq', ['_lv', 'ch'], ['rom_animcurve', 'get_channel', ['_as', 'ac'], 0]]],
+    ['ins_destroy'],
+    ['var_set', ['_lv', 'names'], ['var_arr_length', ['var_inst_names', ['_lv', 'id']]]],
+    ['var_set', ['_lv', 'gone'], ['ins_exists', ['_lv', 'id']]],
+  ];
+  const krpj = { ...project({ o: obj([['evt_create', body]]) }, [{ object: 'o', x: 0, y: 0 }]), animcurves: { ac: { channels: [
+    { name: 'lin', type: 0, iterations: 16, points: [[0, 0], [0.5, 1], [1, 1]] },
+    // a symmetric S-curve: bezier handles flat at both ends, so value(0.5) = 0.5
+    { name: 'bz', type: 2, iterations: 16, points: [[0, 0, -0.1, 0, 0.3, 0], [1, 1, -0.3, 0, 0.1, 0]] },
+  ] } } };
+  const g = await load({ krpj, url: (x) => x }, createHeadless(() => [10, 10]));
+  const v = Object.fromEntries([...g.instances[0].vars].map(([i, x]) => [g.a.varNames[i], x]));
+  assert.deepEqual([v.mid, v.lo, v.same, v.gone], [0.5, 0, true, false]);
+  assert.ok(Math.abs((v.bz as number) - 0.5) < 1e-9);
+  assert.ok((v.names as number) > 0);
+});
+
+test('camera matrices: GM 2D ones from the view; setters take what 2D can show, and fail on 3D', async () => {
+  const v = await exec([
+    ['var_set', ['_lv', 'c'], ['cam_create_view', 0, 0, 320, 240]],
+    ['var_set', ['_lv', 'p'], ['cam_get_mat', 'proj', ['_lv', 'c']]],
+    ['cam_set_mat', 'proj', ['_lv', 'c'], ['drw_matrix', 'build_projection_ortho', 320, 240, -16000, 16000]],
+    ['cam_set_mat', 'view', ['_lv', 'c'], ['cam_get_mat', 'view', ['_lv', 'c']]],
+  ]);
+  assert.equal((v.p as number[])[0], 2 / 320);
+  await assert.rejects(exec([
+    ['var_set', ['_lv', 'c'], ['cam_create_view', 0, 0, 320, 240]],
+    ['cam_set_mat', 'proj', ['_lv', 'c'], ['drw_matrix', 'build_projection_perspective_fov', 60, 4 / 3, 1, 32000]],
+  ]), /only takes matrices matching/);
+});
+
 test('md5 and buffer_md5 (DR ch2 obj_shapepuzzle)', async () => {
   const enc = (x: string) => new TextEncoder().encode(x);
   assert.equal(md5(enc('')), 'd41d8cd98f00b204e9800998ecf8427e');

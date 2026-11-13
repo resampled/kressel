@@ -209,8 +209,9 @@ export class VM {
           }
           case Op.WITH_BEGIN: {
             if (this.wsp >= WITH_DEPTH) throw new NotImplemented('with nested too deeply');
-            const list = this.wList[this.wsp];
-            g.collect(s[--sp], list);
+            const list = this.wList[this.wsp], tv = s[--sp];
+            // with (undefined) runs zero times (Ch5 obj_plat_npc: with (custom_waiter) while it's still undefined)
+            if (tv === undefined) list.length = 0; else g.collect(tv, list);
             if (!list.length) { pc = code[pc + 1]; break; }
             this.wSelf[this.wsp] = g.self; this.wOther[this.wsp] = g.other; this.wIdx[this.wsp] = 0;
             this.wsp++;
@@ -321,7 +322,7 @@ export class VM {
     if (t instanceof Scope) return t;
     const n = real(t);
     if (n === -5) return this.g.globalScope;
-    const inst = this.g.first(n);
+    const inst = this.g.addressable(n);
     if (!inst) throw new GmlError(`unable to find an instance for ${this.g.describe(n)}`);
     return inst;
   }
