@@ -32,32 +32,41 @@ var kreditorCode = (function () {
     const gml = /`([a-z0-9_]+)/.exec(o.gml || '');
     return [o.name, { ...o, args, cat: o.name[0] === '_' ? (/^_(kw|as)$/.test(o.name) ? 'ins' : '_') : (MERGE[o.name.split('_')[0]] || o.name.split('_')[0]), gml: gml && gml[1] }];
   }));
-  const REF_OPTS = {
-    evt_key: ['pressed', 'held', 'released'],
-    evt_mouse: ['left_pressed', 'left_held', 'left_released', 'right_pressed', 'right_held', 'right_released', 'middle_pressed',
-      'middle_held', 'middle_released', 'none', 'enter', 'leave', 'wheel_up', 'wheel_down', 'global_left_pressed', 'global_left_held', 'global_left_released'],
-    var_change: ['+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>', '??'],
-    opr_mathop: ['abs', 'sign', 'round', 'floor', 'ceil', 'frac', 'sqrt', 'sqr', 'exp', 'ln', 'log2', 'log10'],
-    opr_trig: ['sin', 'cos', 'tan', 'arcsin', 'arccos', 'arctan'], opr_dtrig: ['sin', 'cos', 'tan', 'arcsin', 'arccos', 'arctan'],
-    opr_is_type: ['real', 'string', 'array', 'struct', 'undefined', 'bool', 'method', 'numeric', 'int64', 'ptr'],
-    _kw: ['self', 'other', 'all', 'noone', 'global'],
-  };
-  const KEYS = { 0: 'no key', 1: 'any key', 8: 'backspace', 9: 'tab', 13: 'enter', 16: 'shift', 17: 'control', 18: 'alt', 27: 'escape',
+  // ── dropdowns ──
+  // MENUS: op -> { argument index: options }; TYPE_MENUS: slot type -> options (backtick options in the opcode table win).
+  // Options are values (labelled through OPT_LABELS, else underscores read as spaces) or [value, label] pairs: a value not in
+  // the list (e.g. from an import) falls back to a plain input. A function instead lists names when the menu opens, and
+  // the menu also takes a typed name: variables come from the scripts, assets from `sources` (filled by the editor).
+  const KW = ['self', 'other', 'all', 'noone', 'global'];
+  const BUILTIN = new Set(BUILTIN_VARS); // built-in variables (x, room...), from opcodes.gen.js: not the user's own
+  const KEY_NAMES = { 0: 'no key', 1: 'any key', 8: 'backspace', 9: 'tab', 13: 'enter', 16: 'shift', 17: 'control', 18: 'alt', 27: 'escape',
     32: 'space', 37: 'left arrow', 38: 'up arrow', 39: 'right arrow', 40: 'down arrow' };
-  for (let c = 48; c <= 90; c++) if (c <= 57 || c >= 65) KEYS[c] = String.fromCharCode(c);
-  for (let f = 1; f <= 12; f++) KEYS[111 + f] = 'F' + f;
-  // How `ref` options read in dropdowns, when not just their name with spaces for underscores.
+  for (let c = 48; c <= 90; c++) if (c <= 57 || c >= 65) KEY_NAMES[c] = String.fromCharCode(c);
+  for (let f = 1; f <= 12; f++) KEY_NAMES[111 + f] = 'F' + f;
   const OPT_LABELS = { string: 'text', real: 'number', h: 'horizontal', v: 'vertical', restart: 'this (restart)', rgb: 'RGB', hsv: 'HSV' };
-  // Number inputs that take GameMaker constants get a dropdown: op -> { argument index: [[value, label], ...] }.
-  // A value not in the list (e.g. from an import) falls back to a plain number input.
-  const MB = { 1: [[1, 'left'], [2, 'right'], [3, 'middle']] };
+  const MB = [[1, 'left'], [2, 'right'], [3, 'middle']];
+  const TRIG = ['sin', 'cos', 'tan', 'arcsin', 'arccos', 'arctan'];
   const GP = ['A / cross', 'B / circle', 'X / square', 'Y / triangle', 'left shoulder', 'right shoulder', 'left trigger', 'right trigger',
     'select', 'start', 'left stick', 'right stick', 'pad up', 'pad down', 'pad left', 'pad right'].map((l, k) => [32769 + k, l]);
-  const ENUMS = {
-    sen_mouse_held: MB, sen_mouse_pressed: MB, sen_mouse_released: MB, sen_gamepad_button: { 3: GP },
+  const MENUS = {
+    evt_key: { 1: ['pressed', 'held', 'released'] },
+    evt_mouse: { 1: ['left_pressed', 'left_held', 'left_released', 'right_pressed', 'right_held', 'right_released', 'middle_pressed',
+      'middle_held', 'middle_released', 'none', 'enter', 'leave', 'wheel_up', 'wheel_down', 'global_left_pressed', 'global_left_held', 'global_left_released'] },
+    var_change: { 1: ['+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>', '??'] },
+    opr_mathop: { 1: ['abs', 'sign', 'round', 'floor', 'ceil', 'frac', 'sqrt', 'sqr', 'exp', 'ln', 'log2', 'log10'] },
+    opr_trig: { 1: TRIG }, opr_dtrig: { 1: TRIG },
+    opr_is_type: { 1: ['real', 'string', 'array', 'struct', 'undefined', 'bool', 'method', 'numeric', 'int64', 'ptr'] },
+    _kw: { 1: KW },
+    sen_mouse_held: { 1: MB }, sen_mouse_pressed: { 1: MB }, sen_mouse_released: { 1: MB }, sen_gamepad_button: { 3: GP },
     drw_set_align: { 2: [[0, 'left / top'], [1, 'centre / middle'], [2, 'right / bottom']] },
     mov_path_start: { 3: [[0, 'stop'], [1, 'restart'], [2, 'continue'], [3, 'reverse']] },
   };
+  const NAME_AT = { _lv: 1, _iv: 2, var_local: 1, var_static: 1, var_globalvar: 1, ctr_for_each: 1 }; // op -> variable name index
+  for (const [op, k] of Object.entries(NAME_AT)) (MENUS[op] ||= {})[k] = varMenu;
+  const TYPE_MENUS = { bool: [[true, 'true'], [false, 'false']], key: Object.entries(KEY_NAMES).map(([c, l]) => [Number(c), l]) };
+  const sources = {}; // asset type -> () => [name, ...], set by the editor
+  const assets = (t) => (sources[t] ? sources[t]() : []);
+  const items = (l) => typeof l === 'function' ? l().map((n) => Array.isArray(n) ? n : [n, n]) : l.map((o) => Array.isArray(o) ? o : [o, OPT_LABELS[o] || o.replace(/_/g, ' ')]);
   // Palette starting values, when the per-type default (0, true, '', white...) would be a poor start: op -> { index: value }.
   const X = ['_lv', 'x'], Y = ['_lv', 'y'], HI = 'Hello!';
   const DEFAULTS = {
@@ -152,7 +161,10 @@ var kreditorCode = (function () {
       case 'key': return 32;
       case 'var': return ['_lv', 'myvar'];
       case 'inst': return ['_kw', 'self'];
-      case 'ref': return a.opts[0] || (REF_OPTS[op] || [''])[0] || (op === '_lv' ? 'myvar' : '');
+      case 'ref': {
+        const m = a.opts.length ? a.opts : (MENUS[op] || {})[1];
+        return op === '_lv' ? 'myvar' : m && typeof m !== 'function' ? items(m)[0][0] : '';
+      }
       case 'layer': return 'Instances';
       case 'arr': return ['_lv', 'myarray'];
       case 'struct': return {};
@@ -199,35 +211,92 @@ var kreditorCode = (function () {
     fit(inp);
     return inp;
   }
-  function pick(options, value, onSet) {
-    const s = h('select', '', ...options.map(([v, label]) => { const o = h('option', '', label); o.value = v; return o; }));
-    s.value = value;
-    s.onchange = () => onSet(s.value);
-    return s;
+  /** A dropdown slot: shows the chosen option and opens the shared popup on click. Name lists aren't built until then. */
+  function menu(list, value, onSet, placeholder) {
+    const it = typeof list !== 'function' && items(list).find(([x]) => x === value);
+    const b = h('span', 'dd', it ? it[1] : String(value ?? '') || placeholder || ' ');
+    b.onclick = () => popup(b, list, value, onSet);
+    if (list === varMenu && BUILTIN.has(value)) { b.classList.add('builtin'); b.title = 'built-in variable'; }
+    return b;
   }
+
+  // One popup for every dropdown: a filter box (which also takes a new name) over the matching options.
+  let pop = null;
+  const closePopup = () => { if (pop) pop.remove(); pop = null; };
+  function popup(anchor, list, value, onSet, search = true) {
+    closePopup();
+    const free = typeof list === 'function', all = items(list), filter = h('input'), ul = h('div', 'dd-list');
+    filter.spellcheck = false; filter.placeholder = free ? 'search or type a name' : 'search';
+    let shown = [], sel = 0;
+    const choose = (v) => { closePopup(); if (v !== value) { onSet(v); render(); } };
+    const draw = () => {
+      ul.replaceChildren(...shown.map(([label, act, cur], k) => {
+        const d = h('div', 'dd-it' + (cur ? ' cur' : '') + (k === sel ? ' sel' : ''), label);
+        d.onpointerdown = (e) => { e.preventDefault(); act(); };
+        return d;
+      }));
+      if (ul.children[sel]) ul.children[sel].scrollIntoView({ block: 'nearest' });
+    };
+    const fill = () => {
+      const typed = filter.value.trim(), q = typed.toLowerCase();
+      shown = all.filter(([, l]) => String(l).toLowerCase().includes(q)).map(([x, l]) => [l, () => choose(x), x === value]);
+      if (free && typed && !all.some(([x]) => x === typed)) {
+        shown.unshift([`use "${typed}"`, () => choose(typed)]);
+        if (list === varMenu && value && !BUILTIN.has(value)) shown.push([`rename "${value}" to "${typed}" everywhere`, () => { closePopup(); renameVar(value, typed); render(); }]);
+      }
+      sel = Math.max(0, typed ? 0 : shown.findIndex((s) => s[2]));
+      draw();
+    };
+    filter.oninput = fill;
+    const keys = (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + shown.length) % (shown.length || 1); draw(); }
+      else if (e.key === 'Enter' && shown[sel]) shown[sel][1]();
+      else if (e.key === 'Escape') closePopup();
+      else return;
+      e.preventDefault();
+    };
+    pop = h('div', 'dd-pop', search ? filter : null, ul);
+    pop.tabIndex = -1; pop.onkeydown = keys; // arrows, Enter and Escape work with or without the search box
+    document.body.append(pop);
+    fill();
+    const r = anchor.getBoundingClientRect();
+    pop.style.left = Math.min(r.left, innerWidth - pop.offsetWidth - 4) + 'px';
+    pop.style.top = (r.bottom + pop.offsetHeight + 4 > innerHeight ? r.top - pop.offsetHeight - 2 : r.bottom + 2) + 'px';
+    (search ? filter : pop).focus();
+  }
+
+  /** Calls fn(node, k) for every variable name in the scripts (node[k]). */
+  function eachName(fn) {
+    const walk = (n) => {
+      if (!Array.isArray(n)) return;
+      const k = NAME_AT[n[0]];
+      if (k && typeof n[k] === 'string') fn(n, k);
+      n.forEach(walk);
+    };
+    for (const st of stacks) walk(st.script);
+  }
+  /** The user's own variable names in the scripts (not built-ins), sorted. */
+  function knownVars() { const s = new Set(); eachName((n, k) => BUILTIN.has(n[k]) || s.add(n[k])); return [...s].sort(); }
+  /** Variable dropdowns: the user's variables, then the built-ins. */
+  function varMenu() { return [...knownVars(), ...BUILTIN_VARS.map((b) => [b, b + ' (built-in)'])]; }
+  function renameVar(from, to) { eachName((n, k) => { if (n[k] === from) n[k] = to; }); }
 
   /** The input for node[i]: an editor for a literal, or the reporter block sitting in it. */
   function slot(node, i, a) {
     const v = node[i], t = a.type, set = (x) => { node[i] = x; };
     const wrap = (c, cls) => tag(h('span', 'slot ' + (cls || 'in-' + t), c), { kind: 'slot', node, i, spec: a });
     if (isOp(v)) {
-      if (v[0] === '_lv' && t === 'var') return wrap(text(v[1], (s) => set(['_lv', s])), 'in-var');
+      if (v[0] === '_lv' && t === 'var') return wrap(menu(varMenu, v[1], (s) => set(['_lv', s])), 'in-var');
       if ((v[0] === '_kw' || v[0] === '_as') && (t === 'inst' || ASSET_TYPES.has(t))) {
-        const inp = text(v[1], (s) => set([t === 'inst' && REF_OPTS._kw.includes(s) ? '_kw' : '_as', s]));
-        if (t === 'inst') inp.setAttribute('list', 'kr-kw');
-        inp.placeholder = t;
-        return wrap(inp, 'in-asset');
+        const list = t === 'inst' ? () => KW.concat(assets('obj')) : () => assets(t);
+        return wrap(menu(list, v[1], (s) => set([t === 'inst' && KW.includes(s) ? '_kw' : '_as', s]), t), 'in-asset');
       }
       return tag(block(v, true), { kind: 'slot', node, i, spec: a });
     }
-    if (t === 'ref') {
-      const opts = a.opts.length ? a.opts : REF_OPTS[node[0]];
-      return wrap(opts ? pick(opts.map((o) => [o, OPT_LABELS[o] || o.replace(/_/g, ' ')]), v, set) : text(v == null ? '' : v, set), 'in-ref');
-    }
-    const en = (ENUMS[node[0]] || {})[i];
-    if (en && en.some(([x]) => x === v)) return wrap(pick(en, String(v), (s) => set(Number(s))), 'in-ref');
-    if (t === 'bool' && typeof v === 'boolean') return wrap(pick([['true', 'true'], ['false', 'false']], String(v), (s) => set(s === 'true')));
-    if (t === 'key' && typeof v === 'number') return wrap(pick(Object.entries(KEYS), String(v), (s) => set(Number(s))));
+    const opts = a.opts.length ? a.opts : (MENUS[node[0]] || {})[i] || TYPE_MENUS[t];
+    if (typeof opts === 'function') return wrap(menu(opts, v == null ? '' : String(v), set), 'in-ref');
+    if (opts && items(opts).some(([x]) => x === v)) return wrap(menu(opts, v, set), 'in-ref');
+    if (t === 'ref') return wrap(text(v == null ? '' : String(v), set), 'in-ref');
     if (t === 'col' && typeof v === 'number') {
       const c = h('input'); c.type = 'color'; c.value = bgr2hex(v); c.onchange = () => set(hex2bgr(c.value));
       return wrap(c);
@@ -283,21 +352,25 @@ var kreditorCode = (function () {
 
   // ── canvas ──
   const stacks = []; // [{ x, y, script: [node, ...] }]: a krpj "placed" script; a hat stack is [hatNode]
-  let box, list, line, kwList;
+  let box, list, line, palVars = '';
   const palOpts = { hidden: false, compat: false }; // also list opcodes with these flags in the palette
+  const visible = (o) => Object.keys(palOpts).every((f) => palOpts[f] || !o.flags.includes(f));
   function render() {
+    closePopup();
     box.replaceChildren(...stacks.map((st) => {
       const s = stack(st.script, st);
       s.style.left = st.x + 'px'; s.style.top = st.y + 'px';
       return s;
     }));
+    if (knownVars().join('\n') !== palVars) palette(); // the palette has a reporter per variable
   }
 
   // Section headings are sticky at both edges (CSS), offset by their index: headings of sections scrolled past pile up
   // at the top of the list in order, those still below pile up at the bottom. Clicking one scrolls to its section.
   function palette() {
     const out = [];
-    const show = (o) => Object.keys(palOpts).every((f) => palOpts[f] || !o.flags.includes(f));
+    const show = visible, vars = knownVars();
+    palVars = vars.join('\n');
     for (const [cat, label] of CATS) {
       const head = h('h3', colour(cat), label), i = out.filter((e) => e.tagName === 'H3').length;
       head.style.setProperty('--i', i);
@@ -308,13 +381,12 @@ var kreditorCode = (function () {
       };
       out.push(head);
       const nodes = [];
-      if (cat === 'var') for (const n of ['_lv', '_iv', '_ai', '_ar']) nodes.push(template(n));
+      if (cat === 'var') nodes.push(...(vars.length ? vars : ['myvar']).map((v) => ['_lv', v]), ['_iv', ['_kw', 'global'], 'myvar'], template('_ai'), template('_ar'));
       for (const o of OPCODES) {
         if (OPS.get(o.name).cat !== cat || !show(o)) continue;
         nodes.push(template(o.name));
         if (o.name === 'ctr_if') nodes.push(['ctr_if', true, [], []]);
       }
-      if (cat === 'var') nodes[1] = ['_iv', ['_kw', 'global'], 'myvar'];
       for (const n of nodes) {
         const el = tag(h('div', 'pal', block(n, isReporter(n))), { kind: 'pal', node: n }), gml = OPS.get(n[0]).gml;
         if (gml && gml.length > 1) el.title = 'GameMaker: ' + gml; // for users coming from GML (operators' `a + b` parse to 'a')
@@ -336,7 +408,7 @@ var kreditorCode = (function () {
     if (e.button !== 0) return;
     const pal = e.target.closest('.pal');
     if (pal && e.target === pal && e.offsetY >= pal.clientHeight) return; // own horizontal scrollbar
-    if (!pal &&e.target.closest('input, select, button')) return;
+    if (!pal && e.target.closest('input, select, button, .dd')) return;
     let src = pal ? null : e.target.closest('.blk');
     while (src && !refs.has(src)) src = src.parentElement.closest('.blk');
     if (!pal && !src) { if (e.target.closest('.w-code-box')) pan(e); return; }
@@ -426,16 +498,77 @@ var kreditorCode = (function () {
     render();
   }
 
+  // ── right-click menu ──
+  /** Opcodes a block can switch to: same category and shape, same argument signature, shown in the palette. */
+  function similar(op) {
+    const key = (o) => { const i = OPS.get(o); return [i.cat, isHat([o]), isReporter([o]), BOOLISH.test(o), i.args.map((a) => a.type + (a.opt ? '?' : '') + (a.rest ? '*' : ''))].join('|'); };
+    const k = key(op);
+    return op[0] === '_' ? [] : OPCODES.filter((o) => o.name !== op && o.name[0] !== '_' && visible(o) && key(o.name) === k).map((o) => o.name);
+  }
+  const shortLabel = (op) => (LABELS[op] || generic(OPS.get(op))).replace(/%\d+/g, '…').replace(/\s+/g, ' ').trim();
+  function context(e) {
+    if (e.target === editing && e.target.tagName === 'INPUT') return; // already typing in it: the browser's menu (copy/paste)
+    let acts = [];
+    for (let t = e.target; !acts.length && t && box.contains(t); t = t.parentElement) acts = actions(t);
+    if (!acts.length) return;
+    e.preventDefault();
+    popup({ getBoundingClientRect: () => ({ left: e.clientX, top: e.clientY, bottom: e.clientY }) }, acts, null, (f) => f(), false);
+  }
+  /** Right-click options for a block (statement or reporter in a slot) or input element: [action, label]. */
+  function actions(t) {
+    const ref = refs.get(t);
+    if (!ref || (ref.kind !== 'stmt' && ref.kind !== 'slot')) return [];
+    const n = ref.kind === 'stmt' ? ref.list[ref.i] : isOp(ref.node[ref.i]) ? ref.node[ref.i] : null, acts = [];
+    if (n && isReporter(n)) acts.push([() => print(n, t.getBoundingClientRect()), 'print output']);
+    if (ref.kind === 'slot' && !['var', 'ref', 'script'].includes(ref.spec.type)) {
+      const v = ref.node[ref.i], set = (x) => () => { ref.node[ref.i] = x; };
+      if (isOp(v) && v[0] === '_lv') acts.push([set(defaultFor(ref.spec, ref.node[0])), 'use a value instead']);
+      else if (!isOp(v) || v[0] === '_kw' || v[0] === '_as') acts.push([set(['_lv', knownVars()[0] || 'myvar']), 'use a variable instead']);
+    }
+    if (n) for (const op of similar(n[0])) acts.push([() => { n[0] = op; }, 'switch to: ' + shortLabel(op)]);
+    return acts;
+  }
+
+  // "print output": the block runs in krplayer (kressel_eval.js, URL from <meta name="kreditor-eval">, loaded on first use).
+  let bubble = null, evalLoad = null, editing = null; // editing: focus before the right-click (mouse-down moves it)
+  const closeBubble = () => { if (bubble) bubble.remove(); bubble = null; };
+  function evaluator() {
+    return evalLoad ||= new Promise((ok, fail) => {
+      if (window.kresselEval) return ok(window.kresselEval);
+      const src = (document.querySelector('meta[name="kreditor-eval"]') || {}).content;
+      if (!src) return fail(new Error('the page has no <meta name="kreditor-eval">'));
+      const s = h('script');
+      s.src = src;
+      s.onload = () => window.kresselEval ? ok(window.kresselEval) : fail(new Error(src + ' did not define kresselEval'));
+      s.onerror = () => { evalLoad = null; fail(new Error('could not load ' + src)); };
+      document.head.append(s);
+    });
+  }
+  async function print(n, r) {
+    closeBubble();
+    const b = bubble = h('div', 'kr-bubble', '…');
+    b.style.left = r.left + 'px'; b.style.top = r.bottom + 4 + 'px';
+    document.body.append(b);
+    let out;
+    try {
+      const { value, type } = await (await evaluator())(structuredClone(n));
+      out = type === 'string' ? JSON.stringify(value) : value;
+      b.title = type;
+    } catch (err) { out = err.message || String(err); b.classList.add('err'); }
+    b.textContent = out;
+  }
+
   function init() {
     box = document.querySelector('.w-code-box'); list = document.querySelector('.w-code-list');
     line = h('div', 'c-drop'); line.hidden = true;
-    kwList = h('datalist', '', ...REF_OPTS._kw.map((k) => { const o = h('option'); o.value = k; return o; }));
-    kwList.id = 'kr-kw';
-    document.body.append(line, kwList);
+    document.body.append(line);
     palette(); render();
     box.addEventListener('pointerdown', down); list.addEventListener('pointerdown', down);
+    addEventListener('pointerdown', (e) => { editing = document.activeElement; closeBubble(); if (pop && !pop.contains(e.target)) closePopup(); }, true);
+    box.addEventListener('scroll', () => { closePopup(); closeBubble(); });
+    box.addEventListener('contextmenu', context);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
-  return { stacks, render, template, OPS };
+  return { stacks, render, template, OPS, sources };
 })();

@@ -46,6 +46,7 @@ krplayer/src/
   builtins/         one file per opcode category (ins, sen, opr, var, drw, lks, rom, cam, dat); registry.ts maps
                     opcode id → implementation, family() for family opcodes
   play.ts           source + platform → Game (browser and headless)
+  eval.ts           editor entry (kressel_eval.js): runs one block in an empty headless game for "print output"
 
 kreditor/mockup/src/ plain JS, no build step (dev: `pnpm dev:editor`, then open /kreditor/)
   state.js          open project + asset files, selection, undo (JSON snapshots), form helpers
@@ -57,7 +58,8 @@ kreditor/mockup/src/ plain JS, no build step (dev: `pnpm dev:editor`, then open 
   opcodes.gen.js    GENERATED with krplayer/src/opcodes.gen.ts
 
 scripts/
-  gen-opcodes.ts    docs/krpj_opcodes.md → krplayer/src/opcodes.gen.ts + kreditor/mockup/src/opcodes.gen.js
+  gen-opcodes.ts    docs/krpj_opcodes.md → krplayer/src/opcodes.gen.ts + kreditor opcodes.gen.js (kreditor/_static's also lists
+                    the built-in variable names from krplayer/src/compile/names.ts)
   convert.ts        gm2kr from the command line (folder → .krpj)
 ```
 
@@ -90,6 +92,7 @@ scripts/
 * **Debug start room.** `?debug&room=<name|index>` on the player URL (works with any source, e.g. `?from=opener&debug&room=room_town_krisyard`) still runs global init and the init room, but the game's first room change goes to that room instead, so setup code in the init room (e.g. Deltarune's `obj_initializer`) still runs. Add `&direct` to enter the room straight away and skip the init room, or `&after=<room>` to warp on the first room change *out of* that room instead, for games whose setup room isn't the first (Deltarune Ch2: `?debug&room=room_castle_town&after=ROOM_INITIALIZE`; playtest: `--after`). It's a debug option: imported code isn't changed, and flags the skipped rooms would set stay unset.
 * **Debug start state.** With `?room=`, `&set=name=value` (or `name[i]=value`, optional `global.` prefix) sets a global and `&call=fn` (or `fn(1,"a")`) calls a project function as global. They run in URL order just before the warp room is entered (after the init room, so its resets don't undo them). Each param can repeat or take a comma list. Values are numbers, `true`/`false` (1/0) or strings (`"quoted"` when they contain commas). Unknown functions fail when the page loads (`runtime/debug.ts`). Example: Deltarune Ch1's init runs `scr_gamestart` (darkzone 0, plot 0, Kris alone), so `?room=room_field3` alone gives a light-world Kris in a dark room; `?debug&room=room_field3&set=darkzone=1,plot=40,char[1]=2,char[2]=3` starts it as the game would (dark world, Susie and Ralsei following).
 * **Editor stage.** kreditor plays the open project by zipping it to a blob URL and loading `kressel.js` in a `srcdoc` iframe, with `<meta id="kressel-load-project" src=blob>`. Two embed metas exist for this: `kressel-query` stands in for `location.search` (a srcdoc frame has none; "play this room" passes `debug&room=<key>&direct`), and `kressel-autostart` skips the click-to-start prompt (the Play click was the gesture). The player script URL and the shared asset base are `kreditor-player` / `kreditor-shared-assets` metas on the editor page.
+* **Editor "print output".** Right-clicking a reporter in kreditor evaluates it with `kressel_eval.js` (`src/eval.ts`), loaded on first use from the editor page's `kreditor-eval` meta. The block runs as the create event of the only instance in an empty headless game, through the normal compiler and VM, so results and errors follow the same GML rules as a real run; it does not see the open project's state.
 * **Editor layout lives on the scripts.** Script positions and loose stacks are saved inline as `{ x, y, script, loose }` entries (krpj.md "Script layout"). The engine reads only `script` and skips anything that can't run (loose, hat-less, or a hat with nothing under it) instead of failing, since a canvas mid-edit is normal. Asset keys are the names the user types (like gm2kr), so renaming rewrites every reference (`_as`, `_fn`, `fnc_g`, object/room/layer fields, `room_order`...).
 * **Debug console handle.** `?debug` puts the running `Game` on `window.kr` (e.g. `kr.room.name`, `kr.roomIndex`). Without it nothing is exposed.
 

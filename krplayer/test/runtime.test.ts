@@ -8,6 +8,7 @@ import { follow } from '../src/runtime/game.ts';
 import { warpSetup } from '../src/runtime/debug.ts';
 import { md5 } from '../src/runtime/md5.ts';
 import { errorKind } from '../src/vm/vm.ts';
+import { evaluate } from '../src/eval.ts';
 
 function project(objects: Krpj['objects'], instances: { object: string; x: number; y: number }[]): Krpj {
   return {
@@ -647,4 +648,11 @@ test('mp_grid_path finds a way around forbidden cells (no corner cutting) and fa
   // the only way is under the wall (row 4), so the path has several cell centres between start and goal
   assert.deepEqual([v.ok, v.lastx, v.cell, v.blocked], [true, 45, -1, false]);
   assert.ok((v.n as number) >= 6);
+});
+
+test("kreditor's print output: one block through the real VM, errors labelled by kind", async () => {
+  assert.deepEqual(await evaluate(['opr_add', 1, 2]), { value: '3', type: 'number' });
+  assert.deepEqual(await evaluate(['opr_lt', ['_lv', 'x'], 5]), { value: 'true', type: 'bool' });
+  assert.deepEqual(await evaluate(['opr_add', 'a', 'b']), { value: 'ab', type: 'string' });
+  await assert.rejects(evaluate(['opr_add', 1, 'a']), /^Error: project error: .*unable to add/);
 });

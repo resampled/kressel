@@ -1,6 +1,8 @@
 // Parses docs/krpj_opcodes.md into opcode definitions, and renders krplayer/src/opcodes.gen.ts.
 // The doc is the source of truth: edit it, then run `pnpm gen:opcodes`.
 
+import { GV_NAMES, IV_NAMES } from '../krplayer/src/compile/names.ts';
+
 export interface ParsedOpcode { name: string; flags: string[]; args: string | null; gml: string | null }
 
 const NAMES = /^\* ((?:`[a-z0-9_]+`(?: \/ )?)+)(.*)$/; // * `a` / `b` (flags) - text
@@ -60,8 +62,11 @@ export function renderOpcodes(ops: ParsedOpcode[]): string {
 }
 
 /** Plain-JS copy for kreditor (no build step): an ES module, or (module = false) a classic script defining a global. */
+/** kreditor's opcode table; the classic-script form (kreditor/_static) also lists the built-in variable names. */
 export function renderOpcodesJs(ops: ParsedOpcode[], module = true): string {
   const rows = ops.map((o) => `  ${JSON.stringify(o)},`).join('\n');
   return `// GENERATED from docs/krpj_opcodes.md by scripts/gen-opcodes.ts. Do not edit; run \`pnpm gen:opcodes\`.\n` +
-    `${module ? 'export const' : 'var'} OPCODES = [\n${rows}\n];\n`;
+    `${module ? 'export const' : 'var'} OPCODES = [\n${rows}\n];\n` +
+    (module ? '' : `// Built-in variables (krplayer/src/compile/names.ts): instance, then global.\n` +
+      `var BUILTIN_VARS = ${JSON.stringify([...IV_NAMES.keys(), ...GV_NAMES.keys()])};\n`);
 }

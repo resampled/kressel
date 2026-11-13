@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --minify --sourcemap --format=iife --outfile=dist/kressel.js",
+    "build": "esbuild src/index.ts --bundle --minify --sourcemap --format=iife --outfile=dist/kressel.js && esbuild src/eval.ts --bundle --minify --sourcemap --format=iife --outfile=dist/kressel_eval.js",
     "dev": "esbuild src/index.ts --bundle --sourcemap --format=iife --outfile=dist/kressel.js --servedir=. --serve=8000 --watch",
     "typecheck": "tsc -p ."
   }
