@@ -71,7 +71,7 @@ export function truthy(v: Value): boolean {
 
 export function add(a: Value, b: Value): Value {
   if (typeof a === 'string' && typeof b === 'string') return a + b;
-  if (typeof a === 'string' || typeof b === 'string') throw new GmlError(`unable to add ${typeName(a)} and ${typeName(b)}`);
+  if (typeof a === 'string' || typeof b === 'string') throw new GmlError(`unable to add ${typeName(a)} and ${typeName(b)} (${preview(a)}, ${preview(b)})`);
   return real(a) + real(b);
 }
 
@@ -123,7 +123,7 @@ export function compare(a: Value, b: Value): number {
   // A string against a real is read as a number (c_wait("5") in DR ch2); a non-numeric one is an error.
   const x = typeof a === 'string' ? cmpStr(a) : real(a), y = typeof b === 'string' ? cmpStr(b) : real(b);
   if (Number.isNaN(x) || Number.isNaN(y)) {
-    if (typeof a === 'string' || typeof b === 'string') throw new GmlError(`unable to compare ${typeName(a)} and ${typeName(b)}`);
+    if (typeof a === 'string' || typeof b === 'string') throw new GmlError(`unable to compare ${typeName(a)} and ${typeName(b)} (${preview(a)}, ${preview(b)})`);
   }
   return Math.abs(x - y) <= EPSILON ? 0 : x < y ? -1 : 1;
 }
@@ -166,6 +166,13 @@ export function str(v: Value, names?: (slot: number) => string): string {
     return parts.length ? `{ ${parts.join(', ')} }` : '{  }';
   }
   return `[ ${v.map((x) => (typeof x === 'string' ? JSON.stringify(x) : str(x, names))).join(',')} ]`;
+}
+
+/** A short form of v for error messages: strings quoted and cut, arrays and structs by kind. */
+export function preview(v: Value): string {
+  if (typeof v === 'string') return JSON.stringify(v.length > 40 ? `${v.slice(0, 40)}…` : v);
+  if (Array.isArray(v)) return `array(${v.length})`;
+  return v instanceof GmStruct ? 'struct' : str(v);
 }
 
 /** A new array owned by nobody (it takes the owner of the first variable it is stored in). */

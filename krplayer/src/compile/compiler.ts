@@ -78,8 +78,10 @@ class Compiler {
     params.forEach((p, k) => { this.emit(Op.GET, S.ARG, k); this.emit(Op.SET, S.LOCAL, this.locals.get(p)!, this.localOwn + this.locals.get(p)!); });
     this.script(body, '');
     this.emit(Op.EXIT);
-    return { code: Int32Array.from(this.code), consts: this.consts, nLocals: this.nLocals, name: this.name, stmtPc: this.stmtPc, stmtPath: this.stmtPath };
+    return { code: Int32Array.from(this.code), consts: this.consts, nLocals: this.nLocals, name: this.name, stmtPc: this.stmtPc, stmtPath: this.stmtPath, localNames: this.localNames() };
   }
+
+  private localNames(): string[] { const r: string[] = []; for (const [k, i] of this.locals) r[i] = k; return r; }
 
   private fail(path: string, msg: string): never { throw new CompileError(`${this.name}${path}: ${msg}`); }
 

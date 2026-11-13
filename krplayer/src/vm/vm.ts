@@ -3,8 +3,9 @@
 
 import { BinOp, Op, S, UnOp, type Block } from '../compile/bytecode.ts';
 import { IMPL } from '../builtins/registry.ts';
+import { OPCODES } from '../opcodes.ts';
 import {
-  add, bits, compare, equals, fits32, fromBits, GmlError, GmMethod, GmStruct, idiv, mod, NotImplemented, real, Scope, truthy, typeName, Unverified,
+  add, bits, compare, equals, fits32, fromBits, GmlError, GmMethod, GmStruct, idiv, mod, NotImplemented, preview, real, Scope, truthy, typeName, Unverified,
   type GArray, type Value,
 } from '../value.ts';
 import { Instance, NOI } from '../runtime/instance.ts';
@@ -25,10 +26,16 @@ const catchable = (e: unknown): boolean => { const r = rootOf(e); return r insta
 /** Crash triage label: whose fault an uncaught error most likely is (docs/error_audit.md). */
 export function errorKind(e: unknown): string {
   const r = rootOf(e);
-  return r instanceof NotImplemented ? 'not implemented in krplayer'
-    : r instanceof Unverified ? 'unverified GML error (GameMaker may not raise this; likely a krplayer bug)'
-    : r instanceof GmlError ? 'GML error (GameMaker raises this too)'
+  return r instanceof NotImplemented ? 'feature not implemented'
+    : r instanceof Unverified ? 'unverified GML error - GameMaker may not raise this; likely a krplayer bug'
+    : r instanceof GmlError ? 'project error'
     : r instanceof Watchdog ? 'infinite loop' : 'krplayer internal error';
+}
+
+/** Who self is, for crash messages: object, id and position for instances. */
+function describeScope(sc: Scope | null): string {
+  if (sc instanceof Instance) return `${sc.obj.name} #${sc.id} at (${+sc.x.toFixed(2)}, ${+sc.y.toFixed(2)})`;
+  return sc instanceof GmStruct ? 'a struct' : 'global';
 }
 
 export class VM {
@@ -91,7 +98,7 @@ export class VM {
           }
           case Op.GETI: {
             const scope = code[pc + 1], id = code[pc + 2], index = s[--sp];
-            if (scope === S.LOCAL) s[sp++] = elem(L[lp + id], index);
+            if (scope === S.LOCAL) s[sp++] = elem(L[lp + id], index, b.localNames?.[id]);
             else if (scope === S.ARG && id >= 0) s[sp++] = elem(id < argN ? A[argBase + id] : undefined, index); // argumentN[i]
             else if (scope === S.ARG) {
               const i = Math.trunc(real(index));
@@ -163,7 +170,7 @@ export class VM {
               r = this.invoke(f.fn, self, self === g.self ? g.other : g.self, n);
             } else if (typeof f === 'number') {
               r = this.invoke(g.scriptFunction(f), this.scopeOf(on), g.other, n);
-            } else throw new GmlError(`${typeName(f)} is not a function`);
+            } else throw new GmlError(`${typeName(f)} (${preview(f)}) is not a function`);
             sp -= n; s[sp++] = r;
             pc += 2; break;
           }
@@ -174,7 +181,7 @@ export class VM {
             else {
               const f = s[--sp];
               fn = f instanceof GmMethod ? f.fn : typeof f === 'number' ? g.scriptFunction(f) : -1;
-              if (fn < 0) throw new GmlError(`${typeName(f)} is not a constructor`);
+              if (fn < 0) throw new GmlError(`${typeName(f)} (${preview(f)}) is not a constructor`);
             }
             this.sp = sp;
             const ctor = g.a.functions[fn], st = new GmStruct(ctor.name);
@@ -244,9 +251,10 @@ export class VM {
     } catch (e) {
       let k = 0;
       while (k + 1 < b.stmtPc.length && b.stmtPc[k + 1] <= pc) k++;
-      const where = `${b.name}${b.stmtPath[k] ?? ''}`;
+      const nested = e instanceof RuntimeError;
+      const where = `${b.name}${b.stmtPath[k] ?? ''}${this.callAt(code, pc, sp, !nested)} on ${describeScope(g.self)}`;
       // Each frame adds itself, so the message reads like a GML call stack.
-      if (e instanceof RuntimeError) { e.message += `
+      if (nested) { e.message += `
   called from ${where}`; throw e; }
       throw new RuntimeError(`${where}: ${(e as Error).message}`, { cause: e });
     } finally {
@@ -269,10 +277,21 @@ export class VM {
   /** Calls a function value from a builtin (callbacks, script_execute with a computed id). */
   callValue(f: Value, self: Scope, args: Value[]): Value {
     const fn = f instanceof GmMethod ? f.fn : typeof f === 'number' ? this.g.scriptFunction(f) : -1;
-    if (fn < 0) throw new GmlError(`${typeName(f)} is not a function`);
+    if (fn < 0) throw new GmlError(`${typeName(f)} (${preview(f)}) is not a function`);
     const s = this.stack, sp0 = this.sp;
     for (let k = args.length - 1; k >= 0; k--) s[this.sp++] = args[k];
     try { return this.invoke(fn, f instanceof GmMethod && f.self ? f.self : self, this.g.self, args.length); } finally { this.sp = sp0; }
+  }
+
+  /** " in fn(args)" when the error came from the builtin call at pc; args only for the innermost frame. */
+  private callAt(code: Int32Array, pc: number, sp: number, withArgs: boolean): string {
+    const op = code[pc];
+    if (op !== Op.CALL && op !== Op.CALLB) return '';
+    const def = OPCODES[code[pc + 1]], name = /^`(\w+)`$/.exec(def?.gml ?? '')?.[1] ?? def?.name ?? '?';
+    if (!withArgs || op === Op.CALLB) return ` in ${name}`; // CALLB passes the caller's own arguments on
+    const n = code[pc + 2], s = this.stack, args: string[] = [];
+    for (let k = 0; k < n; k++) args.push(preview(s[sp - 1 - k]));
+    return ` in ${name}(${args.join(', ')})`;
   }
 
   private runaway(): never {
@@ -328,7 +347,7 @@ export class VM {
       case S.STATIC: v = this.statics().vars.get(id); break;
       default: throw new Error(`bad scope ${scope}`);
     }
-    return index === NOI ? v : elem(v, index);
+    return index === NOI ? v : elem(v, index, g.a.varNames[id]);
   }
 
   private unset(sc: Scope, id: number): never {
@@ -398,8 +417,11 @@ function setOwner(a: GArray, own: number): GArray {
   return a;
 }
 
+const notArray = (v: Value, name?: string): GmlError =>
+  new GmlError(`trying to index a variable which is not an array (${name ? `${name} = ` : ''}${preview(v)})`);
+
 function asArray(v: Value): GArray {
-  if (!Array.isArray(v)) throw new GmlError('trying to index a variable which is not an array');
+  if (!Array.isArray(v)) throw notArray(v);
   return v;
 }
 
@@ -419,10 +441,11 @@ function row(arr: GArray, index: Value, own: number): GArray {
   return r;
 }
 
-function elem(arr: Value, index: Value): Value {
-  if (!Array.isArray(arr)) throw new GmlError('trying to index a variable which is not an array');
+/** arr[index]; name (the variable read) is only for the error message. */
+function elem(arr: Value, index: Value, name?: string): Value {
+  if (!Array.isArray(arr)) throw notArray(arr, name);
   const i = Math.trunc(real(index));
-  if (i < 0 || i >= arr.length) throw new GmlError(`array index ${i} out of range (length ${arr.length})`);
+  if (i < 0 || i >= arr.length) throw new GmlError(`array index ${i} out of range${name ? ` for ${name}` : ''} (length ${arr.length})`);
   return arr[i];
 }
 

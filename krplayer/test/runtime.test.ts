@@ -156,7 +156,15 @@ test('compile errors name the opcode and its location', async () => {
 });
 
 test('runtime errors name the statement', async () => {
-  await assert.rejects(exec([['var_set', ['_lv', 'a'], ['_lv', 'missing']]]), /o\/evt_create\/0: variable missing not set before reading it/);
+  await assert.rejects(exec([['var_set', ['_lv', 'a'], ['_lv', 'missing']]]), /o\/evt_create\/0 on o #\d+ at \(0, 0\): variable missing not set before reading it/);
+});
+
+test('runtime errors name the builtin, its arguments and the values involved', async () => {
+  await assert.rejects(exec([['var_set', ['_lv', 'a'], 5], ['var_set', ['_lv', 'b'], ['var_arr_get', ['_lv', 'a'], 0]]]),
+    /o\/evt_create\/1 in array_get\(5, 0\) on o #\d+ at \(0, 0\): /);
+  await assert.rejects(exec([['var_set', ['_lv', 'a'], 'hi'], ['var_set', ['_lv', 'b'], ['_ai', ['_lv', 'a'], 0]]]),
+    /not an array \(a = "hi"\)/);
+  await assert.rejects(exec([['var_set', ['_lv', 'b'], ['opr_add', 1, 'x']]]), /unable to add number and string \(1, "x"\)/);
 });
 
 test('motion, with, collisions and alarms', async () => {

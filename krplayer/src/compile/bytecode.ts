@@ -69,6 +69,8 @@ export interface Block {
   /** Statement start pcs and their paths inside the script, for error messages. */
   stmtPc: number[];
   stmtPath: string[];
+  /** Local variable names by slot, for error messages. */
+  localNames?: string[];
   /** Object events: the object that defined it and the event key (see evKey), for event_inherited. */
   owner?: number; ev?: number;
   /** The function's static variables, made on first use (and the static struct of structs it constructs). */
