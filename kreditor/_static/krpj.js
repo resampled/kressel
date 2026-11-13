@@ -47,5 +47,53 @@ var kreditorKrpj = (function () {
     return { game, files };
   }
 
-  return { read, unzip };
+  const CRC = new Uint32Array(256).map((_, n) => {
+    for (let k = 0; k < 8; k++) n = n & 1 ? 0xedb88320 ^ (n >>> 1) : n >>> 1;
+    return n >>> 0;
+  });
+  function crc32(b) {
+    let c = 0xffffffff;
+    for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  }
+  /** Map<path, Uint8Array> -> zip Blob (stored, UTF-8 names), as gm2kr writes them. */
+  function zip(files) {
+    const enc = new TextEncoder(), parts = [], central = [];
+    let offset = 0;
+    for (const [path, data] of files) {
+      const name = enc.encode(path), crc = crc32(data);
+      const l = new Uint8Array(30 + name.length), lv = new DataView(l.buffer);
+      lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(6, 0x800, true);
+      lv.setUint32(14, crc, true); lv.setUint32(18, data.length, true); lv.setUint32(22, data.length, true);
+      lv.setUint16(26, name.length, true); l.set(name, 30);
+      const c = new Uint8Array(46 + name.length), cv = new DataView(c.buffer);
+      cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true); cv.setUint16(8, 0x800, true);
+      cv.setUint32(16, crc, true); cv.setUint32(20, data.length, true); cv.setUint32(24, data.length, true);
+      cv.setUint16(28, name.length, true); cv.setUint32(42, offset, true); c.set(name, 46);
+      parts.push(l, data); central.push(c);
+      offset += l.length + data.length;
+    }
+    if (files.size > 0xffff || offset > 0xffffffff) throw new Error('project too large for a .krpj (no zip64 support)');
+    const cdLen = central.reduce((n, c) => n + c.length, 0), end = new Uint8Array(22), ev = new DataView(end.buffer);
+    ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, files.size, true); ev.setUint16(10, files.size, true);
+    ev.setUint32(12, cdLen, true); ev.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, end], { type: 'application/zip' });
+  }
+  /** game.json text + asset files -> .krpj Blob. */
+  const write = (json, files) => zip(new Map([['game.json', new TextEncoder().encode(json)], ...files]));
+
+  const KRPJ_VERSION = '0.2';
+  function newProject(title = 'Untitled') {
+    const now = Math.floor(Date.now() / 1000);
+    return {
+      krpj_v: KRPJ_VERSION,
+      cfg_db_relay: { slug: '', title, author: '', revision: 1, date_created: now, date_updated: now },
+      cfg_gm_compat: { imported_from: null },
+      cfg_defaults: { width: 'default', height: 'default', fps: 60, window_title: title },
+      cfg_project: { init_room: null },
+      sprites: {}, sounds: {}, fonts: {}, functions: {}, objects: {}, rooms: {},
+    };
+  }
+
+  return { read, write, unzip, newProject, KRPJ_VERSION };
 })();

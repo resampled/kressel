@@ -1,96 +1,79 @@
-// The open project: [File] imports a .krpj (or game.json); the Functions and Objects dropdowns list the project's
-// functions/objects (searchable) and open the chosen one in the code window. Needs krpj.js, windows.js, codeblocks.js.
+// The open project (game.json + asset files) and its edit history. No UI here: views.js draws it.
+// Edits happen in place on `proj.game`. History works per unit (one asset `game[field][key]`, or a whole field
+// `game[field]` when key is null): watch(unit) records its state when a view opens it, and touch(unit) after an edit
+// compares against that and, if it changed, pushes one undo step. So undo costs a JSON copy of the edited unit only.
+// Events (on(fn), fn(type, detail)): 'load' (new/imported project), 'change' {field, key}, 'history' {field, key},
+// 'flush' (before saving: views write pending edits back), 'save'.
 var kreditorProject = (function () {
   'use strict';
-  const proj = { game: null, files: new Map(), name: '' };
-  const codeWin = document.querySelector('.w-code').closest('.w');
-  let cur = null; // [kind, key] open in the code window
-  const ASSETS = { obj: 'objects', spr: 'sprites', snd: 'sounds', fnt: 'fonts', room: 'rooms', path: 'paths', shd: 'shaders' };
-  const keys = (field) => Object.keys((proj.game && proj.game[field]) || {});
-  for (const [t, field] of Object.entries(ASSETS)) kreditorCode.sources[t] = () => keys(field);
-  kreditorCode.sources.as = () => Object.values(ASSETS).flatMap(keys).concat(keys('tilesets'));
+  const K = kreditorKrpj, MAX_UNDO = 200;
+  const proj = { game: K.newProject(), files: new Map(), name: 'untitled.krpj', dirty: false, jsonBytes: 0 };
+  const undo = [], redo = [], snap = new Map(), listeners = [];
+  const on = (fn) => listeners.push(fn);
+  const emit = (type, detail) => { for (const fn of listeners) fn(type, detail); };
 
-  const picker = h('input');
-  picker.type = 'file'; picker.accept = '.krpj,.json';
-  picker.onchange = () => { if (picker.files[0]) load(picker.files[0]); picker.value = ''; };
-  function h(name, cls, ...kids) {
-    const e = document.createElement(name);
-    if (cls) e.className = cls;
-    e.append(...kids);
-    return e;
+  const id = (field, key) => key == null ? field : field + '\n' + key;
+  const get = (field, key) => key == null ? proj.game[field] : (proj.game[field] || {})[key];
+  function put(field, key, v) {
+    const into = key == null ? proj.game : (proj.game[field] ||= {}), k = key == null ? field : key;
+    if (v === undefined) delete into[k]; else into[k] = v;
+  }
+  const json = (field, key) => JSON.stringify(get(field, key)); // undefined for a missing unit
+  function watch(field, key = null) { snap.set(id(field, key), json(field, key)); }
+  function touch(field, key = null) {
+    const k = id(field, key), now = json(field, key);
+    if (!snap.has(k)) { snap.set(k, now); return; } // never watched: nothing to compare to
+    const before = snap.get(k);
+    if (now === before) return;
+    snap.set(k, now);
+    undo.push({ field, key, before, after: now });
+    if (undo.length > MAX_UNDO) undo.shift();
+    redo.length = 0;
+    proj.dirty = true;
+    emit('change', { field, key });
+  }
+  function step(from, to, side) {
+    const e = from.pop();
+    if (!e) return false;
+    to.push(e);
+    put(e.field, e.key, e[side] === undefined ? undefined : JSON.parse(e[side]));
+    snap.set(id(e.field, e.key), e[side]);
+    proj.dirty = true;
+    emit('history', e);
+    return true;
   }
 
+  function reset(game, files, name) {
+    Object.assign(proj, { game, files, name, dirty: false });
+    proj.jsonBytes = JSON.stringify(game).length;
+    undo.length = redo.length = 0; snap.clear();
+    emit('load');
+  }
+  /** Opens a .krpj or game.json File. Throws on a bad file (the open project is kept). */
   async function load(file) {
-    if ((proj.game || kreditorCode.stacks.length) && !confirm('Replace the open project? Unsaved changes will be lost.')) return;
-    try {
-      const { game, files } = await kreditorKrpj.read(new Uint8Array(await file.arrayBuffer()));
-      Object.assign(proj, { game, files, name: file.name });
-      edit(null);
-    } catch (e) { alert(`Couldn't import ${file.name}: ${e.message || e}`); }
+    const { game, files } = await K.read(new Uint8Array(await file.arrayBuffer()));
+    reset(game, files, file.name.replace(/\.json$/i, '.krpj'));
   }
-
-  /** Opens a function ('fn') or object ('obj') in the code window; null clears it. */
-  function edit(kind, key) {
-    const g = proj.game, data = kind && (kind === 'fn' ? g.functions : g.objects)[key];
-    cur = data ? [kind, key] : null;
-    kw.open(codeWin);
-    const title = !data ? 'Code' : kind === 'fn' ? `Code: function ${key}(${(data.args || []).join(', ')})` : `Object: ${key}`;
-    codeWin.querySelector('.wtitle').textContent = title;
-    tabs.hidden = kind !== 'obj';
-    tab('code');
-    kreditorCode.open(data ? kind : null, data || null);
+  /** The project as a .krpj Blob (views flush pending edits first). */
+  function save() {
+    emit('flush');
+    const g = proj.game;
+    if (g.cfg_db_relay) { // not an edit: keep it out of the history
+      g.cfg_db_relay.date_updated = Math.floor(Date.now() / 1000);
+      if (snap.has(id('cfg_db_relay'))) watch('cfg_db_relay');
+    }
+    const text = JSON.stringify(g), blob = K.write(text, proj.files);
+    proj.jsonBytes = text.length; proj.dirty = false;
+    emit('save');
+    return blob;
   }
+  /** Approximate project size in bytes: asset files + game.json as of the last load/save. */
+  const size = () => { let n = proj.jsonBytes; for (const d of proj.files.values()) n += d.length; return n; };
 
-  // ── Code / Properties tabs (objects only) ──
-  const tabs = codeWin.querySelector('.wtabs'), codePane = codeWin.querySelector('.w-code'), propPane = codeWin.querySelector('.w-props');
-  function tab(t) {
-    for (const b of tabs.children) b.classList.toggle('on', b.dataset.tab === t);
-    codePane.hidden = t !== 'code'; propPane.hidden = t !== 'props';
-    if (t === 'props') props();
-  }
-  tabs.addEventListener('click', (e) => { const t = e.target.closest('.wtab'); if (t) tab(t.dataset.tab); });
-
-  /** The open object's fields (krpj.md, Objects). Edits write straight into game.json. */
-  function props() {
-    const key = cur[1], o = proj.game.objects[key], sprites = proj.game.sprites || {};
-    const sprLabel = (k) => sprites[k] && sprites[k].name && sprites[k].name !== k ? `${k} (${sprites[k].name})` : k;
-    // parent: any object that doesn't already inherit from this one (no cycles)
-    const inherits = (k) => { for (let i = 0; k && i < 1e4; i++, k = (proj.game.objects[k] || {}).parent) if (k === key) return true; return false; };
-    const pick = (field, ks, label, none) => {
-      const v = o[field] ?? null, b = h('span', 'dd' + (v == null ? ' none' : ''), v == null ? none : label(v));
-      b.onclick = () => kreditorCode.popup(b, [[null, none], ...ks().map((k) => [k, label(k)])], v, (x) => { o[field] = x; props(); });
-      return b;
-    };
-    const check = (field, def) => {
-      const c = h('input'); c.type = 'checkbox'; c.checked = o[field] ?? def;
-      c.onchange = () => { o[field] = c.checked; };
-      return c;
-    };
-    const depth = h('input'); depth.type = 'number'; depth.value = o.depth ?? ''; depth.placeholder = '0';
-    depth.onchange = () => { if (depth.value === '') delete o.depth; else o.depth = Number(depth.value); };
-    const rows = [['Sprite', pick('sprite', () => keys('sprites'), sprLabel, 'none')],
-      ['Collision mask', pick('mask', () => keys('sprites'), sprLabel, 'same as sprite')],
-      ['Parent', pick('parent', () => keys('objects').filter((k) => !inherits(k)), (k) => k, 'none')],
-      ['Depth', depth], ['Visible', check('visible', true)], ['Solid', check('solid', false)], ['Persistent', check('persistent', false)]];
-    propPane.replaceChildren(h('h3', '', key), ...rows.flatMap(([l, input]) => [h('label', '', l), input]),
-      ...(o.imported_from ? [h('label', '', 'Imported from'), h('span', '', o.imported_from)] : []));
-  }
-
-  const MENUS = {
-    file: () => [[() => picker.click(), 'Import .krpj…']],
-    functions: () => list('fn', keys('functions'), (k) => `${k}(${(proj.game.functions[k].args || []).join(', ')})`),
-    objects: () => list('obj', keys('objects'), (k) => k),
+  return {
+    proj, on, watch, touch, load, save, size,
+    newProject: () => reset(K.newProject(), new Map(), 'untitled.krpj'),
+    undo: () => step(undo, redo, 'before'), redo: () => step(redo, undo, 'after'),
+    canUndo: () => undo.length > 0, canRedo: () => redo.length > 0,
   };
-  function list(kind, ks, label) {
-    if (!ks.length) return [[null, proj.game ? 'none in this project' : 'import a .krpj first']];
-    return ks.map((k) => [() => edit(kind, k), label(k), kind + ':' + k]);
-  }
-  for (const el of document.querySelectorAll('[data-menu]')) {
-    el.addEventListener('click', () => {
-      const items = MENUS[el.dataset.menu](), now = cur && items.find((it) => it[2] === cur.join(':'));
-      kreditorCode.popup(el, items.map(([f, l]) => [f, l]), now ? now[0] : undefined, (f) => f && f(), el.dataset.menu !== 'file');
-    });
-  }
-
-  return { proj, edit };
 })();

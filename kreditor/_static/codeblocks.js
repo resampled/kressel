@@ -223,12 +223,12 @@ var kreditorCode = (function () {
   // One popup for every dropdown: a filter box (which also takes a new name) over the matching options.
   let pop = null;
   const closePopup = () => { if (pop) pop.remove(); pop = null; };
-  function popup(anchor, list, value, onSet, search = true) {
+  function popup(anchor, list, value, onSet, search = true, make = 'use') { // make: label for a typed new name
     closePopup();
     const free = typeof list === 'function', all = items(list), filter = h('input'), ul = h('div', 'dd-list');
     filter.spellcheck = false; filter.placeholder = free ? 'search or type a name' : 'search';
     let shown = [], sel = 0;
-    const choose = (v) => { closePopup(); if (v !== value) { onSet(v); render(); } };
+    const choose = (v) => { closePopup(); if (v !== value) { onSet(v); changed(); } };
     const draw = () => {
       ul.replaceChildren(...shown.map(([label, act, cur], k) => {
         const d = h('div', 'dd-it' + (cur ? ' cur' : '') + (k === sel ? ' sel' : ''), label);
@@ -241,8 +241,8 @@ var kreditorCode = (function () {
       const typed = filter.value.trim(), q = typed.toLowerCase();
       shown = all.filter(([, l]) => String(l).toLowerCase().includes(q)).map(([x, l]) => [l, () => choose(x), x === value]);
       if (free && typed && !all.some(([x]) => x === typed)) {
-        shown.unshift([`use "${typed}"`, () => choose(typed)]);
-        if (list === varMenu && value && !BUILTIN.has(value)) shown.push([`rename "${value}" to "${typed}" everywhere`, () => { closePopup(); renameVar(value, typed); render(); }]);
+        shown.unshift([`${make} "${typed}"`, () => choose(typed)]);
+        if (list === varMenu && value && !BUILTIN.has(value)) shown.push([`rename "${value}" to "${typed}" everywhere`, () => { closePopup(); renameVar(value, typed); changed(); }]);
       }
       sel = Math.max(0, typed ? 0 : shown.findIndex((s) => s[2]));
       draw();
@@ -283,7 +283,7 @@ var kreditorCode = (function () {
 
   /** The input for node[i]: an editor for a literal, or the reporter block sitting in it. */
   function slot(node, i, a) {
-    const v = node[i], t = a.type, set = (x) => { node[i] = x; };
+    const v = node[i], t = a.type, set = (x) => { node[i] = x; notify(); };
     const wrap = (c, cls) => tag(h('span', 'slot ' + (cls || 'in-' + t), c), { kind: 'slot', node, i, spec: a });
     if (isOp(v)) {
       if (v[0] === '_lv' && t === 'var') return wrap(menu(varMenu, v[1], (s) => set(['_lv', s])), 'in-var');
@@ -334,7 +334,7 @@ var kreditorCode = (function () {
     if (!hat) { // + / − for optional and repeated inputs
       const target = row.childNodes.length ? row : el.firstChild;
       const required = specs.filter((a) => !a.opt && !a.rest).length, next = specs[end - 1] || (specAt(end).rest ? specAt(end) : null);
-      const btn = (label, fn) => { const b = h('button', 'pm', label); b.onclick = () => { fn(); render(); }; target.append(b); };
+      const btn = (label, fn) => { const b = h('button', 'pm', label); b.onclick = () => { fn(); changed(); }; target.append(b); };
       if (next && (next.opt || next.rest) && next.type !== 'script') btn('+', () => node.push(defaultFor(next, op)));
       if (end - 1 > required && specAt(end - 1).type !== 'script') btn('−', () => node.pop());
     }
@@ -365,6 +365,9 @@ var kreditorCode = (function () {
     }));
     if (knownVars().join('\n') !== palVars) palette(); // the palette has a reporter per variable
   }
+  /** After an edit: tell the editor (api.onchange), which records an undo step. changed() also redraws. */
+  const notify = () => { if (api.onchange) api.onchange(); };
+  function changed() { render(); notify(); }
 
   // Section headings are sticky at both edges (CSS), offset by their index: headings of sections scrolled past pile up
   // at the top of the list in order, those still below pile up at the bottom. Clicking one scrolls to its section.
@@ -496,7 +499,7 @@ var kreditorCode = (function () {
       if (over.top && over.idx === 0) over.top.y = Math.max(0, over.top.y - Math.round(g.height)); // keep the old blocks in place
     } else if (!over) stacks.push({ x, y, script: d.nodes });
     for (let i = stacks.length; i--;) if (!stacks[i].script.length && !stacks[i].body) stacks.splice(i, 1);
-    render();
+    changed();
   }
 
   // ── open function / object ──
@@ -613,5 +616,6 @@ var kreditorCode = (function () {
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
-  return { stacks, render, template, OPS, sources, open, commit, popup };
+  const api = { stacks, render, template, OPS, sources, open, commit, popup, closePopup, current: () => target && target.data, onchange: null };
+  return api;
 })();
