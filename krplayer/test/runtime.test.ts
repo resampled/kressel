@@ -59,6 +59,16 @@ test('undefined orders against a real as unordered: < <= > >= all false (DR ch2 
   assert.deepEqual([v.gt, v.lte], [false, false]);
 });
 
+test('shader_replace_simple DLL acts as not loaded (DR ch5 shader_replace_simple_set_hook)', async () => {
+  const v = await exec([
+    ['var_set', ['_lv', 'sync'], ['sys_srs', 'sync', -1]],
+    ['var_set', ['_lv', 'init'], ['sys_srs', 'init_raw', '2.3.4.442', 0, 0]],
+    ['var_set', ['_lv', 'raw'], ['sys_srs', 'raw', 0, '', '']],
+  ]);
+  assert.deepEqual([v.sync, v.init, typeof v.raw], [0, 0, 'string']);
+  assert.notEqual(v.raw, ''); // shader_replace_simple_auto treats "" as success
+});
+
 test('md5 and buffer_md5 (DR ch2 obj_shapepuzzle)', async () => {
   const enc = (x: string) => new TextEncoder().encode(x);
   assert.equal(md5(enc('')), 'd41d8cd98f00b204e9800998ecf8427e');

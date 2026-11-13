@@ -556,4 +556,5 @@ export const OPCODES = [
   {"name":"sys_game_change","flags":["compat"],"args":"str dir, str params","gml":"`game_change`"},
   {"name":"sys_psn","flags":["compat","family"],"args":"ref fn, ...","gml":"`psn_*`"},
   {"name":"sys_switch","flags":["compat","family"],"args":"ref fn, ...","gml":"`switch_*`"},
+  {"name":"sys_srs","flags":["compat"],"args":"ref `sync`/`init_raw`/`raw`, ...","gml":"`shader_replace_simple_sync` / `shader_replace_simple_init_raw` / `shader_replace_simple_raw`"},
 ];

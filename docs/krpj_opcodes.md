@@ -948,6 +948,7 @@ Arrays and structs (Variables) are better for visual scripts; `ds_*` mainly exis
 | `sys_game_change` (compat) | str dir, str params | `game_change` | Switching to another game ends this one. |
 | `sys_psn` (compat, family) | ref fn, ... | `psn_*` | Console SDK. Calling one is an error. |
 | `sys_switch` (compat, family) | ref fn, ... | `switch_*` | Console SDK. Calling one is an error. |
+| `sys_srs` (compat) | ref `sync`/`init_raw`/`raw`, ... | `shader_replace_simple_sync` / `shader_replace_simple_init_raw` / `shader_replace_simple_raw` | Deltarune's shader_replace_simple DLL (D3D11 shader hot-swap). Acts like the DLL failed to load: `sync` does nothing, `init_raw` returns 0, `raw` returns an error string. |
 
 ## Unsupported
 These have no opcode. Importing them fails loudly with the function name and offset.

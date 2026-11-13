@@ -115,6 +115,9 @@ define('sys_os_paused', (g) => g.p.hidden());
 // Console SDKs: only reachable on consoles (games check os_type first). Calling one fails loudly.
 family('sys_psn', 'psn_', {});
 family('sys_switch', 'switch_', {});
+// Deltarune's shader_replace_simple DLL swaps D3D11 shaders at runtime (only its dead live-reload path
+// does). Behave like the DLL failed to load: nothing is ever replaced, so sync has nothing to rebind.
+define('sys_srs', (_g, s, t) => (s[t] === 'raw' ? 'shader_replace_simple is unavailable in krplayer' : 0));
 
 /** GM datetimes are days since 1899-12-30, like OLE automation dates. */
 const EPOCH = Date.UTC(1899, 11, 30);
