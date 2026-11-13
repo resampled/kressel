@@ -140,6 +140,13 @@ test('method calls (callv) and 2D array writes (popaf)', () => {
   ]);
 });
 
+test('3D array read: pushac takes the middle dimension (DR ch4 obj_ch4_DCA15 anim_sprite[i][1][j])', () => {
+  const ext = (i16: number): Spec => ({ op: Op.brk, i16 });
+  assert.deepEqual(decompile([pushi(-1), pushv('i'), pushv('a', 0, VarKind.pushaf), pushi(1), ext(Ext.pushac), pushv('j'), ext(Ext.pushaf), pop('x')]), [
+    ['var_set', ['_lv', 'x'], ['_ai', ['_ai', ['_ai', ['_lv', 'a'], ['_lv', 'i']], 1], ['_lv', 'j']]],
+  ]);
+});
+
 // Pre-2.3 (bytecode 16) code: scripts are called by name, 2D arrays are one index i * 32000 + j.
 const pre23 = { ...assets, scripts: new Set(['scr_hurt']) };
 const chk: Spec = { op: Op.brk, i16: Ext.chkindex };

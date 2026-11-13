@@ -85,6 +85,7 @@ define('ins_event_user', (g, s, t) => {
 define('ins_event_perform', (g, s, t) => { if (g.self instanceof Instance) g.performEvent(g.self, Math.trunc(n(s, t, 0)), Math.trunc(n(s, t, 1))); return undefined; });
 define('ins_object_name', (g, s, t) => g.object(s[t]).name);
 define('ins_object_sprite', (g, s, t) => g.object(s[t]).sprite?.index ?? -1);
+define('ins_object_parent', (g, s, t) => g.object(s[t]).parent?.index ?? -100);
 define('ins_is_ancestor', (g, s, t) => { const c = g.object(s[t]); return c.isA.has(real(s[t - 1])) && c.index !== real(s[t - 1]); });
 
 // ---------------------------------------------------------------- movement

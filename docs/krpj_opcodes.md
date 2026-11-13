@@ -443,6 +443,7 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `ins_object_name` (hidden) | obj obj | `object_get_name` | |
 | `ins_is_ancestor` (hidden) | obj child, obj parent | `object_is_ancestor` | |
 | `ins_object_sprite` (hidden) | obj obj | `object_get_sprite` | |
+| `ins_object_parent` (hidden) | obj obj | `object_get_parent` | -100 when the object has no parent. |
 | `ins_object_set_persistent` (hidden) | obj obj, bool on | `object_set_persistent` | Affects instances created afterwards. |
 | `ins_set_active_layer` (hidden) | ref `activate`/`deactivate`, layer l | `instance_activate_layer` / `instance_deactivate_layer` | Returns whether the layer exists. |
 | `ins_id_get` (compat) | num n | `instance_id_get` | The nth active instance in instance order, or `noone`. |
@@ -495,11 +496,13 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `sen_mouse_held` | num button | `mouse_check_button` | `mb_left` = 1, `mb_right` = 2, `mb_middle` = 3. Use `_lv` `mouse_x`/`mouse_y` for the position. |
 | `sen_mouse_pressed` | num button | `mouse_check_button_pressed` | |
 | `sen_mouse_released` | num button | `mouse_check_button_released` | |
+| `sen_device_mouse_held` (compat) | num device, num button | `device_mouse_check_button` | Device 0 is the mouse; other devices (touches) are never down. |
 | `sen_mouse_wheel` | ref `up`/`down` | `mouse_wheel_up` / `mouse_wheel_down` | |
 | `sen_mouse_gui` (hidden) | ref `x`/`y`, num device | `device_mouse_x_to_gui` / `device_mouse_y_to_gui` | |
 | `sen_gamepad_connected` (hidden) | num slot | `gamepad_is_connected` | |
 | `sen_gamepad_button` | ref `held`/`pressed`/`released`, num slot, num button | `gamepad_button_check` / `gamepad_button_check_pressed` / `gamepad_button_check_released` | |
 | `sen_gamepad_axis` (hidden) | num slot, num axis | `gamepad_axis_value` | |
+| `sen_gamepad_button_value` (hidden) | num slot, num button | `gamepad_button_value` | 0 (no gamepads in the browser build yet). |
 | `sen_gamepad_info` (hidden) | ref `description`/`guid`, num slot | `gamepad_get_description` / `gamepad_get_guid` | |
 | `sen_gamepad_count` (hidden) | - | `gamepad_get_device_count` | |
 | `sen_gamepad_button_count` (hidden) | num slot | `gamepad_button_count` | 0 (no gamepads in the browser build yet). |
@@ -647,6 +650,7 @@ Sound inputs take an `_as` sound or a voice id reporter (the value `snd_play` re
 | `snd_length` (hidden) | snd s | `audio_sound_length` | |
 | `snd_exists` (hidden) | snd s | `audio_exists` | Whether a sound asset (or stream) exists. |
 | `snd_name` (hidden) | snd s | `audio_get_name` | A sound's name, or the name of a voice's sound. |
+| `snd_recorder` (compat) | ref `count`/`info`/`start`/`stop`, num? recorder | `audio_get_recorder_count` / `audio_get_recorder_info` / `audio_start_recording` / `audio_stop_recording` | No microphone input in krplayer: the count is 0, info and start give -1, stop does nothing. |
 | `snd_loop` (hidden) | ref `enabled`/`start`/`end`, snd voice, bool/num value | `audio_sound_loop` / `audio_sound_loop_start` / `audio_sound_loop_end` | GM 2023+. |
 | `snd_stream_create` (hidden) | str path | `audio_create_stream` | The path is resolved against the project's CDN path. |
 | `snd_stream_destroy` (hidden) | snd stream | `audio_destroy_stream` | |
@@ -710,6 +714,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_colour_get` (hidden) | ref `red`/`green`/`blue`/`hue`/`saturation`/`value`, col c | `colour_get_*` | |
 | `drw_blendmode` (hidden) | num mode | `gpu_set_blendmode` | |
 | `drw_blendmode_get` (hidden) | - | `gpu_get_blendmode` | The last `gpu_set_blendmode` mode. |
+| `drw_gpu_get` (compat, family) | ref fn | `gpu_get_*` (`blendenable`, `colorwriteenable`, `alphatestenable`, `alphatestref`, `tex_repeat`, `texfilter`) | ref drops `gpu_get_`. The state the matching `gpu_set_*` left. |
 | `drw_gpu` (compat, family) | ref fn, ... | `gpu_set_*` (`blendmode_ext`, `alphatestenable`, `colorwriteenable`, `fog`...) | ref drops `gpu_set_`. |
 | `drw_surface_create` (hidden) | num w, num h | `surface_create` | The editor calls surfaces 'canvases'. |
 | `drw_surface_free` (hidden) | num surf | `surface_free` | |
@@ -722,6 +727,9 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_surface_part_ext` (hidden) | as GML | `draw_surface_part_ext` | |
 | `drw_surface_stretched` (hidden) | as GML | `draw_surface_stretched` | |
 | `drw_surface_general` (hidden) | as GML | `draw_surface_general` | |
+| `drw_surface_tiled` (hidden) | num surf, num x, num y | `draw_surface_tiled` | Tiles the surface over the whole view. |
+| `drw_surface_tiled_ext` (hidden) | num surf, num x, num y, num xscale, num yscale, col colour, num alpha | `draw_surface_tiled_ext` | |
+| `drw_surface_save` (compat) | num surf, str file | `surface_save` | Not supported (no PNG export): calling it fails. |
 | `drw_surface_copy` (hidden) | ref `copy`/`copy_part`, num dest, num x, num y, num src, num? xs, num? ys, num? ws, num? hs | `surface_copy` / `surface_copy_part` | Replaces the destination pixels (no blending). |
 | `drw_surface_resize` (hidden) | num surf, num w, num h | `surface_resize` | The contents are lost. |
 | `drw_surface_get_target` (hidden) | - | `surface_get_target` | -1 when drawing to the default target. |
@@ -749,7 +757,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_primitive_end` (hidden) | - | `draw_primitive_end` | Draws the vertices since `drw_primitive_begin`. |
 | `drw_tilemap` (hidden) | num tilemap, num x, num y | `draw_tilemap` | |
 | `drw_effect` (hidden) | ref `above`/`below`, num kind, num x, num y, num size, col colour | `effect_create_above` / `effect_create_below` | Built-in one-shot effects. kind: `ef_explosion` = 0, `ef_ring` 1, `ef_ellipse` 2, `ef_firework` 3, `ef_smoke` 4, `ef_smokeup` 5, `ef_star` 6, `ef_spark` 7, `ef_flare` 8, `ef_cloud` 9, `ef_rain` 10, `ef_snow` 11; size 0-2 (small/medium/large). Drawn by krplayer as an approximation, not GM's exact particles. |
-| `drw_part` (hidden, family) | ref fn, ... | `part_*` | ref drops `part_` (`["drw_part","particles_create",ps,x,y,pt,10]`). Only `system_create`, `particles_create` and `system_destroy` get custom labels. |
+| `drw_part` (hidden, family) | ref fn, ... | `part_*` | ref drops `part_` (`["drw_part","particles_create",ps,x,y,pt,10]`). Only `system_create`, `particles_create` and `system_destroy` get custom labels. No particle systems in krplayer yet: calling one fails. |
 | `drw_texture` (compat, family) | ref fn, ... | `texture_*` | Texture paging hints (`prefetch`, `is_ready`...); ref drops `texture_`. |
 | `drw_texturegroup` (compat, family) | ref fn, ... | `texturegroup_*` | ref drops `texturegroup_`. |
 | `drw_vertex` (hidden, family) | ref fn, ... | `vertex_*` | Vertex formats and buffers; ref drops `vertex_`. |
@@ -775,18 +783,21 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `rom_layer_name` (hidden) | layer l | `layer_get_name` | |
 | `rom_layer_all` (hidden) | - | `layer_get_all` | Array of layer ids. |
 | `rom_layer_at_depth` (hidden) | num depth | `layer_get_id_at_depth` | Array of the ids of layers at that depth (`[-1]` if none). |
-| `rom_layer_script` (hidden) | ref `begin`/`end`, layer l, fn script | `layer_script_begin` / `layer_script_end` | Called before / after the layer draws, with self = the calling instance at the time (-1 clears). |
+| `rom_layer_script` (hidden) | ref `begin`/`end`, layer l, fn script | `layer_script_begin` / `layer_script_end` | Called before / after the layer draws, with self = the calling instance at the time (-1 clears). On an instance layer, the scripts wrap each run of its instances in the depth-sorted draw order. |
 | `rom_layer_tilemap` (hidden) | layer l | `layer_tilemap_get_id` | The layer's tile map element, or -1. |
 | `rom_layer_elements` (hidden) | layer l | `layer_get_all_elements` | Array of element ids. |
 | `rom_element_type` (hidden) | num element | `layer_get_element_type` | |
+| `rom_element_layer` (hidden) | num element | `layer_get_element_layer` | The element's layer id, or -1. |
+| `rom_element_move` (hidden) | num element, layer l | `layer_element_move` | Moves an element (or an instance's element) to another layer. Missing element or layer: does nothing. |
 | `rom_layer_instance` (hidden) | num element | `layer_instance_get_instance` | The instance of an instance element, or `noone`. |
 | `rom_layer_force_depth` (compat) | bool force, num depth | `layer_force_draw_depth` | |
 | `rom_bg` (hidden, family) | ref fn, ... | `layer_background_*` | ref drops `layer_background_` (`["rom_bg","blend",bg,255]`). |
 | `rom_tile` (hidden, family) | ref fn, ... | `layer_tile_*` | GMS1-style tiles in asset layers; ref drops `layer_tile_`. |
 | `rom_sprite` (hidden, family) | ref fn, ... | `layer_sprite_*` | Sprites in asset layers; ref drops `layer_sprite_`. |
 | `rom_tilemap` (hidden, family) | ref fn, ... | `tilemap_*` | ref drops `tilemap_`. |
+| `rom_tile_data` (hidden) | ref `index`/`flip`/`mirror`/`rotate`, num tiledata | `tile_get_index` / `tile_get_flip` / `tile_get_mirror` / `tile_get_rotate` | Fields of a tile data value (`tilemap_get`): index is bits 0-18, mirror bit 28, flip bit 29, rotate bit 30. |
 | `rom_sequence` (hidden, family) | ref fn, ... | `layer_sequence_*` | ref drops `layer_sequence_`. |
-| `rom_animcurve` (hidden, family) | ref fn, ... | `animcurve_*` | ref drops `animcurve_`. |
+| `rom_animcurve` (hidden, family) | ref fn, ... | `animcurve_*` | ref drops `animcurve_`. Animation curves aren't imported yet: calling one fails. |
 
 ## Camera
 Camera inputs default to `["_ai",["_lv","view_camera"],0]`.
@@ -803,6 +814,7 @@ Camera inputs default to `["_ai",["_lv","view_camera"],0]`.
 | `cam_create` (hidden) | - | `camera_create` | |
 | `cam_create_view` (hidden) | as GML | `camera_create_view` | |
 | `cam_destroy` (hidden) | num cam | `camera_destroy` | |
+| `cam_apply` (hidden) | num cam | `camera_apply` | Draws through the camera's view onto the whole current target, until the target or view pass changes. |
 | `cam_view_get` (hidden) | ref `visible`/`camera`/`xport`/`yport`/`wport`/`hport`/`surface_id`, num view | `view_get_visible` / `view_get_camera` / `view_get_xport` / `view_get_yport` / `view_get_wport` / `view_get_hport` / `view_get_surface_id` | |
 | `cam_view_set` (hidden) | ref `visible`/`camera`/`xport`/`yport`/`wport`/`hport`/`surface_id`, num view, any value | `view_set_visible` / `view_set_camera` / `view_set_xport` / `view_set_yport` / `view_set_wport` / `view_set_hport` / `view_set_surface_id` | |
 | `cam_legacy_view_get` (compat) | num what, num view | `__view_get` | GMS1-to-GMS2 compatibility scripts, common in older imports. |
@@ -832,7 +844,7 @@ Alarms, timing and dynamic calls. Timelines have no opcode: `timeline_index`/`ti
 | `ctr_game_speed` (hidden) | num type | `game_get_speed` | type: 0 = fps, 1 = microseconds per frame. |
 | `ctr_game_speed_set` (hidden) | num value, num type | `game_set_speed` | |
 | `ctr_timer` (hidden) | - | `get_timer` | Microseconds since start. Like Scratch's 'timer', but can't be reset. |
-| `ctr_call_later` (hidden) | num period, num units, fn callback, bool? repeat | `call_later` | GM 2023+. Returns a handle. |
+| `ctr_call_later` (hidden) | num period, num units, fn callback, bool? repeat | `call_later` | GM 2023+. Returns a handle. Not implemented in krplayer yet: calling it fails. |
 | `ctr_call_cancel` (hidden) | num handle | `call_cancel` | |
 | `ctr_time_source` (compat, family) | ref fn, ... | `time_source_*` | ref drops `time_source_`. |
 | `ctr_script_execute` (hidden) | fn/num f, any... | `script_execute` | For calls where the function is only known at runtime; fixed calls to user functions use `fnc_g`. |
@@ -849,6 +861,9 @@ Arrays and structs (Variables) are better for visual scripts; `ds_*` mainly exis
 | `dat_list_add` (hidden) | ds l, any... | `ds_list_add` | Labels match the array blocks. |
 | `dat_list_get` (hidden) | ds l, num n | `ds_list_find_value` | Reads/writes can also use `_ac` with `\|`. |
 | `dat_list_set` (hidden) | ds l, num n, any value | `ds_list_set` | |
+| `dat_list_insert` (hidden) | ds l, num n, any value | `ds_list_insert` | |
+| `dat_list_replace` (hidden) | ds l, num n, any value | `ds_list_replace` | Outside the list: does nothing. |
+| `dat_list_copy` (hidden) | ds dest, ds src | `ds_list_copy` | Replaces dest's contents. |
 | `dat_list_delete` (hidden) | ds l, num n | `ds_list_delete` | |
 | `dat_list_size` (hidden) | ds l | `ds_list_size` | |
 | `dat_list_index_of` (hidden) | ds l, any value | `ds_list_find_index` | |

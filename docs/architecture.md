@@ -116,7 +116,7 @@ scripts/
 
 ## Build order
 Get a thin end-to-end slice working first, then widen one opcode category at a time, updating the compat matrix "Build progress" as you go:
-Steps 1–3 are done for the asteroids sample (plus collisions, alarms, fonts and room restart). Deltarune Chapter 1 converts completely and runs through its intro (contact sequence, vessel creation and naming) in krplayer. Deltarune Chapter 2 converts completely, plays its intro to the file menu, and its rooms load and draw (light world, Castle Town, Cyber World, Cyber City) with debug warps. Deltarune Chapter 3 converts completely and plays from its intro through file select and naming into the opening couch scene (cutscene, dialogue, walking with Susie following).
+Steps 1–3 are done for the asteroids sample (plus collisions, alarms, fonts and room restart). Deltarune Chapter 1 converts completely and runs through its intro (contact sequence, vessel creation and naming) in krplayer. Deltarune Chapter 2 converts completely, plays its intro to the file menu, and its rooms load and draw (light world, Castle Town, Cyber World, Cyber City) with debug warps. Deltarune Chapter 3 converts completely and plays from its intro through file select and naming into the opening couch scene (cutscene, dialogue, walking with Susie following). Deltarune Chapter 4 converts completely, loads, shows its file menu and naming, and plays the opening fountain cutscene; its light and dark world rooms load and draw with debug warps (particles, animation curves and `call_later` fail when called).
 
 1. **Chunks:** GEN8, STRG, CODE, VARI, FUNC, OBJT, ROOM, SPRT, TPAG, TXTR
 2. **Runtime:** create/step/draw events, `draw_sprite`, keyboard input

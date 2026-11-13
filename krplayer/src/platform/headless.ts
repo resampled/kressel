@@ -35,7 +35,7 @@ export function createHeadless(textureSize: (url: string) => [number, number] = 
     readPixels: (t) => { const [w, h] = sizes.get(t) ?? [0, 0]; return { w, h, data: new Uint8ClampedArray(w * h * 4) }; },
     createTexture: (px) => { const id = nextId++; sizes.set(id, [px.w, px.h]); return id; },
     copyTexture: (_t, _x, _y, w, h) => { const id = nextId++; sizes.set(id, [w, h]); return id; },
-    setTarget() {}, setView() {}, clear() {}, setBlend() {}, setFog() {}, setAlphaTest() {}, setColorWrite() {}, setFilter() {},
+    setTarget() {}, setView() {}, clear() {}, setBlend() {}, setFog() {}, setAlphaTest() {}, setColorWrite() {}, setFilter() {}, setRepeat() {},
     drawImage() { stats.draws++; }, drawQuad() { stats.draws++; }, triangle() { stats.draws++; }, triangleTex() { stats.draws++; }, systemText() {},
     compileShader: () => nextId++, setShader() {}, shaderUniform: () => nextId++, setUniformF() {}, setSampler() {},
   };

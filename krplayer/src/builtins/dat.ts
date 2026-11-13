@@ -21,6 +21,9 @@ define('dat_list_set', (g, s, t) => {
   return undefined;
 });
 define('dat_list_delete', (g, s, t) => { list(g, s[t]).a.splice(Math.trunc(n(s, t, 1)), 1); return undefined; });
+define('dat_list_insert', (g, s, t) => { const l = list(g, s[t]), i = Math.trunc(n(s, t, 1)); if (i >= 0 && i <= l.a.length) l.a.splice(i, 0, s[t - 2]); return undefined; });
+define('dat_list_replace', (g, s, t) => { const l = list(g, s[t]), i = Math.trunc(n(s, t, 1)); if (i >= 0 && i < l.a.length) l.a[i] = s[t - 2]; return undefined; });
+define('dat_list_copy', (g, s, t) => { list(g, s[t]).a = list(g, s[t - 1]).a.slice(); return undefined; });
 define('dat_list_size', (g, s, t) => list(g, s[t]).a.length);
 define('dat_list_index_of', (g, s, t) => list(g, s[t]).a.findIndex((x) => equals(x, s[t - 1])));
 define('dat_list_clear', (g, s, t) => { list(g, s[t]).a = []; return undefined; });
@@ -282,6 +285,15 @@ family('dat_buffer', 'buffer_', {
   seek: (g, s, t) => { const bf = buf(g, s[t]), base = n(s, t, 1); bf.pos = Math.max(0, (base === 0 ? 0 : base === 1 ? bf.pos : bf.data.length) + n(s, t, 2)); return undefined; },
   tell: (g, s, t) => buf(g, s[t]).pos,
   get_size: (g, s, t) => buf(g, s[t]).data.length,
+  /** (src, src_offset, size, dest, dest_offset): a grow buffer grows to fit; others clip (wrap buffers too, unverified). */
+  copy: (g, s, t) => {
+    const src = buf(g, s[t]).data, dst = buf(g, s[t - 3]), so = Math.max(0, Math.trunc(n(s, t, 1))), dof = Math.max(0, Math.trunc(n(s, t, 4)));
+    let size = Math.min(Math.trunc(n(s, t, 2)), src.length - so);
+    if (dst.type === 1 && dof + size > dst.data.length) { const d = new Uint8Array(dof + size); d.set(dst.data); dst.data = d; dst.view = new DataView(d.buffer); }
+    size = Math.min(size, dst.data.length - dof);
+    if (size > 0) dst.data.set(src.subarray(so, so + size), dof);
+    return undefined;
+  },
   /** (buffer, offset, size): hex MD5 of the range, clamped to the buffer; a negative size means to the end. */
   md5: (g, s, t) => {
     const d = buf(g, s[t]).data, off = Math.min(d.length, Math.max(0, Math.trunc(n(s, t, 1)))), size = Math.trunc(n(s, t, 2));

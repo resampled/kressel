@@ -80,7 +80,7 @@ export class Layers {
           }
           for (const s of d.sprites ?? []) {
             const e = this.add(l, ELEM.sprite);
-            e.asset = spr(s.sprite); e.name = s.name; e.x = s.x; e.y = s.y; e.xscale = s.scale_x ?? 1; e.yscale = s.scale_y ?? 1; e.angle = s.angle ?? 0;
+            e.asset = s.sprite === null ? -1 : spr(s.sprite); e.name = s.name; e.x = s.x; e.y = s.y; e.xscale = s.scale_x ?? 1; e.yscale = s.scale_y ?? 1; e.angle = s.angle ?? 0;
             e.colour = s.colour ?? 0xffffff; e.alpha = s.alpha ?? 1; e.index = s.image_index ?? 0; e.speed = s.image_speed ?? 1;
           }
           break;
@@ -116,6 +116,11 @@ export class Layers {
     this.byElement.delete(e.id);
   }
   element(id: number): Element | undefined { return this.byElement.get(id); }
+  /** Moves an element to the end of another layer's list (drawn last on it). */
+  moveElement(e: Element, l: RtLayer): void {
+    e.layer.elements = e.layer.elements.filter((x) => x !== e);
+    l.elements.push(e); e.layer = l;
+  }
 
   /** A layer by id or name; throws if missing. */
   get(v: number | string): RtLayer {

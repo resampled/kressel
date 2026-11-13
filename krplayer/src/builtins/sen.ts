@@ -17,11 +17,13 @@ define('sen_mouse_held', (g, s, t) => (g.p.input.mouseButtons & (1 << (n(s, t, 0
 const mbit = (s: Value[], t: number) => { const b = n(s, t, 0); return b === -1 ? 7 : b > 0 ? 1 << (b - 1) : 0; };
 define('sen_mouse_pressed', (g, s, t) => (g.p.input.mousePressed & mbit(s, t)) !== 0);
 define('sen_mouse_released', (g, s, t) => (g.p.input.mouseReleased & mbit(s, t)) !== 0);
+define('sen_device_mouse_held', (g, s, t) => n(s, t, 0) === 0 && (g.p.input.mouseButtons & (1 << (n(s, t, 1) - 1))) !== 0);
 define('sen_mouse_wheel', (g, s, t) => (s[t] === 'up' ? g.p.input.wheel > 0 : g.p.input.wheel < 0));
 // No gamepads in the browser build yet: none connected (games fall back to the keyboard).
 define('sen_gamepad_connected', () => false);
 define('sen_gamepad_button', () => false);
 define('sen_gamepad_axis', () => 0);
+define('sen_gamepad_button_value', () => 0);
 define('sen_gamepad_count', () => 0);
 define('sen_gamepad_button_count', () => 0);
 define('sen_gamepad_info', () => '');

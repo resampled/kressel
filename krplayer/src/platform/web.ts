@@ -45,6 +45,7 @@ class GLRenderer implements Renderer {
   /** world -> target pixels */
   private m = [1, 0, 0, 1, 0, 0];
   private filter = false;
+  private repeat = false;
   /** bm_normal: an alpha-0 draw changes nothing and can be skipped. Under any other blend (or blending off, which
    *  is bm_one/bm_zero) it still writes, e.g. alpha 0 into a dest-alpha mask. */
   private normal = true;
@@ -101,7 +102,8 @@ class GLRenderer implements Renderer {
   private params(): void {
     const gl = this.gl, f = this.filter ? gl.LINEAR : gl.NEAREST;
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const w = this.repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, w); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, w);
   }
 
   async loadTexture(url: string): Promise<TextureId> {
@@ -299,6 +301,7 @@ class GLRenderer implements Renderer {
   }
   setColorWrite(r: boolean, g: boolean, b: boolean, a: boolean): void { this.flush(); this.gl.colorMask(r, g, b, a); }
   setFilter(on: boolean): void { if (on !== this.filter) { this.flush(); this.filter = on; this.cur = -2; } }
+  setRepeat(on: boolean): void { if (on !== this.repeat) { this.flush(); this.repeat = on; this.cur = -2; } }
   systemText(): void {}
 
   private use(t: TextureId): Tex | null {

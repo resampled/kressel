@@ -45,6 +45,8 @@ export interface Renderer {
   setAlphaTest(on: boolean, ref: number): void;
   /** Linear texture filtering on/off (gpu_set_texfilter). */
   setFilter(on: boolean): void;
+  /** Texture coordinates outside 0-1 repeat instead of clamping (gpu_set_tex_repeat). */
+  setRepeat(on: boolean): void;
   /** Draws [sx, sy, sw, sh] of tex with its (ox, oy) pixel at (x, y), scaled, then rotated (degrees, counter-clockwise). */
   drawImage(
     tex: TextureId, sx: number, sy: number, sw: number, sh: number,

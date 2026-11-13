@@ -250,3 +250,5 @@ family('snd_group', 'audio_group_', {
 define('lks_sprite_prefetch', () => 0);
 define('snd_exists', (g, s, t) => typeof s[t] === 'number' && g.snd.exists(s[t] as number));
 define('snd_name', (g, s, t) => g.snd.name(real(s[t])));
+// No microphone input: no recorders, so info/start report failure (-1) and stop does nothing.
+define('snd_recorder', (_g, s, t) => (s[t] === 'count' ? 0 : s[t] === 'stop' ? undefined : -1));

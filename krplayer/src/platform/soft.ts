@@ -70,6 +70,7 @@ export class SoftRenderer implements Renderer {
   private cw = 15;
   setColorWrite(r: boolean, g: boolean, b: boolean, a: boolean): void { this.cw = (r ? 1 : 0) | (g ? 2 : 0) | (b ? 4 : 0) | (a ? 8 : 0); }
   setFilter(): void {}
+  setRepeat(): void {}
   systemText(): void {}
 
   drawImage(t: TextureId, sx: number, sy: number, sw: number, sh: number, x: number, y: number, ox: number, oy: number,

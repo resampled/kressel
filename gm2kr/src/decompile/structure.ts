@@ -604,7 +604,8 @@ export class Decompiler {
       case Ext.setowner: this.pop(stack, i); return;
       case Ext.savearef: case Ext.restorearef: return;
       case Ext.chkindex: return; // pre-2.3 array index check: leaves the index on the stack
-      case Ext.pushaf: { // row index -> element
+      // row index -> element. pushac is a middle dimension of a[i][j][k] (the row for the next index).
+      case Ext.pushaf: case Ext.pushac: {
         const index = this.pop(stack, i).e, row = this.pop(stack, i).e;
         stack.push({ e: ['_ai', row, index], size: 16 });
         return;

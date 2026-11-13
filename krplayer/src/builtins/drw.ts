@@ -1,7 +1,7 @@
 // Drawing (drw_*).
 
 import { define, family, n, b, str, opt } from './registry.ts';
-import { real, NotImplemented, Unverified, type GArray, type Value } from '../value.ts';
+import { real, truthy, NotImplemented, Unverified, type GArray, type Value } from '../value.ts';
 import { Instance } from '../runtime/instance.ts';
 import { ELEM } from '../runtime/layers.ts';
 import type { Game } from '../runtime/game.ts';
@@ -222,14 +222,31 @@ define('drw_blendmode', (g, s, t) => {
   return setBlend(g, m[0], m[1], m[0], m[1]);
 });
 define('drw_blendmode_get', (g) => g.blendMode);
+/** gpu_set_colorwriteenable(r, g, b, a), or (array) in GMS2.3+. */
+function colourWrite(g: Game, s: Value[], t: number): undefined {
+  const a = s[t], cw = g.colorWrite;
+  for (let k = 0; k < 4; k++) cw[k] = Array.isArray(a) ? truthy(a[k]) : b(s, t, k);
+  g.p.renderer.setColorWrite(cw[0], cw[1], cw[2], cw[3]);
+  return undefined;
+}
+family('drw_gpu_get', 'gpu_get_', {
+  blendenable: (g) => g.blendEnable,
+  colorwriteenable: (g) => g.colorWrite.slice() as GArray,
+  colourwriteenable: (g) => g.colorWrite.slice() as GArray,
+  alphatestenable: (g) => g.alphaTest,
+  alphatestref: (g) => g.alphaRef,
+  tex_repeat: (g) => g.texRepeat,
+  texfilter: (g) => g.texFilter,
+});
 family('drw_gpu', 'gpu_set_', {
   blendmode_ext: (g, s, t) => setBlend(g, n(s, t, 0), n(s, t, 1), n(s, t, 0), n(s, t, 1)),
   blendmode_ext_sepalpha: (g, s, t) => setBlend(g, n(s, t, 0), n(s, t, 1), n(s, t, 2), n(s, t, 3)),
-  blendenable: (g, s, t) => (b(s, t, 0) ? setBlend(g, 5, 6, 5, 6) : setBlend(g, 2, 1, 2, 1)),
+  blendenable: (g, s, t) => { g.blendEnable = b(s, t, 0); return g.blendEnable ? setBlend(g, 5, 6, 5, 6) : setBlend(g, 2, 1, 2, 1); },
   fog: (g, s, t) => { g.p.renderer.setFog(b(s, t, 0), n(s, t, 1)); return undefined; },
-  texfilter: (g, s, t) => { g.p.renderer.setFilter(b(s, t, 0)); return undefined; },
-  colorwriteenable: (g, s, t) => { g.p.renderer.setColorWrite(b(s, t, 0), b(s, t, 1), b(s, t, 2), b(s, t, 3)); return undefined; },
-  colourwriteenable: (g, s, t) => { g.p.renderer.setColorWrite(b(s, t, 0), b(s, t, 1), b(s, t, 2), b(s, t, 3)); return undefined; },
+  texfilter: (g, s, t) => { g.texFilter = b(s, t, 0); g.p.renderer.setFilter(g.texFilter); return undefined; },
+  tex_repeat: (g, s, t) => { g.texRepeat = b(s, t, 0); g.p.renderer.setRepeat(g.texRepeat); return undefined; },
+  colorwriteenable: colourWrite,
+  colourwriteenable: colourWrite,
   alphatestenable: (g, s, t) => { g.alphaTest = b(s, t, 0); g.p.renderer.setAlphaTest(g.alphaTest, g.alphaRef); return undefined; },
   alphatestref: (g, s, t) => { g.alphaRef = Math.max(0, Math.min(255, n(s, t, 0))); g.p.renderer.setAlphaTest(g.alphaTest, g.alphaRef); return undefined; },
   ztestenable: () => undefined, zwriteenable: () => undefined, cullmode: () => undefined,
@@ -373,6 +390,18 @@ define('drw_surface_general', (g, s, t) => {
     n(s, t, 10), n(s, t, 11), n(s, t, 12), n(s, t, 13), n(s, t, 14));
   return undefined;
 });
+/** draw_surface_tiled(_ext): repeats the surface over the view (or over the whole target surface while drawing into one). */
+function surfaceTiled(g: Game, s: Value[], t: number, xs: number, ys: number, col: number, alpha: number): undefined {
+  const sf = g.surface(s[t]), w = sf.w * xs, h = sf.h * ys, tgt = g.currentTarget();
+  if (w <= 0 || h <= 0) return undefined;
+  const [vx, vy, vw, vh] = tgt < 0 ? g.viewRect() : [0, 0, g.surface(tgt).w, g.surface(tgt).h];
+  const x = n(s, t, 1), y = n(s, t, 2), x0 = x + Math.floor((vx - x) / w) * w, y0 = y + Math.floor((vy - y) / h) * h;
+  for (let ty = y0; ty < vy + vh; ty += h) for (let tx = x0; tx < vx + vw; tx += w) g.p.renderer.drawImage(sf.tex, 0, 0, sf.w, sf.h, tx, ty, 0, 0, xs, ys, 0, col, alpha);
+  return undefined;
+}
+define('drw_surface_tiled', (g, s, t) => surfaceTiled(g, s, t, 1, 1, 0xffffff, g.alpha));
+define('drw_surface_tiled_ext', (g, s, t) => surfaceTiled(g, s, t, n(s, t, 3), n(s, t, 4), n(s, t, 5), n(s, t, 6)));
+define('drw_surface_save', () => { throw new NotImplemented('surface_save is not implemented in krplayer yet'); });
 /** surface_copy(dest, x, y, src) / surface_copy_part(dest, x, y, src, xs, ys, ws, hs): replaces the pixels (blend one/zero). */
 define('drw_surface_copy', (g, s, t) => {
   const dest = n(s, t, 1), src = g.surface(s[t - 4]), part = s[t] === 'copy_part';
@@ -396,6 +425,8 @@ define('drw_app_position', (g) => {
 });
 family('drw_video', 'video_', {});
 family('drw_gif', 'gif_', {});
+// No particle systems yet: calling any part_* fails (named), so a project using them still loads.
+family('drw_part', 'part_', {});
 define('drw_app_surface', (g, s, t) => { if (s[t] === 'draw_enable') g.appSurfaceDraw = b(s, t, 1); return undefined; });
 define('drw_getpixel', () => 0);
 /** A surface pixel as BGR, or ABGR with alpha in the top byte (_ext). Reads the whole surface back, so it's slow. */

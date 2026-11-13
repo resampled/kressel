@@ -93,6 +93,8 @@ export class Game {
   fileFind: string[] = [];
   /** gpu_set_alphatestenable / gpu_set_alphatestref (0-255). */
   alphaTest = false; alphaRef = 0;
+  /** Other gpu_set_* state, for gpu_get_*. colorWrite is GM's [r, g, b, a] array (reused, not reallocated). */
+  blendEnable = true; texRepeat = false; texFilter = false; readonly colorWrite = [true, true, true, true];
   /** gpu_get_blendmode (the last gpu_set_blendmode mode) and shader_current (a shader asset index, or -1). */
   blendMode = 0; shader = -1;
   /** The blend factors set last (src, dst, srcA, dstA), so surface_copy can restore them. */
@@ -298,8 +300,9 @@ export class Game {
     if (id === IV.alarm) { inst.alarm[this.alarmIndex(index)] = real(v); return; }
     if (index !== NOI) throw new Unverified(`built-in variable ${this.ivName(id)} is not an array`);
     if (id === IV.layer) {
-      const l = this.layers.get(real(v));
-      inst.layer = l.id; inst.depth = l.depth;
+      // A missing layer is ignored, like the layer_* setters (gm_gotchas.md: Ch4 obj_layershader, TILES_GLOW).
+      const l = this.layers.find(real(v));
+      if (l) { inst.layer = l.id; inst.depth = l.depth; }
       return;
     }
     if (id === IV.depth) { inst.depth = real(v); inst.layer = -1; return; }
@@ -828,6 +831,11 @@ export class Game {
   private viewPort = [0, 0, 640, 480];
   private viewAngle = 0;
   viewRect(): readonly number[] { return this.vr; }
+  /** camera_apply: draws through the camera onto the whole current target, until the target or the view pass changes. */
+  applyCamera(c: Camera): void {
+    const top = this.targetStack.at(-1), s = top === undefined ? null : this.surface(top), p = this.viewPort;
+    this.p.renderer.setView(c.x, c.y, c.w, c.h, c.angle, s ? 0 : p[0], s ? 0 : p[1], s ? s.w : p[2], s ? s.h : p[3]);
+  }
 
   private applyView(): void {
     this.p.renderer.setView(this.vr[0], this.vr[1], this.vr[2], this.vr[3], this.viewAngle, this.viewPort[0], this.viewPort[1], this.viewPort[2], this.viewPort[3]);
@@ -845,7 +853,7 @@ export class Game {
     const r = this.p.renderer, app = this.surface(APP_SURFACE), room = this.room;
     const [ww, wh] = r.windowSize();
     r.beginFrame();
-    r.setBlend(5, 6, 5, 6); r.setFog(false, 0); this.blendF[0] = this.blendF[2] = 5; this.blendF[1] = this.blendF[3] = 6; this.blendMode = 0;
+    r.setBlend(5, 6, 5, 6); r.setFog(false, 0); this.blendF[0] = this.blendF[2] = 5; this.blendF[1] = this.blendF[3] = 6; this.blendMode = 0; this.blendEnable = true;
     // Pre-draw goes straight to the window.
     this.setPass(WINDOW, 0, 0, ww, wh, 0, 0, 0, ww, wh);
     r.clear(0, 1);
@@ -894,14 +902,26 @@ export class Game {
     layers.length = 0;
     for (const l of this.layers.list) if (l.visible && l.elements.length && !l.instances) layers.push(l);
     layers.sort((a, b) => b.depth - a.depth);
-    let li = 0;
+    let li = 0, scripted = false;
+    for (const l of this.layers.list) if (l.instances && (l.scriptBegin != null || l.scriptEnd != null)) scripted = true;
+    // Instance layer scripts wrap each run of that layer's instances in the depth-sorted draw list.
+    let open: RtLayer | null = null;
     this.fx.draw(this.p.renderer, false);
     for (const inst of dl) {
       if (!inst.alive) continue;
-      while (li < layers.length && layers[li].depth >= inst.depth) this.drawLayer(layers[li++]);
+      while (li < layers.length && layers[li].depth >= inst.depth) { open = this.endLayer(open); this.drawLayer(layers[li++]); }
+      if (scripted && open?.id !== inst.layer) {
+        open = this.endLayer(open);
+        const l = this.layers.find(inst.layer);
+        if (l?.instances && (l.scriptBegin != null || l.scriptEnd != null)) {
+          open = l;
+          if (l.scriptBegin != null) this.vm.callValue(l.scriptBegin, this.globalScope, NO_ARGS);
+        }
+      }
       if (inst.obj.hasDraw) this.run(inst.obj.ev.simple[EV.draw], inst, null);
       else this.drawSelf(inst);
     }
+    this.endLayer(open);
     while (li < layers.length) this.drawLayer(layers[li++]);
     this.fx.draw(this.p.renderer, true);
     this.phase(EV.draw_end);
@@ -911,6 +931,12 @@ export class Game {
     const spr = inst.sprite;
     if (!spr || !spr.frames.length) return;
     drawSprite(this, spr, inst.image_index, inst.x, inst.y, inst.image_xscale, inst.image_yscale, inst.image_angle, inst.image_blend, inst.image_alpha * this.alpha);
+  }
+
+  /** Runs an open instance layer's end script; returns null (nothing open). */
+  private endLayer(l: RtLayer | null): null {
+    if (l?.scriptEnd != null) this.vm.callValue(l.scriptEnd, this.globalScope, NO_ARGS);
+    return null;
   }
 
   private drawLayer(l: RtLayer): void {

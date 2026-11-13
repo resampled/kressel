@@ -656,3 +656,18 @@ test("kreditor's print output: one block through the real VM, errors labelled by
   assert.deepEqual(await evaluate(['opr_add', 'a', 'b']), { value: 'ab', type: 'string' });
   await assert.rejects(evaluate(['opr_add', 1, 'a']), /^Error: project error: .*unable to add/);
 });
+
+test('DR ch4 built-ins: ds_list insert/replace/copy, tile data fields, object_get_parent, gpu_get_* state', async () => {
+  const v = await exec([
+    ['var_set', ['_lv', 'l'], ['dat_list_create']], ['dat_list_add', ['_lv', 'l'], 1, 3],
+    ['dat_list_insert', ['_lv', 'l'], 1, 2], ['dat_list_replace', ['_lv', 'l'], 0, 9], ['dat_list_replace', ['_lv', 'l'], 5, 7],
+    ['var_set', ['_lv', 'c'], ['dat_list_create']], ['dat_list_copy', ['_lv', 'c'], ['_lv', 'l']], ['dat_list_clear', ['_lv', 'l']],
+    ['var_set', ['_lv', 'out'], ['_ar', ['dat_list_get', ['_lv', 'c'], 0], ['dat_list_get', ['_lv', 'c'], 1], ['dat_list_get', ['_lv', 'c'], 2], ['dat_list_size', ['_lv', 'c']]]],
+    ['var_set', ['_lv', 'tile'], ['_ar', ['rom_tile_data', 'index', 0x30000005], ['rom_tile_data', 'mirror', 0x30000005], ['rom_tile_data', 'flip', 0x30000005], ['rom_tile_data', 'rotate', 0x30000005]]],
+    ['var_set', ['_lv', 'parent'], ['ins_object_parent', 0]],
+    ['drw_gpu', 'colorwriteenable', true, false, true, true], ['drw_gpu', 'blendenable', false],
+    ['var_set', ['_lv', 'cw'], ['drw_gpu_get', 'colorwriteenable']], ['drw_gpu', 'colorwriteenable', ['_lv', 'cw']],
+    ['var_set', ['_lv', 'gpu'], ['_ar', ['drw_gpu_get', 'blendenable'], ['drw_gpu_get', 'colorwriteenable']]],
+  ]);
+  assert.deepEqual([v.out, v.tile, v.parent, v.gpu], [[9, 2, 3, 3], [5, true, true, false], -100, [false, [true, false, true, true]]]);
+});

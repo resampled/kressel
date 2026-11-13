@@ -260,7 +260,8 @@ export async function emitKrpj(m: GmModel, extra: GameFiles = new Map(), log: (m
           if (l.sprites.length) out.sprites = l.sprites.map((s) => {
             const alpha = (s.color >>> 24) / 255, colour = s.color & 0xffffff;
             return {
-              sprite: sprite(s.sprite, where), x: s.x, y: s.y, name: s.name,
+              // An element whose sprite was deleted (-1) draws nothing in GM, but layer_sprite_get_id still finds it.
+              sprite: s.sprite === -1 ? null : sprite(s.sprite, where), x: s.x, y: s.y, name: s.name,
               ...(s.scaleX !== 1 ? { scale_x: s.scaleX } : {}), ...(s.scaleY !== 1 ? { scale_y: s.scaleY } : {}),
               ...(s.rotation ? { angle: s.rotation } : {}), ...(colour !== 0xffffff ? { colour } : {}), ...(alpha !== 1 ? { alpha } : {}),
               ...(s.frame ? { image_index: s.frame } : {}), ...(s.animSpeed !== 1 ? { image_speed: s.animSpeed } : {}),

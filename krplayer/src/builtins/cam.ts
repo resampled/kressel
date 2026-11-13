@@ -33,6 +33,8 @@ define('cam_create_view', (g, s, t, argc) => {
   g.cameras.push(c);
   return id;
 });
+define('cam_apply', (g, s, t) => { const c = cam(g, s[t]); if (c) g.applyCamera(c); return undefined; });
+define('ctr_call_later', () => { throw new NotImplemented('call_later is not implemented in krplayer yet'); });
 define('cam_destroy', (g, s, t) => { const i = real(s[t]); if (g.cameras[i]) g.cameras[i] = null; return undefined; });
 define('cam_view_get', (g, s, t) => {
   const v = g.views[n(s, t, 1)];

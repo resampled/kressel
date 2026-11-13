@@ -92,6 +92,22 @@ define('rom_element_type', (g, s, t) => {
   for (const e of instElements.values()) if (e.id === id) return ELEM.instance;
   return g.layers.element(id)?.kind ?? -1;
 });
+define('rom_element_layer', (g, s, t) => {
+  const e = g.layers.element(real(s[t]));
+  if (e?.kind !== ELEM.instance) return e ? e.layer.id : -1;
+  return g.byIdAny(e.inst)?.layer ?? -1;
+});
+/** layer_element_move(element, layer). An instance element moves its instance (taking the layer's depth). */
+define('rom_element_move', (g, s, t) => {
+  const e = g.layers.element(real(s[t])), l = layer(g, s[t - 1]);
+  if (!e || !l) return undefined;
+  if (e.kind === ELEM.instance) {
+    const i = g.byIdAny(e.inst);
+    if (i) { i.layer = l.id; i.depth = l.depth; }
+  } else g.layers.moveElement(e, l);
+  e.layer = l;
+  return undefined;
+});
 define('rom_layer_force_depth', () => undefined);
 define('rom_layer_instance', (_g, s, t) => {
   const id = real(s[t]);
@@ -184,6 +200,11 @@ family('rom_sprite', 'layer_sprite_', {
   get_yscale: elGet(SPR, 1, (e) => e.yscale),
   get_index: elGet(SPR, -1, (e) => e.index),
   get_speed: elGet(SPR, 0, (e) => e.speed),
+  angle: elSet(SPR, (e, s, t) => { e.angle = n(s, t, 1); }),
+  blend: elSet(SPR, (e, s, t) => { e.colour = n(s, t, 1); }),
+  get_angle: elGet(SPR, 0, (e) => e.angle),
+  get_blend: elGet(SPR, 0, (e) => e.colour),
+  get_alpha: elGet(SPR, 0, (e) => e.alpha),
   /** layer_sprite_get_id(layer, name): asset layer sprites keep their room editor names. */
   get_id: (g, s, t) => firstOf(g, s[t], SPR, str(s, t, 1)),
 });
@@ -198,7 +219,24 @@ family('rom_tilemap', 'tilemap_', {
   get_height: elGet(TMAP, -1, (e) => e.h),
   get_tileset: elGet(TMAP, -1, (e) => e.asset),
   tileset: elSet(TMAP, (e, s, t) => { e.asset = n(s, t, 1); }),
+  get: (g, s, t) => { const e = elOf(g, s[t], TMAP); return e ? cell(e, Math.floor(n(s, t, 1)), Math.floor(n(s, t, 2))) : -1; },
+  /** Pixel position in the room; the tile map sits at its layer's offset plus its own, as it draws. */
+  get_at_pixel: (g, s, t) => {
+    const e = elOf(g, s[t], TMAP), ts = e && g.a.tilesets[e.asset];
+    if (!e || !ts) return -1;
+    return cell(e, Math.floor((n(s, t, 1) - e.layer.x - e.x) / ts.tw), Math.floor((n(s, t, 2) - e.layer.y - e.y) / ts.th));
+  },
 });
+/** A tile map cell's tile data, or -1 outside the map. */
+const cell = (e: Element, col: number, row: number) => (e.cells && col >= 0 && row >= 0 && col < e.w && row < e.h ? e.cells[row * e.w + col] : -1);
+/** tile_get_*: fields of a tile data value (krpj.ts TileLayer: index bits 0-18, mirror 28, flip 29, rotate 30). */
+define('rom_tile_data', (_g, s, t) => {
+  const d = Math.trunc(n(s, t, 1));
+  switch (s[t]) { case 'index': return d & 0x7ffff; case 'mirror': return ((d >> 28) & 1) === 1; case 'flip': return ((d >> 29) & 1) === 1; case 'rotate': return ((d >> 30) & 1) === 1; }
+  throw new NotImplemented(`tile_get_${String(s[t])} unknown`);
+});
+// Animation curves aren't imported yet (no ACRV chunk in gm2kr): calling any animcurve_* fails.
+family('rom_animcurve', 'animcurve_', {});
 define('rom_layer_tilemap', (g, s, t) => firstOf(g, s[t], TMAP));
 define('rom_layer_at_depth', (g, s, t) => {
   const d = n(s, t, 0), out: GArray = g.layers.list.filter((l) => l.depth === d).map((l) => l.id);
@@ -207,7 +245,6 @@ define('rom_layer_at_depth', (g, s, t) => {
 define('rom_layer_script', (g, s, t) => {
   const l = layer(g, s[t - 1]), f = s[t - 2], none = typeof f === 'number' && f < 0;
   if (!l) return undefined;
-  if (l.instances && !none) throw new NotImplemented('layer_script_begin/end on instance layers is not implemented in krplayer yet');
   if (s[t] === 'begin') l.scriptBegin = none ? null : f; else l.scriptEnd = none ? null : f;
   return undefined;
 });

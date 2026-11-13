@@ -108,8 +108,9 @@ export interface BackgroundLayer extends LayerBase {
 export interface InstanceLayer extends LayerBase { type: 'instances'; instances: RoomInstance[] }
 /** [x, y, sprite, left, top, width, height, scale_x, scale_y, colour (ABGR)] */
 export type LegacyTile = [number, number, string, number, number, number, number, number, number, number];
+/** sprite null: an element whose sprite was deleted; draws nothing, but code can still find it by name. */
 export interface AssetSprite {
-  sprite: string; x: number; y: number;
+  sprite: string | null; x: number; y: number;
   scale_x?: number; scale_y?: number; angle?: number; colour?: number; alpha?: number;
   image_index?: number; image_speed?: number;
   name?: string;
