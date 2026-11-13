@@ -59,9 +59,9 @@ export function renderOpcodes(ops: ParsedOpcode[]): string {
     `export const OPCODES: readonly OpcodeDef[] = [\n${rows}\n];\n`;
 }
 
-/** Plain-JS copy for kreditor (no build step), written to kreditor/mockup/src/opcodes.gen.js. */
-export function renderOpcodesJs(ops: ParsedOpcode[]): string {
+/** Plain-JS copy for kreditor (no build step): an ES module, or (module = false) a classic script defining a global. */
+export function renderOpcodesJs(ops: ParsedOpcode[], module = true): string {
   const rows = ops.map((o) => `  ${JSON.stringify(o)},`).join('\n');
   return `// GENERATED from docs/krpj_opcodes.md by scripts/gen-opcodes.ts. Do not edit; run \`pnpm gen:opcodes\`.\n` +
-    `export const OPCODES = [\n${rows}\n];\n`;
+    `${module ? 'export const' : 'var'} OPCODES = [\n${rows}\n];\n`;
 }
