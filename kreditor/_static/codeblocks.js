@@ -6,9 +6,9 @@
 // Classic script (no modules) so kreditor.html opens from file://. Needs opcodes.gen.js loaded first.
 var kreditorCode = (function () {
   'use strict';
-  const CATS = [['evt', 'Events'], ['ctr', 'Control'], ['fnc', 'Functions'], ['opr', 'Operators'], ['var', 'Variables'],
-    ['ins', 'Instances'], ['mov', 'Movement'], ['sen', 'Sensing'], ['lks', 'Looks'], ['snd', 'Sound'], ['drw', 'Drawing'],
-    ['rom', 'Rooms'], ['cam', 'Camera'], ['dat', 'Data'], ['sys', 'System']];
+  const CATS = [['evt', 'Events'], ['ctr', 'Control'], ['mov', 'Movement'], ['lks', 'Looks'], ['drw', 'Drawing'], ['snd', 'Sound'],
+    ['sen', 'Sensing'], ['opr', 'Operators'], ['var', 'Variables'], ['ins', 'Instances'], ['rom', 'Rooms'], ['cam', 'Camera'],
+    ['fnc', 'Functions'], ['dat', 'Data'], ['sys', 'System']];
   const COLOUR = { ctr: 'ctl', _: 'var' }; // category -> .c-<colour> class, when they differ
   const colour = (cat) => 'c-' + (COLOUR[cat] || cat);
 
@@ -36,14 +36,43 @@ var kreditorCode = (function () {
     evt_mouse: ['left_pressed', 'left_held', 'left_released', 'right_pressed', 'right_held', 'right_released', 'middle_pressed',
       'middle_held', 'middle_released', 'none', 'enter', 'leave', 'wheel_up', 'wheel_down', 'global_left_pressed', 'global_left_held', 'global_left_released'],
     var_change: ['+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>', '??'],
+    opr_mathop: ['abs', 'sign', 'round', 'floor', 'ceil', 'frac', 'sqrt', 'sqr', 'exp', 'ln', 'log2', 'log10'],
+    opr_trig: ['sin', 'cos', 'tan', 'arcsin', 'arccos', 'arctan'], opr_dtrig: ['sin', 'cos', 'tan', 'arcsin', 'arccos', 'arctan'],
+    opr_is_type: ['real', 'string', 'array', 'struct', 'undefined', 'bool', 'method', 'numeric', 'int64', 'ptr'],
     _kw: ['self', 'other', 'all', 'noone', 'global'],
   };
   const KEYS = { 0: 'no key', 1: 'any key', 8: 'backspace', 9: 'tab', 13: 'enter', 16: 'shift', 17: 'control', 18: 'alt', 27: 'escape',
     32: 'space', 37: 'left arrow', 38: 'up arrow', 39: 'right arrow', 40: 'down arrow' };
   for (let c = 48; c <= 90; c++) if (c <= 57 || c >= 65) KEYS[c] = String.fromCharCode(c);
   for (let f = 1; f <= 12; f++) KEYS[111 + f] = 'F' + f;
+  // How `ref` options read in dropdowns, when not just their name with spaces for underscores.
+  const OPT_LABELS = { string: 'text', real: 'number', h: 'horizontal', v: 'vertical', restart: 'this (restart)', rgb: 'RGB', hsv: 'HSV' };
+  // Number inputs that take GameMaker constants get a dropdown: op -> { argument index: [[value, label], ...] }.
+  // A value not in the list (e.g. from an import) falls back to a plain number input.
+  const MB = { 1: [[1, 'left'], [2, 'right'], [3, 'middle']] };
+  const GP = ['A / cross', 'B / circle', 'X / square', 'Y / triangle', 'left shoulder', 'right shoulder', 'left trigger', 'right trigger',
+    'select', 'start', 'left stick', 'right stick', 'pad up', 'pad down', 'pad left', 'pad right'].map((l, k) => [32769 + k, l]);
+  const ENUMS = {
+    sen_mouse_held: MB, sen_mouse_pressed: MB, sen_mouse_released: MB, sen_gamepad_button: { 3: GP },
+    drw_set_align: { 2: [[0, 'left / top'], [1, 'centre / middle'], [2, 'right / bottom']] },
+    mov_path_start: { 3: [[0, 'stop'], [1, 'restart'], [2, 'continue'], [3, 'reverse']] },
+  };
+  // Palette starting values, when the per-type default (0, true, '', white...) would be a poor start: op -> { index: value }.
+  const X = ['_lv', 'x'], Y = ['_lv', 'y'], HI = 'Hello!';
+  const DEFAULTS = {
+    snd_play: { 3: false }, snd_gain: { 2: 1 }, snd_pitch: { 2: 1 }, drw_rect: { 5: false }, drw_circle: { 3: 16, 4: false },
+    drw_sprite: { 3: X, 4: Y }, drw_sprite_ext: { 3: X, 4: Y, 5: 1, 6: 1, 9: 1 }, drw_text: { 3: HI },
+    drw_text_transformed: { 3: HI, 4: 1, 5: 1 }, drw_set_alpha: { 1: 1 }, drw_make_colour: { 2: 255, 3: 255, 4: 255 },
+    sen_place_meeting: { 1: X, 2: Y }, sen_instance_place: { 1: X, 2: Y }, sen_place_free: { 1: X, 2: Y },
+    sen_mouse_held: { 1: 1 }, sen_mouse_pressed: { 1: 1 }, sen_mouse_released: { 1: 1 }, sen_gamepad_button: { 3: 32769 },
+    ctr_repeat: { 1: 10 }, ctr_alarm_set: { 2: 30 }, mov_motion_set: { 2: 4 }, mov_towards_point: { 3: 4 },
+    opr_random: { 1: 1 }, opr_irandom: { 1: 10 }, opr_random_range: { 2: 1 }, opr_irandom_range: { 1: 1, 2: 10 },
+    opr_clamp: { 3: 1 }, opr_lerp: { 2: 1, 3: 0.5 }, var_local: { 1: 'temp', 2: 0 }, var_arr_delete: { 3: 1 },
+    ctr_for_each: { 1: 'item' },
+  };
 
-  // %n = argument n (node[n]); `script` arguments become C-block mouths. Unlisted opcodes get a generated label.
+  // %n = argument n (node[n]); `script` arguments become C-block mouths. Unlisted opcodes get a label generated from
+  // their GML name, which is fine for (hidden) blocks; every block shown by default should read as plain English here.
   const LABELS = {
     evt_create: 'on create', evt_destroy: 'on destroy', evt_cleanup: 'on clean up', evt_step: 'on step', evt_step_begin: 'on begin step',
     evt_step_end: 'on end step', evt_alarm: 'on alarm %1', evt_draw: 'on draw', evt_draw_begin: 'on begin draw', evt_draw_end: 'on end draw',
@@ -53,24 +82,48 @@ var kreditorCode = (function () {
     evt_outside_room: 'on leaving the room', evt_intersect_boundary: 'on touching the room edge',
     ctr_if: 'if %1 then %2 else %3', ctr_repeat: 'repeat %1 %2', ctr_while: 'while %1 %2', ctr_do_until: 'do %1 until %2',
     ctr_for: 'for %1 while %2 each time %3 do %4', ctr_for_each: 'for each %1 in %2 %3', ctr_switch: 'switch %1 %2', ctr_case: 'case %1',
-    ctr_default: 'default', ctr_break: 'break', ctr_continue: 'continue', ctr_with: 'as each %1 %2', ctr_exit: 'stop this event',
-    ctr_return: 'return %1', ctr_alarm_set: 'set alarm %1 to %2', ctr_alarm_get: 'alarm %1',
-    var_set: 'set %1 to %2', var_change: 'change %2 by %1 %3', var_inc: 'increase %1', var_dec: 'decrease %1', var_local: 'local %1 = %2',
-    fnc_g: 'call %1 %2', fnc_m: 'call method %1 %2',
+    ctr_default: 'default', ctr_break: 'break', ctr_continue: 'continue', ctr_with: 'run as each %1 %2', ctr_exit: 'stop this event',
+    ctr_return: 'return %1', ctr_alarm_set: 'set alarm %1 to %2 steps', ctr_alarm_get: 'steps left on alarm %1',
+    var_set: 'set %1 to %2', var_change: 'change %2 by %1 %3', var_inc: 'increase %1', var_dec: 'decrease %1',
+    var_local: 'make temporary variable %1 = %2', fnc_g: 'run function %1 %2', fnc_m: 'call method %1 %2',
     opr_add: '%1 + %2', opr_sub: '%1 − %2', opr_mul: '%1 × %2', opr_div: '%1 ÷ %2', opr_idiv: '%1 div %2', opr_mod: '%1 mod %2',
     opr_neg: '− %1', opr_eq: '%1 = %2', opr_neq: '%1 ≠ %2', opr_lt: '%1 < %2', opr_lte: '%1 ≤ %2', opr_gt: '%1 > %2', opr_gte: '%1 ≥ %2',
     opr_and: '%1 and %2', opr_or: '%1 or %2', opr_xor: '%1 xor %2', opr_not: 'not %1', opr_cond: 'if %1 then %2 else %3',
-    opr_random: 'random %1', opr_string: 'string of %1',
+    opr_nullish: '%1 ?? %2', opr_band: '%1 & %2', opr_bor: '%1 | %2', opr_bxor: '%1 ^ %2', opr_bnot: '~ %1', opr_shl: '%1 << %2',
+    opr_shr: '%1 >> %2', opr_random:'random number from 0 to %1', opr_irandom: 'random whole number from 0 to %1',
+    opr_random_range: 'random number from %1 to %2', opr_irandom_range: 'random whole number from %1 to %2',
+    opr_choose: 'pick one of %1', opr_randomize: 'use a new random seed', opr_string: '%1 as text', opr_real: '%1 as number',
+    opr_point_direction: 'direction from x %1 y %2 to x %3 y %4', opr_point_distance: 'distance from x %1 y %2 to x %3 y %4',
+    opr_lengthdir: '%1 of moving %2 toward %3°', opr_mathop: '%1 of %2', opr_dtrig: '%1 of %2°', opr_aggregate: '%1 of %2',
+    opr_clamp: 'limit %1 between %2 and %3', opr_lerp: 'blend %1 to %2 by %3',
+    opr_str_length: 'length of %1', opr_str_char_at: 'letter %2 of %1', opr_str_copy: '%3 letters of %1 from %2',
+    opr_str_pos: 'position of %1 in %2', opr_str_replace: 'replace %1 %3 in %2 with %4', opr_str_case: '%2 in %1 case',
     _lv: '%1', _kw: '%1', _as: '%1', _fn: 'function %1', _iv: '%1 . %2', _ar: 'array %1', _ai: '%1 [ %2 ]',
+    var_arr_length: 'length of %1', var_arr_push: 'add %2 to the end of %1', var_arr_delete: 'delete %3 items of %1 from position %2',
+    var_arr_contains: '%1 contains %2?',
     sen_key_held: 'key %1 held?', sen_key_pressed: 'key %1 pressed?', sen_key_released: 'key %1 released?',
-    sen_place_meeting: 'touching %3 at x %1 y %2?',
+    sen_mouse_held: 'mouse %1 held?', sen_mouse_pressed: 'mouse %1 pressed?', sen_mouse_released: 'mouse %1 released?',
+    sen_mouse_wheel: 'mouse wheel %1?', sen_gamepad_button: 'gamepad %2 button %3 %1?',
+    sen_place_meeting: 'touching %3 at x %1 y %2?', sen_instance_place: '%3 touched at x %1 y %2',
+    sen_place_free: 'no solids at x %1 y %2?', sen_distance_to_object: 'distance to %1',
     ins_create_layer: 'create %4 at x %1 y %2 on layer %3', ins_create_depth: 'create %4 at x %1 y %2 depth %3', ins_destroy: 'destroy %1',
-    ins_exists: '%1 exists?', ins_number: 'number of %1', ins_event_inherited: 'run parent event',
+    ins_exists: '%1 exists?', ins_number: 'number of %1', ins_event_inherited: 'run parent event', ins_nearest: 'nearest %3 to x %1 y %2',
     mov_motion_set: 'move at speed %2 toward %1°', mov_motion_add: 'push toward %1° by %2', mov_wrap: 'wrap around room h %1 v %2 margin %3',
-    snd_play: 'play sound %1 priority %2 loop %3', snd_stop: 'stop sound %1', snd_stop_all: 'stop all sounds',
+    mov_towards_point: 'move toward x %1 y %2 at speed %3',
+    lks_sprite_info: '%1 of %2',
+    snd_play: 'play sound %1 loop %3 priority %2', snd_stop: 'stop sound %1', snd_stop_all: 'stop all sounds', snd_pause: '%1 sound %2',
+    snd_is: 'sound %2 %1?', snd_gain: 'set volume of %1 to %2 over %3 ms', snd_pitch: 'set pitch of %1 to %2',
     drw_self: 'draw myself', drw_text: 'draw text %3 at x %1 y %2', drw_set_font: 'set font %1', drw_set_colour: 'set colour %1',
-    drw_sprite: 'draw %1 frame %2 at x %3 y %4', drw_rect: 'draw rectangle %1 %2 to %3 %4 outline %5',
-    rom_goto: 'go to room %1', rom_change: 'go to %1 room', sys_log: 'log %1', sys_game_end: 'end game', sys_game_restart: 'restart game',
+    drw_sprite: 'draw %1 frame %2 at x %3 y %4', drw_sprite_ext: 'draw %1 frame %2 at x %3 y %4 scale %5 %6 angle %7 tint %8 opacity %9',
+    drw_text_transformed: 'draw text %3 at x %1 y %2 scale %4 %5 angle %6', drw_set_alpha: 'set opacity to %1 (0 to 1)',
+    drw_set_align: 'align text %1 %2', drw_make_colour: '%1 colour %2 %3 %4',
+    drw_rect: 'draw rectangle from x %1 y %2 to x %3 y %4 outline only %5', drw_circle: 'draw circle at x %1 y %2 radius %3 outline only %4',
+    drw_line: 'draw line from x %1 y %2 to x %3 y %4 width %5',
+    rom_goto: 'go to room %1', rom_change: 'go to %1 room', rom_layer_set_visible: 'set layer %1 visible %2',
+    cam_get: 'camera %2 %1', cam_set_pos: 'move camera %1 to x %2 y %3', cam_fullscreen_set: 'set fullscreen %1',
+    dat_ini_open: 'open save file %1', dat_ini_close: 'close save file', dat_file_exists: 'file %1 exists?',
+    dat_ini_read: 'read %1 from save section %2 key %3 or %4', dat_ini_write: 'write %1 %4 to save section %2 key %3',
+    sys_log: 'log %1', sys_game_end: 'end game', sys_game_restart: 'restart game',
   };
   const generic = (info) => info.args.reduce((s, a, k) => `${s} ${a.type !== 'script' && a.name ? a.name + ' ' : ''}%${k + 1}`,
     (info.gml || info.name.replace(/^[a-z]+_/, '')).replace(/_/g, ' '));
@@ -100,7 +153,7 @@ var kreditorCode = (function () {
       case 'inst': return ['_kw', 'self'];
       case 'ref': return a.opts[0] || (REF_OPTS[op] || [''])[0] || (op === '_lv' ? 'myvar' : '');
       case 'layer': return 'Instances';
-      case 'arr': return ['_ar'];
+      case 'arr': return ['_lv', 'myarray'];
       case 'struct': return {};
       default: return ASSET_TYPES.has(a.type) ? ['_as', ''] : 0;
     }
@@ -109,6 +162,7 @@ var kreditorCode = (function () {
   function template(op) {
     const n = [op];
     for (const a of OPS.get(op).args) { if (a.opt) break; n.push(defaultFor(a, op)); if (a.rest) break; }
+    for (const [k, v] of Object.entries(DEFAULTS[op] || {})) n[k] = structuredClone(v); // may also fill an optional argument
     if (isHat(n)) n.push([]);
     return n;
   }
@@ -167,8 +221,10 @@ var kreditorCode = (function () {
     }
     if (t === 'ref') {
       const opts = a.opts.length ? a.opts : REF_OPTS[node[0]];
-      return wrap(opts ? pick(opts.map((o) => [o, o.replace(/_/g, ' ')]), v, set) : text(v == null ? '' : v, set), 'in-ref');
+      return wrap(opts ? pick(opts.map((o) => [o, OPT_LABELS[o] || o.replace(/_/g, ' ')]), v, set) : text(v == null ? '' : v, set), 'in-ref');
     }
+    const en = (ENUMS[node[0]] || {})[i];
+    if (en && en.some(([x]) => x === v)) return wrap(pick(en, String(v), (s) => set(Number(s))), 'in-ref');
     if (t === 'bool' && typeof v === 'boolean') return wrap(pick([['true', 'true'], ['false', 'false']], String(v), (s) => set(s === 'true')));
     if (t === 'key' && typeof v === 'number') return wrap(pick(Object.entries(KEYS), String(v), (s) => set(Number(s))));
     if (t === 'col' && typeof v === 'number') {
@@ -258,9 +314,13 @@ var kreditorCode = (function () {
         if (o.name === 'ctr_if') nodes.push(['ctr_if', true, [], []]);
       }
       if (cat === 'var') nodes[1] = ['_iv', ['_kw', 'global'], 'myvar'];
-      for (const n of nodes) out.push(tag(h('div', 'pal', block(n, isReporter(n))), { kind: 'pal', node: n }));
+      for (const n of nodes) {
+        const el = tag(h('div', 'pal', block(n, isReporter(n))), { kind: 'pal', node: n }), gml = OPS.get(n[0]).gml;
+        if (gml && gml.length > 1) el.title = 'GameMaker: ' + gml; // for users coming from GML (operators' `a + b` parse to 'a')
+        out.push(el);
+      }
     }
-    for (const [f, label] of [['hidden', 'Show hidden blocks'], ['compat', 'Show GameMaker compatibility blocks']]) {
+    for (const [f, label] of [['hidden', 'Show advanced blocks'],['compat', 'Show GameMaker compatibility blocks']]) {
       const cb = h('input');
       cb.type = 'checkbox'; cb.checked = palOpts[f];
       cb.onchange = () => { palOpts[f] = cb.checked; palette(); };

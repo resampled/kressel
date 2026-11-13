@@ -23,7 +23,7 @@ if (1 != -2.5) {
     variable_name = "Value!";
 }
 ```
-What follows is a list of these opcodes and their arguments. Opcodes labelled as (hidden) are particularly complex features that the editor should hide by default. Opcodes listed as (compat) mostly exist for compatibility reasons and, for the sake of simplicity, should not be used unless absolutely necessary. They often have incomplete or 'dummy block' representations in the editor.
+What follows is a list of these opcodes and their arguments. Opcodes labelled as (hidden) are complex or rarely used features that the editor hides by default ('Show advanced blocks'); mark a new opcode (hidden) when most projects won't need it. Opcodes listed as (compat) mostly exist for compatibility reasons and, for the sake of simplicity, should not be used unless absolutely necessary. They often have incomplete or 'dummy block' representations in the editor.
 
 Note that most of these opcodes are (near-)exact representations of how they appear in the editor.
 ## Categories
@@ -155,21 +155,27 @@ A visual script may have several hats for the same event. They run in the order 
 * `evt_destroy` - Executes when the instance is destroyed with `ins_destroy` (unless run_destroy_event is false).
 > * KRPJ: ["evt_destroy",[...]]
 
-* `evt_cleanup` - Executes when the instance is removed for any reason (destroyed, room end for non-persistent instances, game end). Free surfaces and data structures here.
+* `evt_cleanup` (hidden) - Executes when the instance is removed for any reason (destroyed, room end for non-persistent instances, game end). Free surfaces and data structures here.
 > * KRPJ: ["evt_cleanup",[...]]
 
-* `evt_step` / `evt_step_begin` / `evt_step_end` - Execute each step ('on update' in some langs).
+* `evt_step` - Executes each step ('on update' in some langs).
 > * KRPJ: ["evt_step",[...]]
+
+* `evt_step_begin` / `evt_step_end` (hidden) - Same, before/after every instance's step event.
 
 * `evt_alarm` - Executes when an alarm counts down to 0 (set with `ctr_alarm_set` or `alarm[n]`).
 > * num arg1 = the alarm, min 0 max 11.
 > * KRPJ: ["evt_alarm",10,[...]]
 
-* `evt_draw` / `evt_draw_begin` / `evt_draw_end` - Draw in room space. An object with no draw event at all draws itself, as if it had `drw_self`.
+* `evt_draw` - Draw in room space. An object with no draw event at all draws itself, as if it had `drw_self`.
 > * KRPJ: ["evt_draw",[...]]
 
-* `evt_drawgui` / `evt_drawgui_begin` / `evt_drawgui_end` - Draw on the GUI layer, above everything and unaffected by the camera.
+* `evt_draw_begin` / `evt_draw_end` (hidden) - Same, before/after every instance's draw event.
+
+* `evt_drawgui` - Draw on the GUI layer, above everything and unaffected by the camera.
 > * KRPJ: ["evt_drawgui",[...]]
+
+* `evt_drawgui_begin` / `evt_drawgui_end` (hidden) - Same, before/after every instance's draw GUI event.
 
 * `evt_draw_pre` / `evt_draw_post` / `evt_resize` (compat) - Pre-draw, post-draw and window resize.
 
@@ -186,15 +192,17 @@ A visual script may have several hats for the same event. They run in the order 
 > * ref arg1 = `left`/`right`/`middle` + `_held`/`_pressed`/`_released` (e.g. `left_pressed`), `none`, `enter`, `leave`, `wheel_up`, `wheel_down`, or any of the button ones with a `global_` prefix (e.g. `global_left_pressed`)
 > * KRPJ: ["evt_mouse","left_pressed",[...]]
 
-* `evt_user` - Executes when `ins_event_user` triggers it.
+* `evt_user` (hidden) - Executes when `ins_event_user` triggers it.
 > * num arg1 = user event, min 0 max 15
 > * KRPJ: ["evt_user",0,[...]]
 
-* `evt_room_start` / `evt_room_end` / `evt_game_start` / `evt_game_end` - Room and game lifecycle.
+* `evt_room_start` / `evt_room_end` / `evt_game_start` - Room and game lifecycle.
 > * KRPJ: ["evt_room_start",[...]]
 
+* `evt_game_end` (hidden) - Executes when the game ends.
+
 * `evt_animation_end` - Executes when the sprite's last frame finishes.
-* `evt_path_end` - Executes when a path started with `mov_path_start` ends.
+* `evt_path_end` (hidden) - Executes when a path started with `mov_path_start` ends.
 * `evt_outside_room` / `evt_intersect_boundary` - Execute when the instance leaves the room or touches its edge.
 * `evt_outside_view` / `evt_boundary_view` (hidden) - Same for a view.
 > * num arg1 = view, min 0 max 7
@@ -220,7 +228,7 @@ Assignments are statements, never reporters. Targets are `_lv`, `_iv`, `_ai` or 
 > * KRPJ: ["var_change","+",["_lv","hp"],-1]
 > * GML: hp += -1;
 
-* `var_inc` / `var_dec` - `++` / `--`
+* `var_inc` / `var_dec` (hidden) - `++` / `--`
 > Works as a statement or a reporter. As a reporter, prefix returns the new value and postfix the old one.
 > * var arg1 = target
 > * bool arg2 (optional) = postfix (default false)
@@ -258,7 +266,7 @@ Operators follow GML's rules exactly, including what they refuse to coerce: `+` 
 | `opr_sub` | `a - b` | |
 | `opr_mul` | `a * b` | |
 | `opr_div` | `a / b` | Always a real division. |
-| `opr_idiv` | `a div b` | Integer division. |
+| `opr_idiv` (hidden) | `a div b` | Integer division. |
 | `opr_mod` | `a % b` / `a mod b` | Result has the sign of `a`. |
 | `opr_neg` | `-a` | Unary. |
 | `opr_eq` | `a == b` | |
@@ -269,9 +277,9 @@ Operators follow GML's rules exactly, including what they refuse to coerce: `+` 
 | `opr_gte` | `a >= b` | |
 | `opr_and` | `a && b` | Short-circuits. |
 | `opr_or` | `a \|\| b` | Short-circuits. |
-| `opr_xor` | `a ^^ b` | |
+| `opr_xor` (hidden) | `a ^^ b` | |
 | `opr_not` | `!a` | Unary. |
-| `opr_cond` | `c ? a : b` | arg1 = condition; only the chosen branch is evaluated. |
+| `opr_cond` (hidden) | `c ? a : b` | arg1 = condition; only the chosen branch is evaluated. |
 | `opr_nullish` (hidden) | `a ?? b` | `b` is only evaluated when `a` is `undefined`. |
 | `opr_band` (hidden) | `a & b` | |
 | `opr_bor` (hidden) | `a \| b` | |
@@ -308,13 +316,13 @@ Bodies are script arrays (lists of statements). Opcodes marked "cap" end a scrip
 > * script arg2 = body
 > * GML: while (cond) {...}
 
-* `ctr_do_until` - do / until
+* `ctr_do_until` (hidden) - do / until
 > The body runs once before the first check, and the loop stops when the condition is true. The editor's Scratch-style 'repeat until' checks first and is saved as `ctr_while` with `opr_not`.
 > * script arg1 = body
 > * any arg2 = condition
 > * GML: do {...} until (cond);
 
-* `ctr_for` - for
+* `ctr_for` (hidden) - for
 > * script arg1 = init (one statement)
 > * any arg2 = condition
 > * script arg3 = step (one statement)
@@ -336,10 +344,14 @@ Bodies are script arrays (lists of statements). Opcodes marked "cap" end a scrip
 > * KRPJ: ["ctr_switch",["_lv","state"],[["ctr_case",0],["var_set",["_lv","spd"],0],["ctr_break"],["ctr_case",1],["ctr_default"],["var_set",["_lv","spd"],4]]]
 > * GML: switch (state) { case 0: spd = 0; break; case 1: default: spd = 4; }
 
-* `ctr_case` / `ctr_default` - switch labels (only valid directly inside a `ctr_switch` body)
-> * any arg1 = case value (`ctr_case` only)
+* `ctr_case` - switch label (only valid directly inside a `ctr_switch` body)
+> * any arg1 = case value
 
-* `ctr_break` / `ctr_continue` - cap. Leave or skip to the next iteration of the innermost loop; `ctr_break` also leaves a `ctr_switch` or `ctr_with`. As in GML, `ctr_continue` inside a switch applies to the surrounding loop.
+* `ctr_default` - default switch label, no arguments (only valid directly inside a `ctr_switch` body)
+
+* `ctr_break` - cap. Leaves the innermost loop, `ctr_switch` or `ctr_with`.
+
+* `ctr_continue` (hidden) - cap. Skips to the next iteration of the innermost loop. As in GML, `ctr_continue` inside a switch applies to the surrounding loop.
 
 * `ctr_with` - with
 > Runs the body as each matching instance (or as a struct), with `other` set to the caller. Iteration order and the handling of instances created or destroyed during the loop match GameMaker exactly. The editor's 'for each instance of' block.
@@ -380,7 +392,7 @@ User-defined functions live in the project's `functions` table (see krpj.md), ke
 > * KRPJ: ["fnc_g","fnc_giAqiCrTp2",10]
 > * GML: add_score(10)
 
-* `fnc_m` - call a function value (method variable, struct member, array element...)
+* `fnc_m` (hidden) - call a function value (method variable, struct member, array element...)
 > * var arg1 = the function
 > * any arg2, ... = arguments
 > * KRPJ: ["fnc_m",["_iv",["_kw","self"],"on_hit"],5]
@@ -418,18 +430,18 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `ins_destroy` | inst? target, bool? run_destroy_event | `instance_destroy` | Not a cap: code after it still runs. |
 | `ins_exists` | inst obj | `instance_exists` | |
 | `ins_number` | obj obj | `instance_number` | |
-| `ins_find` | obj obj, num n | `instance_find` | |
+| `ins_find` (hidden) | obj obj, num n | `instance_find` | |
 | `ins_nearest` | num x, num y, obj obj | `instance_nearest` | |
-| `ins_furthest` | num x, num y, obj obj | `instance_furthest` | |
+| `ins_furthest` (hidden) | num x, num y, obj obj | `instance_furthest` | |
 | `ins_copy` (hidden) | bool run_create | `instance_copy` | Returns the new id. |
 | `ins_change` (compat) | obj obj, bool run_events | `instance_change` | Deprecated in GMS2. |
 | `ins_set_active_all` (hidden) | ref `activate`/`deactivate`, bool? notme | `instance_activate_all` / `instance_deactivate_all` | `notme` is only passed for `deactivate`. |
 | `ins_set_active_object` (hidden) | ref `activate`/`deactivate`, inst obj | `instance_activate_object` / `instance_deactivate_object` | |
 | `ins_event_inherited` | - | `event_inherited` | Greyed out when the object has no parent. |
-| `ins_event_user` | num n (0-15) | `event_user` | |
+| `ins_event_user` (hidden) | num n (0-15) | `event_user` | |
 | `ins_event_perform` (compat) | num type, num number | `event_perform` | |
 | `ins_object_name` (hidden) | obj obj | `object_get_name` | |
-| `ins_is_ancestor` | obj child, obj parent | `object_is_ancestor` | |
+| `ins_is_ancestor` (hidden) | obj child, obj parent | `object_is_ancestor` | |
 | `ins_object_sprite` (hidden) | obj obj | `object_get_sprite` | |
 | `ins_object_set_persistent` (hidden) | obj obj, bool on | `object_set_persistent` | Affects instances created afterwards. |
 | `ins_set_active_layer` (hidden) | ref `activate`/`deactivate`, layer l | `instance_activate_layer` / `instance_deactivate_layer` | Returns whether the layer exists. |
@@ -442,7 +454,7 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `mov_action_move` (compat) | str dirs, num speed | `action_move` | GMS1 D&D move: dirs is 9 `0`/`1` flags in numpad order (`1` down-left ... `5` stop ... `9` up-right); one set flag is picked at random. |
 | `mov_motion_add` | num dir, num speed | `motion_add` | |
 | `mov_towards_point` | num x, num y, num speed | `move_towards_point` | Sets speed/direction; doesn't move instantly. |
-| `mov_snap` | num hsnap, num vsnap | `move_snap` | |
+| `mov_snap` (hidden) | num hsnap, num vsnap | `move_snap` | |
 | `mov_wrap` | bool hor, bool vert, num margin | `move_wrap` | |
 | `mov_bounce` (hidden) | ref `solid`/`all`, bool precise | `move_bounce_solid` / `move_bounce_all` | |
 | `mov_contact` (hidden) | ref `solid`/`all`, num dir, num maxdist | `move_contact_solid` / `move_contact_all` | |
@@ -451,8 +463,8 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `mov_mp_linear_step` (hidden) | num x, num y, num speed, bool checkall | `mp_linear_step` | Returns whether the goal was reached. |
 | `mov_mp_potential_step` (hidden) | num x, num y, num speed, bool checkall | `mp_potential_step` | Same. |
 | `mov_mp_grid` (hidden, family) | ref fn, ... | `mp_grid_*` (`create`, `destroy`, `add_cell`, `clear_cell`, `get_cell`, `add_rectangle`, `clear_rectangle`, `clear_all`, `add_instances`, `path`, `draw`) | ref drops `mp_grid_`. `path` is A* over free cells (8 directions with allowdiag, no corner cutting), ending on the exact goal. |
-| `mov_path_start` | path path, num speed, num end_action, bool absolute | `path_start` | end_action: 0 stop, 1 restart, 2 continue, 3 reverse. Absolute follows the path's own coordinates; relative moves its first point to the instance. Paths are followed after built-in motion, and `evt_path_end` fires at each end. |
-| `mov_path_end` | - | `path_end` | |
+| `mov_path_start` (hidden) | path path, num speed, num end_action, bool absolute | `path_start` | end_action: 0 stop, 1 restart, 2 continue, 3 reverse. Absolute follows the path's own coordinates; relative moves its first point to the instance. Paths are followed after built-in motion, and `evt_path_end` fires at each end. |
+| `mov_path_end` (hidden) | - | `path_end` | |
 | `mov_path` (hidden, family) | ref fn, ... | `path_*` (`add`, `add_point`, `delete`, `exists`, `get_x`, `get_y`, `get_length`, `set_closed`, `set_kind`, `set_precision`...) | ref drops `path_`. Paths made with `path_add` get ids after the project's paths. |
 
 ## Sensing
@@ -460,20 +472,20 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 |---|---|---|---|
 | `sen_place_meeting` | num x, num y, inst obj | `place_meeting` | x/y inputs default to `x`/`y` reporters. |
 | `sen_place_free` | num x, num y | `place_free` | |
-| `sen_place_empty` | num x, num y, inst? obj | `place_empty` | |
-| `sen_position_meeting` | num x, num y, inst obj | `position_meeting` | |
+| `sen_place_empty` (hidden) | num x, num y, inst? obj | `place_empty` | |
+| `sen_position_meeting` (hidden) | num x, num y, inst obj | `position_meeting` | |
 | `sen_position_empty` (hidden) | num x, num y | `position_empty` | |
 | `sen_instance_place` | num x, num y, inst obj | `instance_place` | `noone` (-4) when nothing is found. |
-| `sen_instance_position` | num x, num y, inst obj | `instance_position` | |
+| `sen_instance_position` (hidden) | num x, num y, inst obj | `instance_position` | |
 | `sen_instance_list` (hidden) | ref `place`/`position`, num x, num y, inst obj, ds list, bool ordered | `instance_place_list` / `instance_position_list` | Returns the count. |
-| `sen_collision_point` | num x, num y, inst obj, bool precise, bool notme | `collision_point` | |
-| `sen_collision_rect` | num x1, num y1, num x2, num y2, inst obj, bool precise, bool notme | `collision_rectangle` | |
-| `sen_collision_circle` | num x, num y, num r, inst obj, bool precise, bool notme | `collision_circle` | |
-| `sen_collision_line` | num x1, num y1, num x2, num y2, inst obj, bool precise, bool notme | `collision_line` | |
+| `sen_collision_point` (hidden) | num x, num y, inst obj, bool precise, bool notme | `collision_point` | |
+| `sen_collision_rect` (hidden) | num x1, num y1, num x2, num y2, inst obj, bool precise, bool notme | `collision_rectangle` | |
+| `sen_collision_circle` (hidden) | num x, num y, num r, inst obj, bool precise, bool notme | `collision_circle` | |
+| `sen_collision_line` (hidden) | num x1, num y1, num x2, num y2, inst obj, bool precise, bool notme | `collision_line` | |
 | `sen_collision_ellipse` (hidden) | num x1, num y1, num x2, num y2, inst obj, bool precise, bool notme | `collision_ellipse` | |
 | `sen_collision_list` (hidden) | ref `rectangle`/`circle`, ... | `collision_rectangle_list` / `collision_circle_list` | Arguments as GML (shape, obj, precise, notme, ds list, ordered). Appends every hit to the list; returns the count. Ordered sorts by distance from the shape's centre. |
 | `sen_distance_to_object` | inst obj | `distance_to_object` | Bounding-box distance, not origin distance. |
-| `sen_distance_to_point` | num x, num y | `distance_to_point` | Bounding-box distance. |
+| `sen_distance_to_point` (hidden) | num x, num y | `distance_to_point` | Bounding-box distance. |
 | `sen_key_held` | key key | `keyboard_check` | Dropdown lists `vk_*`, A-Z and 0-9; letters are stored as `ord()` codes (A = 65). Also accepts a reporter. |
 | `sen_key_pressed` | key key | `keyboard_check_pressed` | |
 | `sen_key_released` | key key | `keyboard_check_released` | |
@@ -484,10 +496,10 @@ Argument types: `num`, `str`, `bool`, `any`, `inst` (instance id, object or keyw
 | `sen_mouse_pressed` | num button | `mouse_check_button_pressed` | |
 | `sen_mouse_released` | num button | `mouse_check_button_released` | |
 | `sen_mouse_wheel` | ref `up`/`down` | `mouse_wheel_up` / `mouse_wheel_down` | |
-| `sen_mouse_gui` | ref `x`/`y`, num device | `device_mouse_x_to_gui` / `device_mouse_y_to_gui` | |
-| `sen_gamepad_connected` | num slot | `gamepad_is_connected` | |
+| `sen_mouse_gui` (hidden) | ref `x`/`y`, num device | `device_mouse_x_to_gui` / `device_mouse_y_to_gui` | |
+| `sen_gamepad_connected` (hidden) | num slot | `gamepad_is_connected` | |
 | `sen_gamepad_button` | ref `held`/`pressed`/`released`, num slot, num button | `gamepad_button_check` / `gamepad_button_check_pressed` / `gamepad_button_check_released` | |
-| `sen_gamepad_axis` | num slot, num axis | `gamepad_axis_value` | |
+| `sen_gamepad_axis` (hidden) | num slot, num axis | `gamepad_axis_value` | |
 | `sen_gamepad_info` (hidden) | ref `description`/`guid`, num slot | `gamepad_get_description` / `gamepad_get_guid` | |
 | `sen_gamepad_count` (hidden) | - | `gamepad_get_device_count` | |
 | `sen_gamepad_button_count` (hidden) | num slot | `gamepad_button_count` | 0 (no gamepads in the browser build yet). |
@@ -505,16 +517,16 @@ Math, randomness, strings and type checks. GML's `+` doesn't turn numbers into t
 | `opr_point_distance` | num x1, num y1, num x2, num y2 | `point_distance` | |
 | `opr_point_distance_3d` (hidden) | num x1, num y1, num z1, num x2, num y2, num z2 | `point_distance_3d` | |
 | `opr_lengthdir` | ref `x`/`y`, num len, num dir | `lengthdir_x` / `lengthdir_y` | |
-| `opr_angle_difference` | num a, num b | `angle_difference` | |
-| `opr_point_in_rect` | num px, num py, num x1, num y1, num x2, num y2 | `point_in_rectangle` | |
-| `opr_point_in_circle` | num px, num py, num cx, num cy, num r | `point_in_circle` | |
+| `opr_angle_difference` (hidden) | num a, num b | `angle_difference` | |
+| `opr_point_in_rect` (hidden) | num px, num py, num x1, num y1, num x2, num y2 | `point_in_rectangle` | |
+| `opr_point_in_circle` (hidden) | num px, num py, num cx, num cy, num r | `point_in_circle` | |
 | `opr_rect_in_rect` (hidden) | num ×8 (two rectangles) | `rectangle_in_rectangle` | Returns 0/1/2. |
 | `opr_mathop` | ref fn, num n | `abs` `sign` `round` `floor` `ceil` `frac` `sqrt` `sqr` `exp` `ln` `log2` `log10` | `round` is banker's rounding. |
-| `opr_trig` | ref fn, num radians | `sin` `cos` `tan` `arcsin` `arccos` `arctan` | |
+| `opr_trig` (hidden) | ref fn, num radians | `sin` `cos` `tan` `arcsin` `arccos` `arctan` | |
 | `opr_dtrig` | ref fn, num degrees | `dsin` `dcos` `dtan` `darcsin` `darccos` `darctan` | ref is written without the `d` (`["opr_dtrig","sin",90]`). Listed first in the editor, since GM directions are degrees. |
-| `opr_atan2` | ref `rad`/`deg`, num y, num x | `arctan2` / `darctan2` | |
-| `opr_convert_angle` | ref `deg_to_rad`/`rad_to_deg`, num n | `degtorad` / `radtodeg` | |
-| `opr_power` | ref `power`/`logn`, num a, num b | `power` / `logn` | |
+| `opr_atan2` (hidden) | ref `rad`/`deg`, num y, num x | `arctan2` / `darctan2` | |
+| `opr_convert_angle` (hidden) | ref `deg_to_rad`/`rad_to_deg`, num n | `degtorad` / `radtodeg` | |
+| `opr_power` (hidden) | ref `power`/`logn`, num a, num b | `power` / `logn` | |
 | `opr_aggregate` | ref `min`/`max`/`mean`/`median`, num... | `min` `max` `mean` `median` | Variadic: +/- buttons add or remove inputs. |
 | `opr_clamp` | num n, num lo, num hi | `clamp` | |
 | `opr_lerp` | num a, num b, num t | `lerp` | |
@@ -533,22 +545,22 @@ Math, randomness, strings and type checks. GML's `+` doesn't turn numbers into t
 | `opr_str_char_at` | str text, num n | `string_char_at` | 1-based. |
 | `opr_str_copy` | str text, num start, num count | `string_copy` | |
 | `opr_str_pos` | str sub, str text | `string_pos` | Needle first; 0 when not found. |
-| `opr_str_count` | str sub, str text | `string_count` | |
-| `opr_str_insert` | str sub, str text, num pos | `string_insert` | |
-| `opr_str_delete` | str text, num pos, num count | `string_delete` | |
+| `opr_str_count` (hidden) | str sub, str text | `string_count` | |
+| `opr_str_insert` (hidden) | str sub, str text, num pos | `string_insert` | |
+| `opr_str_delete` (hidden) | str text, num pos, num count | `string_delete` | |
 | `opr_str_replace` | ref `first`/`all`, str text, str sub, str new | `string_replace` / `string_replace_all` | |
 | `opr_str_case` | ref `upper`/`lower`, str text | `string_upper` / `string_lower` | |
-| `opr_str_repeat` | str text, num n | `string_repeat` | |
+| `opr_str_repeat` (hidden) | str text, num n | `string_repeat` | |
 | `opr_str_filter` (hidden) | ref `digits`/`letters`/`lettersdigits`, str text | `string_digits` / `string_letters` / `string_lettersdigits` | |
-| `opr_str_trim` | ref `both`/`start`/`end`, str text, arr? chars | `string_trim` / `string_trim_start` / `string_trim_end` | GM 2023+. |
-| `opr_str_affix` | ref `start`/`end`, str text, str sub | `string_starts_with` / `string_ends_with` | GM 2023+. |
-| `opr_str_split` | str text, str sep, bool? remove_empty, num? max | `string_split` | GM 2023+. Returns an array. |
-| `opr_str_join` | str sep, any... | `string_join` | GM 2023+. |
-| `opr_str_join_ext` | str sep, arr values | `string_join_ext` | GM 2023+. This is the editor's 'join (array) with (sep)' block. |
+| `opr_str_trim` (hidden) | ref `both`/`start`/`end`, str text, arr? chars | `string_trim` / `string_trim_start` / `string_trim_end` | GM 2023+. |
+| `opr_str_affix` (hidden) | ref `start`/`end`, str text, str sub | `string_starts_with` / `string_ends_with` | GM 2023+. |
+| `opr_str_split` (hidden) | str text, str sep, bool? remove_empty, num? max | `string_split` | GM 2023+. Returns an array. |
+| `opr_str_join` (hidden) | str sep, any... | `string_join` | GM 2023+. |
+| `opr_str_join_ext` (hidden) | str sep, arr values | `string_join_ext` | GM 2023+. This is the editor's 'join (array) with (sep)' block. |
 | `opr_str_format` (hidden) | num n, num total, num decimals | `string_format` | Pads with spaces, not zeros. |
-| `opr_charcode` | ref `chr`/`ord`, num/str value | `chr` / `ord` | |
+| `opr_charcode` (hidden) | ref `chr`/`ord`, num/str value | `chr` / `ord` | |
 | `opr_str_hash_newline` (compat) | str text | `string_hash_to_newline` | For GMS1-era text. |
-| `opr_is_type` | ref type, any value | `is_real` `is_string` `is_array` `is_struct` `is_undefined` `is_bool` `is_method` `is_numeric` `is_int64` `is_ptr` | ref drops the `is_` (`["opr_is_type","undefined",v]`). |
+| `opr_is_type` (hidden) | ref type, any value | `is_real` `is_string` `is_array` `is_struct` `is_undefined` `is_bool` `is_method` `is_numeric` `is_int64` `is_ptr` | ref drops the `is_` (`["opr_is_type","undefined",v]`). |
 | `opr_typeof` (hidden) | any value | `typeof` | |
 | `opr_convert` (hidden) | ref `bool`/`int64`, any value | `bool` / `int64` | |
 
@@ -560,24 +572,24 @@ Arrays are 0-based (unlike Scratch lists), and block labels say so. Array functi
 | `var_arr_length` | arr a | `array_length` / `array_length_1d` | |
 | `var_arr_get` (hidden) | arr a, num index | `array_get` | |
 | `var_arr_2d` (compat) | ref `height`/`length`, arr a, num? row | `array_height_2d` / `array_length_2d` | Height is the outer length; length is row `row`'s length (0 if it isn't an array). |
-| `var_arr_create` | num n, any? value | `array_create` | |
+| `var_arr_create` (hidden) | num n, any? value | `array_create` | |
 | `var_arr_push` | arr a, any... | `array_push` | Scratch 'add (thing) to [list]'. |
-| `var_arr_take` | ref `last`/`first`, arr a | `array_pop` / `array_shift` | Returns the removed item. |
-| `var_arr_insert` | arr a, num index, any... | `array_insert` | |
+| `var_arr_take` (hidden) | ref `last`/`first`, arr a | `array_pop` / `array_shift` | Returns the removed item. |
+| `var_arr_insert` (hidden) | arr a, num index, any... | `array_insert` | |
 | `var_arr_delete` | arr a, num index, num count | `array_delete` | |
 | `var_arr_contains` | arr a, any value, num? offset, num? length | `array_contains` | |
-| `var_arr_index_of` | arr a, any value, num? offset, num? length | `array_get_index` | -1 when absent. |
-| `var_arr_resize` | arr a, num n | `array_resize` | Size 0 = Scratch 'delete all of list'. |
-| `var_arr_sort` | arr a, bool/fn order | `array_sort` | |
+| `var_arr_index_of` (hidden) | arr a, any value, num? offset, num? length | `array_get_index` | -1 when absent. |
+| `var_arr_resize` (hidden) | arr a, num n | `array_resize` | Size 0 = Scratch 'delete all of list'. |
+| `var_arr_sort` (hidden) | arr a, bool/fn order | `array_sort` | |
 | `var_arr_reverse` (hidden) | arr a, num? offset, num? length | `array_reverse` | Returns a new array. |
 | `var_arr_concat` (hidden) | arr... | `array_concat` | |
 | `var_arr_copy` (hidden) | arr dest, num dest_index, arr src, num src_index, num length | `array_copy` | |
 | `var_arr_iterate` (hidden) | ref fn, arr a, fn callback, num? offset, num? length | `array_foreach` `array_map` `array_filter` `array_find_index` `array_any` `array_all` | ref drops the `array_`. Visual scripts usually use a `ctr_` 'for each item' C-block instead. |
-| `var_struct_get` | struct s, str key | `struct_get` / `variable_struct_get` | For key names known only at runtime; fixed names use `_iv`. |
-| `var_struct_set` | struct s, str key, any value | `struct_set` / `variable_struct_set` | |
-| `var_struct_exists` | struct s, str key | `struct_exists` / `variable_struct_exists` | |
-| `var_struct_remove` | struct s, str key | `struct_remove` / `variable_struct_remove` | |
-| `var_struct_keys` | struct s | `struct_get_names` / `variable_struct_get_names` | |
+| `var_struct_get` (hidden) | struct s, str key | `struct_get` / `variable_struct_get` | For key names known only at runtime; fixed names use `_iv`. |
+| `var_struct_set` (hidden) | struct s, str key, any value | `struct_set` / `variable_struct_set` | |
+| `var_struct_exists` (hidden) | struct s, str key | `struct_exists` / `variable_struct_exists` | |
+| `var_struct_remove` (hidden) | struct s, str key | `struct_remove` / `variable_struct_remove` | |
+| `var_struct_keys` (hidden) | struct s | `struct_get_names` / `variable_struct_get_names` | |
 | `var_inst_get` (hidden) | inst i, str name | `variable_instance_get` | Scratch '(x position of [Sprite])'. |
 | `var_inst_set` (hidden) | inst i, str name, any value | `variable_instance_set` | |
 | `var_inst_exists` (hidden) | inst i, str name | `variable_instance_exists` | |
@@ -623,16 +635,16 @@ Sound inputs take an `_as` sound or a voice id reporter (the value `snd_play` re
 | `snd_stop` | snd s | `audio_stop_sound` | |
 | `snd_stop_all` | - | `audio_stop_all` | |
 | `snd_pause` | ref `pause`/`resume`, snd s | `audio_pause_sound` / `audio_resume_sound` | |
-| `snd_pause_all` | ref `pause`/`resume` | `audio_pause_all` / `audio_resume_all` | |
+| `snd_pause_all` (hidden) | ref `pause`/`resume` | `audio_pause_all` / `audio_resume_all` | |
 | `snd_is` | ref `playing`/`paused`, snd s | `audio_is_playing` / `audio_is_paused` | |
 | `snd_gain` | snd s, num volume, num ms | `audio_sound_gain` | Scratch 'set volume to'; 0 ms = instant. |
 | `snd_pitch` | snd s, num pitch | `audio_sound_pitch` | |
-| `snd_get` | ref `gain`/`pitch`, snd s | `audio_sound_get_gain` / `audio_sound_get_pitch` | |
-| `snd_master_gain` | num volume | `audio_master_gain` | |
+| `snd_get` (hidden) | ref `gain`/`pitch`, snd s | `audio_sound_get_gain` / `audio_sound_get_pitch` | |
+| `snd_master_gain` (hidden) | num volume | `audio_master_gain` | |
 | `snd_set_master_gain` (hidden) | num listener, num gain | `audio_set_master_gain` | |
-| `snd_position` | snd voice | `audio_sound_get_track_position` | Seconds. |
-| `snd_seek` | snd voice, num seconds | `audio_sound_set_track_position` | |
-| `snd_length` | snd s | `audio_sound_length` | |
+| `snd_position` (hidden) | snd voice | `audio_sound_get_track_position` | Seconds. |
+| `snd_seek` (hidden) | snd voice, num seconds | `audio_sound_set_track_position` | |
+| `snd_length` (hidden) | snd s | `audio_sound_length` | |
 | `snd_exists` (hidden) | snd s | `audio_exists` | Whether a sound asset (or stream) exists. |
 | `snd_name` (hidden) | snd s | `audio_get_name` | A sound's name, or the name of a voice's sound. |
 | `snd_loop` (hidden) | ref `enabled`/`start`/`end`, snd voice, bool/num value | `audio_sound_loop` / `audio_sound_loop_start` / `audio_sound_loop_end` | GM 2023+. |
@@ -649,9 +661,9 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_self` | - | `draw_self` | |
 | `drw_sprite` | spr s, num frame, num x, num y | `draw_sprite` | |
 | `drw_sprite_ext` | spr s, num frame, num x, num y, num xscale, num yscale, num angle, col colour, num alpha | `draw_sprite_ext` | |
-| `drw_sprite_stretched` | spr s, num frame, num x, num y, num w, num h | `draw_sprite_stretched` | |
-| `drw_sprite_part` | spr s, num frame, num left, num top, num w, num h, num x, num y | `draw_sprite_part` | |
-| `drw_sprite_tiled` | spr s, num frame, num x, num y | `draw_sprite_tiled` | |
+| `drw_sprite_stretched` (hidden) | spr s, num frame, num x, num y, num w, num h | `draw_sprite_stretched` | |
+| `drw_sprite_part` (hidden) | spr s, num frame, num left, num top, num w, num h, num x, num y | `draw_sprite_part` | |
+| `drw_sprite_tiled` (hidden) | spr s, num frame, num x, num y | `draw_sprite_tiled` | |
 | `drw_sprite_tiled_ext` (hidden) | as GML | `draw_sprite_tiled_ext` | |
 | `drw_path` (hidden) | path p, num x, num y, bool absolute | `draw_path` | |
 | `drw_sprite_part_ext` (hidden) | as GML | `draw_sprite_part_ext` | |
@@ -659,14 +671,14 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_sprite_general` (hidden) | as GML | `draw_sprite_general` | |
 | `drw_sprite_pos` (hidden) | as GML | `draw_sprite_pos` | |
 | `drw_text` | num x, num y, any text | `draw_text` | |
-| `drw_text_ext` | num x, num y, any text, num sep, num w | `draw_text_ext` | |
+| `drw_text_ext` (hidden) | num x, num y, any text, num sep, num w | `draw_text_ext` | |
 | `drw_text_transformed` | num x, num y, any text, num xscale, num yscale, num angle | `draw_text_transformed` | |
 | `drw_text_colour` (hidden) | num x, num y, any text, col c1, col c2, col c3, col c4, num alpha | `draw_text_colour` | |
 | `drw_text_ext_colour` (hidden) | as GML | `draw_text_ext_colour` | |
 | `drw_text_ext_transformed` (hidden) | as GML | `draw_text_ext_transformed` | |
 | `drw_text_transformed_colour` (hidden) | as GML | `draw_text_transformed_colour` | |
 | `drw_text_ext_transformed_colour` (hidden) | as GML | `draw_text_ext_transformed_colour` | |
-| `drw_text_size` | ref `width`/`height`, str text | `string_width` / `string_height` | Uses the current font. |
+| `drw_text_size` (hidden) | ref `width`/`height`, str text | `string_width` / `string_height` | Uses the current font. |
 | `drw_set_font` | fnt f | `draw_set_font` | |
 | `drw_set_colour` | col c | `draw_set_colour` / `draw_set_color` | |
 | `drw_set_alpha` | num alpha (0-1) | `draw_set_alpha` | Like Scratch's 'ghost effect', with the scale inverted. |
@@ -677,10 +689,10 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_roundrect` (hidden) | num x1, num y1, num x2, num y2, bool outline | `draw_roundrect` | |
 | `drw_roundrect_ext` (hidden) | num x1, num y1, num x2, num y2, num xrad, num yrad, bool outline | `draw_roundrect_ext` | |
 | `drw_circle` | num x, num y, num r, bool outline | `draw_circle` | |
-| `drw_ellipse` | num x1, num y1, num x2, num y2, bool outline | `draw_ellipse` | |
+| `drw_ellipse` (hidden) | num x1, num y1, num x2, num y2, bool outline | `draw_ellipse` | |
 | `drw_line` | num x1, num y1, num x2, num y2, num? width | `draw_line` / `draw_line_width` | Leaving out width = `draw_line`. |
-| `drw_triangle` | num x1, num y1, num x2, num y2, num x3, num y3, bool outline | `draw_triangle` | |
-| `drw_point` | num x, num y | `draw_point` | |
+| `drw_triangle` (hidden) | num x1, num y1, num x2, num y2, num x3, num y3, bool outline | `draw_triangle` | |
+| `drw_point` (hidden) | num x, num y | `draw_point` | |
 | `drw_circle_colour` (hidden) | num x, num y, num r, col c1, col c2, bool outline | `draw_circle_colour` | c1 at the centre, c2 at the edge. |
 | `drw_circle_precision` (hidden) | num precision | `draw_set_circle_precision` | Segments per circle/ellipse, rounded to a multiple of 4 in 4-64 (default 24). |
 | `drw_ellipse_colour` (hidden) | num x1, num y1, num x2, num y2, col c1, col c2, bool outline | `draw_ellipse_colour` | |
@@ -691,10 +703,10 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_roundrect_colour_ext` (hidden) | as GML | `draw_roundrect_colour_ext` | |
 | `drw_triangle_colour` (hidden) | num x1, num y1, num x2, num y2, num x3, num y3, col c1, col c2, col c3, bool outline | `draw_triangle_colour` | |
 | `drw_arrow` (hidden) | num x1, num y1, num x2, num y2, num size | `draw_arrow` | |
-| `drw_healthbar` | num x1, num y1, num x2, num y2, num amount, col back, col min, col max, num direction, bool showback, bool showborder | `draw_healthbar` | |
-| `drw_clear` | col c, num? alpha | `draw_clear` / `draw_clear_alpha` | Leaving out alpha = `draw_clear`. |
+| `drw_healthbar` (hidden) | num x1, num y1, num x2, num y2, num amount, col back, col min, col max, num direction, bool showback, bool showborder | `draw_healthbar` | |
+| `drw_clear` (hidden) | col c, num? alpha | `draw_clear` / `draw_clear_alpha` | Leaving out alpha = `draw_clear`. |
 | `drw_make_colour` | ref `rgb`/`hsv`, num a, num b, num c | `make_colour_rgb` / `make_colour_hsv` | |
-| `drw_merge_colour` | col c1, col c2, num t | `merge_colour` | |
+| `drw_merge_colour` (hidden) | col c1, col c2, num t | `merge_colour` | |
 | `drw_colour_get` (hidden) | ref `red`/`green`/`blue`/`hue`/`saturation`/`value`, col c | `colour_get_*` | |
 | `drw_blendmode` (hidden) | num mode | `gpu_set_blendmode` | |
 | `drw_blendmode_get` (hidden) | - | `gpu_get_blendmode` | The last `gpu_set_blendmode` mode. |
@@ -736,7 +748,7 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `drw_prim_vertex_texture_colour` (hidden) | num x, num y, num u, num v, col c, num alpha | `draw_vertex_texture_colour` | |
 | `drw_primitive_end` (hidden) | - | `draw_primitive_end` | Draws the vertices since `drw_primitive_begin`. |
 | `drw_tilemap` (hidden) | num tilemap, num x, num y | `draw_tilemap` | |
-| `drw_effect` | ref `above`/`below`, num kind, num x, num y, num size, col colour | `effect_create_above` / `effect_create_below` | Built-in one-shot effects. kind: `ef_explosion` = 0, `ef_ring` 1, `ef_ellipse` 2, `ef_firework` 3, `ef_smoke` 4, `ef_smokeup` 5, `ef_star` 6, `ef_spark` 7, `ef_flare` 8, `ef_cloud` 9, `ef_rain` 10, `ef_snow` 11; size 0-2 (small/medium/large). Drawn by krplayer as an approximation, not GM's exact particles. |
+| `drw_effect` (hidden) | ref `above`/`below`, num kind, num x, num y, num size, col colour | `effect_create_above` / `effect_create_below` | Built-in one-shot effects. kind: `ef_explosion` = 0, `ef_ring` 1, `ef_ellipse` 2, `ef_firework` 3, `ef_smoke` 4, `ef_smokeup` 5, `ef_star` 6, `ef_spark` 7, `ef_flare` 8, `ef_cloud` 9, `ef_rain` 10, `ef_snow` 11; size 0-2 (small/medium/large). Drawn by krplayer as an approximation, not GM's exact particles. |
 | `drw_part` (hidden, family) | ref fn, ... | `part_*` | ref drops `part_` (`["drw_part","particles_create",ps,x,y,pt,10]`). Only `system_create`, `particles_create` and `system_destroy` get custom labels. |
 | `drw_texture` (compat, family) | ref fn, ... | `texture_*` | Texture paging hints (`prefetch`, `is_ready`...); ref drops `texture_`. |
 | `drw_texturegroup` (compat, family) | ref fn, ... | `texturegroup_*` | ref drops `texturegroup_`. |
@@ -750,14 +762,14 @@ Only does anything in draw events; the editor greys these out elsewhere. Colour 
 | `rom_change` | ref `next`/`previous`/`restart` | `room_goto_next` / `room_goto_previous` / `room_restart` | Same timing as `rom_goto`. |
 | `rom_info` (hidden) | ref `next`/`previous`/`exists`/`name`, room r | `room_next` / `room_previous` / `room_exists` / `room_get_name` | |
 | `rom_set` (hidden) | ref `persistent`/`width`/`height`, room r, any value | `room_set_*` | |
-| `rom_layer_id` | str name | `layer_get_id` | |
-| `rom_layer_exists` | layer l | `layer_exists` | |
+| `rom_layer_id` (hidden) | str name | `layer_get_id` | |
+| `rom_layer_exists` (hidden) | layer l | `layer_exists` | |
 | `rom_layer_set_visible` | layer l, bool visible | `layer_set_visible` | |
-| `rom_layer_get_visible` | layer l | `layer_get_visible` | |
-| `rom_layer_depth` | layer l, num depth | `layer_depth` | |
-| `rom_layer_get_depth` | layer l | `layer_get_depth` | |
-| `rom_layer_set` | ref `x`/`y`/`hspeed`/`vspeed`, layer l, num value | `layer_x` / `layer_y` / `layer_hspeed` / `layer_vspeed` | For parallax/scrolling backgrounds. |
-| `rom_layer_get` | ref `x`/`y`/`hspeed`/`vspeed`, layer l | `layer_get_x` / `layer_get_y` / `layer_get_hspeed` / `layer_get_vspeed` | |
+| `rom_layer_get_visible` (hidden) | layer l | `layer_get_visible` | |
+| `rom_layer_depth` (hidden) | layer l, num depth | `layer_depth` | |
+| `rom_layer_get_depth` (hidden) | layer l | `layer_get_depth` | |
+| `rom_layer_set` (hidden) | ref `x`/`y`/`hspeed`/`vspeed`, layer l, num value | `layer_x` / `layer_y` / `layer_hspeed` / `layer_vspeed` | For parallax/scrolling backgrounds. |
+| `rom_layer_get` (hidden) | ref `x`/`y`/`hspeed`/`vspeed`, layer l | `layer_get_x` / `layer_get_y` / `layer_get_hspeed` / `layer_get_vspeed` | |
 | `rom_layer_create` (hidden) | num depth, str? name | `layer_create` | |
 | `rom_layer_destroy` (hidden) | layer l | `layer_destroy` | |
 | `rom_layer_name` (hidden) | layer l | `layer_get_name` | |
@@ -783,7 +795,7 @@ Camera inputs default to `["_ai",["_lv","view_camera"],0]`.
 |---|---|---|---|
 | `cam_get` | ref `x`/`y`/`width`/`height`/`angle`/`border_x`/`border_y`/`speed_x`/`speed_y`/`target`, num cam | `camera_get_view_x` / `camera_get_view_y` / `camera_get_view_width` / `camera_get_view_height` / `camera_get_view_angle` / `camera_get_view_border_x` / `camera_get_view_border_y` / `camera_get_view_speed_x` / `camera_get_view_speed_y` / `camera_get_view_target` | |
 | `cam_set_pos` | num cam, num x, num y | `camera_set_view_pos` | |
-| `cam_set_size` | num cam, num w, num h | `camera_set_view_size` | |
+| `cam_set_size` (hidden) | num cam, num w, num h | `camera_set_view_size` | |
 | `cam_set_target` (hidden) | num cam, inst target | `camera_set_view_target` | |
 | `cam_set_border` (hidden) | num cam, num hborder, num vborder | `camera_set_view_border` | |
 | `cam_set_speed` (hidden) | num cam, num hspeed, num vspeed | `camera_set_view_speed` | |
@@ -795,9 +807,9 @@ Camera inputs default to `["_ai",["_lv","view_camera"],0]`.
 | `cam_view_set` (hidden) | ref `visible`/`camera`/`xport`/`yport`/`wport`/`hport`/`surface_id`, num view, any value | `view_set_visible` / `view_set_camera` / `view_set_xport` / `view_set_yport` / `view_set_wport` / `view_set_hport` / `view_set_surface_id` | |
 | `cam_legacy_view_get` (compat) | num what, num view | `__view_get` | GMS1-to-GMS2 compatibility scripts, common in older imports. |
 | `cam_legacy_view_set` (compat) | num what, num view, any value | `__view_set` | |
-| `cam_gui_size` | ref `width`/`height` | `display_get_gui_width` / `display_get_gui_height` | |
-| `cam_gui_set_size` | num w, num h | `display_set_gui_size` | |
-| `cam_fullscreen` | - | `window_get_fullscreen` | |
+| `cam_gui_size` (hidden) | ref `width`/`height` | `display_get_gui_width` / `display_get_gui_height` | |
+| `cam_gui_set_size` (hidden) | num w, num h | `display_set_gui_size` | |
+| `cam_fullscreen` (hidden) | - | `window_get_fullscreen` | |
 | `cam_fullscreen_set` | bool on | `window_set_fullscreen` | Needs a user gesture, so it waits until the next click/key. |
 | `cam_window` (hidden) | ref `width`/`height` | `window_get_width` / `window_get_height` | The window is the canvas. |
 | `cam_display` (hidden) | ref `width`/`height` | `display_get_width` / `display_get_height` | |
@@ -817,13 +829,13 @@ Alarms, timing and dynamic calls. Timelines have no opcode: `timeline_index`/`ti
 |---|---|---|---|
 | `ctr_alarm_set` | num n (0-11), num steps | `alarm_set` | Pairs with `evt_alarm`. Imports usually write `alarm[n]` with `_ai`; the editor shows both the same way. |
 | `ctr_alarm_get` | num n | `alarm_get` | |
-| `ctr_game_speed` | num type | `game_get_speed` | type: 0 = fps, 1 = microseconds per frame. |
-| `ctr_game_speed_set` | num value, num type | `game_set_speed` | |
-| `ctr_timer` | - | `get_timer` | Microseconds since start. Like Scratch's 'timer', but can't be reset. |
+| `ctr_game_speed` (hidden) | num type | `game_get_speed` | type: 0 = fps, 1 = microseconds per frame. |
+| `ctr_game_speed_set` (hidden) | num value, num type | `game_set_speed` | |
+| `ctr_timer` (hidden) | - | `get_timer` | Microseconds since start. Like Scratch's 'timer', but can't be reset. |
 | `ctr_call_later` (hidden) | num period, num units, fn callback, bool? repeat | `call_later` | GM 2023+. Returns a handle. |
 | `ctr_call_cancel` (hidden) | num handle | `call_cancel` | |
 | `ctr_time_source` (compat, family) | ref fn, ... | `time_source_*` | ref drops `time_source_`. |
-| `ctr_script_execute` | fn/num f, any... | `script_execute` | For calls where the function is only known at runtime; fixed calls to user functions use `fnc_g`. |
+| `ctr_script_execute` (hidden) | fn/num f, any... | `script_execute` | For calls where the function is only known at runtime; fixed calls to user functions use `fnc_g`. |
 | `ctr_script_exists` (hidden) | fn/num f | `script_exists` | |
 | `ctr_script_name` (hidden) | fn/num f | `script_get_name` | |
 
@@ -868,8 +880,8 @@ Arrays and structs (Variables) are better for visual scripts; `ds_*` mainly exis
 | `dat_queue` (hidden, family) | ref fn, ... | `ds_queue_*` | ref drops `ds_queue_`. |
 | `dat_priority` (hidden, family) | ref fn, ... | `ds_priority_*` | ref drops `ds_priority_`. |
 | `dat_exists` (hidden) | ds id, num type | `ds_exists` | |
-| `dat_json_stringify` | any value, bool? pretty | `json_stringify` | |
-| `dat_json_parse` | str text | `json_parse` | |
+| `dat_json_stringify` (hidden) | any value, bool? pretty | `json_stringify` | |
+| `dat_json_parse` (hidden) | str text | `json_parse` | |
 | `dat_json_encode` (compat) | ds m | `json_encode` | Old ds_map-based API. |
 | `dat_json_decode` (compat) | str text | `json_decode` | Same. |
 | `dat_ini_open` | str name | `ini_open` | Shown together with `dat_ini_close` as one 'with save file' C-block, but saved as two opcodes. Calls that aren't paired show as plain commands. |
@@ -877,21 +889,21 @@ Arrays and structs (Variables) are better for visual scripts; `ds_*` mainly exis
 | `dat_ini_open_string` (hidden) | str text | `ini_open_from_string` | |
 | `dat_ini_read` | ref `string`/`real`, str section, str key, any default | `ini_read_string` / `ini_read_real` | |
 | `dat_ini_write` | ref `string`/`real`, str section, str key, any value | `ini_write_string` / `ini_write_real` | The editor picks the variant from the value's type; a dropdown overrides it. |
-| `dat_ini_section_exists` | str section | `ini_section_exists` | |
-| `dat_ini_key_exists` | str section, str key | `ini_key_exists` | |
-| `dat_ini_key_delete` | str section, str key | `ini_key_delete` | |
-| `dat_ini_section_delete` | str section | `ini_section_delete` | |
+| `dat_ini_section_exists` (hidden) | str section | `ini_section_exists` | |
+| `dat_ini_key_exists` (hidden) | str section, str key | `ini_key_exists` | |
+| `dat_ini_key_delete` (hidden) | str section, str key | `ini_key_delete` | |
+| `dat_ini_section_delete` (hidden) | str section | `ini_section_delete` | |
 | `dat_file_exists` | str name | `file_exists` | |
-| `dat_file_delete` | str name | `file_delete` | |
+| `dat_file_delete` (hidden) | str name | `file_delete` | |
 | `dat_file_copy` (hidden) | str from, str to | `file_copy` | |
 | `dat_file_rename` (hidden) | str from, str to | `file_rename` | |
-| `dat_text_open` | ref `read`/`write`/`append`, str name | `file_text_open_read` / `file_text_open_write` / `file_text_open_append` | Returns a file id. Fangames often save this way. |
-| `dat_text_close` | num f | `file_text_close` | |
-| `dat_text_read` | ref `string`/`real`, num f | `file_text_read_string` / `file_text_read_real` | |
-| `dat_text_readln` | num f | `file_text_readln` | |
-| `dat_text_eof` | num f | `file_text_eof` | |
-| `dat_text_write` | ref `string`/`real`, num f, any value | `file_text_write_string` / `file_text_write_real` | |
-| `dat_text_writeln` | num f | `file_text_writeln` | |
+| `dat_text_open` (hidden) | ref `read`/`write`/`append`, str name | `file_text_open_read` / `file_text_open_write` / `file_text_open_append` | Returns a file id. Fangames often save this way. |
+| `dat_text_close` (hidden) | num f | `file_text_close` | |
+| `dat_text_read` (hidden) | ref `string`/`real`, num f | `file_text_read_string` / `file_text_read_real` | |
+| `dat_text_readln` (hidden) | num f | `file_text_readln` | |
+| `dat_text_eof` (hidden) | num f | `file_text_eof` | |
+| `dat_text_write` (hidden) | ref `string`/`real`, num f, any value | `file_text_write_string` / `file_text_write_real` | |
+| `dat_text_writeln` (hidden) | num f | `file_text_writeln` | |
 | `dat_file_find_first` (hidden) | str mask, num attr | `file_find_first` | |
 | `dat_file_find_next` (hidden) | - | `file_find_next` | |
 | `dat_file_find_close` (hidden) | - | `file_find_close` | |
@@ -912,8 +924,8 @@ Arrays and structs (Variables) are better for visual scripts; `ds_*` mainly exis
 | `sys_game_end` | - | `game_end` | Cap. Returns to the player menu. |
 | `sys_game_restart` | - | `game_restart` | Cap. |
 | `sys_device` (hidden) | ref `language`/`info`/`region` | `os_get_language` / `os_get_info` / `os_get_region` | `os_type`/`os_browser` are built-in variables (`_lv`), shown in the same dropdown. |
-| `sys_now` | - | `date_current_datetime` | |
-| `sys_date` | ref `year`/`month`/`day`/`hour`/`minute`/`second`/`weekday`, num? datetime | `date_get_*` | Scratch 'current [year]'. Leaving out datetime = now; gm2kr folds `date_get_*(date_current_datetime())` into that form. |
+| `sys_now` (hidden) | - | `date_current_datetime` | |
+| `sys_date` (hidden) | ref `year`/`month`/`day`/`hour`/`minute`/`second`/`weekday`, num? datetime | `date_get_*` | Scratch 'current [year]'. Leaving out datetime = now; gm2kr folds `date_get_*(date_current_datetime())` into that form. |
 | `sys_url_open` (hidden) | str url | `url_open` | Opens a new tab after a confirmation. |
 | `sys_param` (compat) | ref `count`/`string`/`env`, ... | `parameter_count` / `parameter_string` / `environment_get_variable` | Empty values in the browser. |
 | `sys_callstack` (hidden) | - | `debug_get_callstack` | |
