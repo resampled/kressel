@@ -8,7 +8,7 @@ const kw = (() => {
   const toggleMax = (w) => w.classList.toggle('max');
 
   function drag(e, w) {
-    if (e.button !== 0 || e.target.closest('.wbtn') || w.classList.contains('max')) return;
+    if (e.button !== 0 || e.target.closest('.wbtn, .wtabs') || w.classList.contains('max')) return;
     e.preventDefault();
     const desk = w.parentElement, top = e.currentTarget, ox = e.clientX - w.offsetLeft, oy = e.clientY - w.offsetTop;
     const move = (m) => {
@@ -24,7 +24,7 @@ const kw = (() => {
       const top = w.querySelector('.wtop');
       w.addEventListener('pointerdown', () => front(w), true);
       top.addEventListener('pointerdown', (e) => drag(e, w));
-      top.addEventListener('dblclick', (e) => { if (!e.target.closest('.wbtn')) toggleMax(w); });
+      top.addEventListener('dblclick', (e) => { if (!e.target.closest('.wbtn, .wtabs')) toggleMax(w); });
       top.addEventListener('click', (e) => {
         const act = e.target.closest('.wbtn')?.dataset.act;
         if (act === 'max') toggleMax(w); else if (act === 'close') close(w);

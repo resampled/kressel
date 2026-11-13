@@ -359,6 +359,7 @@ var kreditorCode = (function () {
     closePopup();
     box.replaceChildren(...stacks.map((st) => {
       const s = stack(st.script, st);
+      if (st.body) s.classList.add('body');
       s.style.left = st.x + 'px'; s.style.top = st.y + 'px';
       return s;
     }));
@@ -494,8 +495,50 @@ var kreditorCode = (function () {
       over.list.splice(over.idx, 0, ...d.nodes);
       if (over.top && over.idx === 0) over.top.y = Math.max(0, over.top.y - Math.round(g.height)); // keep the old blocks in place
     } else if (!over) stacks.push({ x, y, script: d.nodes });
-    for (let i = stacks.length; i--;) if (!stacks[i].script.length) stacks.splice(i, 1);
+    for (let i = stacks.length; i--;) if (!stacks[i].script.length && !stacks[i].body) stacks.splice(i, 1);
     render();
+  }
+
+  // ── open function / object ──
+  // The canvas edits the project's own nodes in place; only the layout (which stacks exist, and where) is written back,
+  // by commit(), when another target opens. Object scripts become placed entries (krpj.md, Script layout): a lone hat
+  // is stored bare as its hat node, anything else as its block list (loose). A function's body is the `body` stack.
+  let target = null; // { kind: 'fn' | 'obj', data }
+  function commit() {
+    if (!target) return;
+    const d = target.data;
+    if (target.kind === 'fn') {
+      const body = stacks.find((st) => st.body), loose = stacks.filter((st) => !st.body).map(({ x, y, script }) => ({ x, y, script }));
+      d.x = body.x; d.y = body.y;
+      if (loose.length) d.loose = loose; else delete d.loose;
+    } else d.scripts = stacks.map((st) => ({ x: st.x, y: st.y, script: st.script.length === 1 && isHat(st.script[0]) ? st.script[0] : st.script, ...(st.loose && { loose: true }) }));
+  }
+  /** Shows a function ('fn', data = functions[key]) or object ('obj', data = objects[key]) on the canvas; null clears it. */
+  function open(kind, data) {
+    commit();
+    target = kind ? { kind, data } : null;
+    stacks.length = 0;
+    if (kind === 'fn') {
+      if (!Array.isArray(data.body)) data.body = [];
+      stacks.push({ x: data.x, y: data.y, script: data.body, body: true });
+      for (const l of data.loose || []) if (l && Array.isArray(l.script)) stacks.push({ x: l.x, y: l.y, script: l.script });
+    } else if (kind === 'obj') {
+      if (!Array.isArray(data.scripts)) data.scripts = [];
+      for (const e of data.scripts) {
+        const p = Array.isArray(e) ? { script: e } : e;
+        if (p && Array.isArray(p.script)) stacks.push({ x: p.x, y: p.y, script: isHat(p.script) ? [p.script] : p.script, loose: p.loose });
+      }
+    }
+    render();
+    // auto-place unplaced (bare) scripts in a column below the placed ones
+    const GAP = 24, els = box.children;
+    let y = stacks.reduce((m, st, i) => st.x == null || st.y == null ? m : Math.max(m, st.y + els[i].offsetHeight + GAP), GAP);
+    stacks.forEach((st, i) => {
+      if (st.x != null && st.y != null) return;
+      st.x = GAP; st.y = y; y += els[i].offsetHeight + GAP;
+      els[i].style.left = st.x + 'px'; els[i].style.top = st.y + 'px';
+    });
+    box.scrollTo(0, 0);
   }
 
   // ── right-click menu ──
@@ -570,5 +613,5 @@ var kreditorCode = (function () {
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
-  return { stacks, render, template, OPS, sources };
+  return { stacks, render, template, OPS, sources, open, commit, popup };
 })();

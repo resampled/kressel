@@ -11,7 +11,7 @@
 <div class="nav1">
     <div class="n1-lft">
     <a class="n1-krlogo">KRATIENCE</a>
-    <div class="n1-lftbtn">[File]</div>
+    <div class="n1-lftbtn" data-menu="file">[File]</div>
     <div class="n1-lftbtn">Undo</div>
     <div class="n1-lftbtn">Redo</div>
     <div class="n1-lftbtn">[PlayOptions]</div>
@@ -28,9 +28,9 @@
         <input type="text" placeholder="Find...">
     </div>
     <div class="n2-drop">Game</div>
-    <div class="n2-drop">Functions</div>
+    <div class="n2-drop" data-menu="functions">Functions</div>
     <div class="n2-drop">Rooms</div>
-    <div class="n2-drop">Objects</div>
+    <div class="n2-drop" data-menu="objects">Objects</div>
     <div class="n2-drop">Sprites</div>
     <div class="n2-drop">Audio</div>
     <div class="n2-drop">Fonts</div>
@@ -40,6 +40,7 @@
 <div class="w max">
     <div class="wtop">
         <span class="wtitle">Code</span>
+        <span class="wtabs" hidden><span class="wtab on" data-tab="code">Code</span><span class="wtab" data-tab="props">Properties</span></span>
         <img class="wbtn" src="_static/expand.png" data-act="max" title="Expand" alt="Expand" draggable="false">
         <img class="wbtn" src="_static/exit.png" data-act="close" title="Close" alt="Close" draggable="false">
     </div>
@@ -49,10 +50,13 @@
         <div class="w-code-box">
         </div>
     </div>
+    <div class="w-props" hidden></div>
 </div>
 </div>
 <script src="_static/windows.js"></script>
 <script src="_static/opcodes.gen.js"></script>
 <script src="_static/codeblocks.js"></script>
+<script src="_static/krpj.js"></script>
+<script src="_static/project.js"></script>
 </body>
 </html>
