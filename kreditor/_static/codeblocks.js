@@ -6,10 +6,11 @@
 // Classic script (no modules) so kreditor.html opens from file://. Needs opcodes.gen.js loaded first.
 var kreditorCode = (function () {
   'use strict';
-  const CATS = [['evt', 'Events'], ['ctr', 'Control'], ['mov', 'Movement'], ['lks', 'Looks'], ['drw', 'Drawing'], ['snd', 'Sound'],
+  const CATS = [['evt', 'Events'], ['ctr', 'Control'], ['mov', 'Movement'], ['drw', 'Drawing'], ['snd', 'Sound'],
     ['sen', 'Sensing'], ['opr', 'Operators'], ['var', 'Variables'], ['ins', 'Instances'], ['rom', 'Rooms'], ['cam', 'Camera'],
     ['fnc', 'Functions'], ['dat', 'Data'], ['sys', 'System']];
-  const COLOUR = { ctr: 'ctl', _: 'var' }; // category -> .c-<colour> class, when they differ
+  const COLOUR = { ctr: 'ctl', drw: 'lks', _: 'var' }; // category -> .c-<colour> class, when they differ
+  const MERGE = { lks: 'drw' }; // opcode prefix -> palette category, when they differ
   const colour = (cat) => 'c-' + (COLOUR[cat] || cat);
 
   // ── opcode metadata ──
@@ -29,7 +30,7 @@ var kreditorCode = (function () {
     let args = parseArgs(o.args);
     if (o.args === null && o.name.startsWith('opr_')) args = o.name === 'opr_cond' ? [ANY, ANY, ANY] : UNARY.has(o.name) ? [ANY] : [ANY, ANY];
     const gml = /`([a-z0-9_]+)/.exec(o.gml || '');
-    return [o.name, { ...o, args, cat: o.name[0] === '_' ? (/^_(kw|as)$/.test(o.name) ? 'ins' : '_') : o.name.split('_')[0], gml: gml && gml[1] }];
+    return [o.name, { ...o, args, cat: o.name[0] === '_' ? (/^_(kw|as)$/.test(o.name) ? 'ins' : '_') : (MERGE[o.name.split('_')[0]] || o.name.split('_')[0]), gml: gml && gml[1] }];
   }));
   const REF_OPTS = {
     evt_key: ['pressed', 'held', 'released'],
