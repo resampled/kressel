@@ -152,6 +152,27 @@ test('layer setters ignore a missing layer, getters give defaults (DR ch2 obj_co
   assert.deepEqual([v.gone, v.ld, v.lx], [undefined, -1, 0]);
 });
 
+test('variable_instance_* take a struct too (DR ch5 obj_panfancy camstruct)', async () => {
+  const v = await execFn([
+    ['var_set', ['_lv', 'st'], ['fnc_new', 'Cam']],
+    ['var_inst_set', ['_lv', 'st'], 'doround', 1],
+    ['var_set', ['_lv', 'yes'], ['var_inst_exists', ['_lv', 'st'], 'doround']],
+    ['var_set', ['_lv', 'no'], ['var_inst_exists', ['_lv', 'st'], 'x']],
+    ['var_set', ['_lv', 'got'], ['var_inst_get', ['_lv', 'st'], 'doround']],
+    ['var_set', ['_lv', 'nonum'], ['var_inst_exists', 0, 'doround']],
+  ], { Cam: { args: [], body: [], ctor: true } });
+  assert.deepEqual([v.yes, v.no, v.got, v.nonum], [true, false, 1, false]);
+});
+
+test('layer names match case-insensitively (DR ch5 floortex hides "TILES_Grass" = TILES_GRASS)', async () => {
+  const v = await exec([
+    ['var_set', ['_lv', 'same'], ['opr_eq', ['rom_layer_id', 'i'], ['rom_layer_id', 'I']]],
+    ['rom_layer_set_visible', 'i', 0],
+    ['var_set', ['_lv', 'vis'], ['rom_layer_get_visible', 'I']],
+  ]);
+  assert.deepEqual([v.same, v.vis], [true, false]);
+});
+
 test('missing resources behave like GM, not errors (docs/error_audit.md)', async () => {
   const v = await exec([
     ['var_set', ['_lv', 'snd'], ['snd_play', 999, 0, false]], // audio_play_sound -> -1

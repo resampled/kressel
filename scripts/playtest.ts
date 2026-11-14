@@ -139,6 +139,10 @@ try {
     else if (op === 'down' || op === 'up') p.key(key(a), op === 'down');
     else if (op === 'shot') await shot(a);
     else if (op === 'state') state(a);
+    else if (op === 'layers') {
+      for (const l of g.layers.list) console.log(`  ${l.name} depth=${l.depth} ${l.visible ? 'visible' : 'hidden'}${l.instances ? ' (instances)' : ''} elements=${l.elements.length}${l.shader != null && l.shader >= 0 ? ` shader=${l.shader}` : ''}`);
+      for (const v of g.views) if (v.visible) { const c = g.cameras[v.camera]; if (c) console.log(`  view camera ${c.id}: ${c.x},${c.y} ${c.w}x${c.h}`); }
+    }
     else if (op === 'var') console.log(`  ${a} = ${JSON.stringify(readVar(a))}`);
     else if (op === 'set') setVar(a, Number.isNaN(Number(b)) ? b : Number(b));
     else throw new Error(`unknown command "${op}"`);

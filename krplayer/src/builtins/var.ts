@@ -107,29 +107,34 @@ define('var_struct_exists', (g, s, t) => s[t] instanceof Scope && s[t].vars.has(
 define('var_struct_remove', (g, s, t) => { struct(s[t], 'struct_remove').vars.delete(g.a.varSlot(str(s, t, 1))); return undefined; });
 define('var_struct_keys', (g, s, t) => [...struct(s[t], 'struct_get_names').vars.keys()].map((k) => g.a.varNames[k]));
 
-/** An instance's variable by name: built-ins too (variable_instance_get(id, "x")). */
-function instVar(g: Game, v: Value, name: string): { inst: Instance; iv: number | undefined; slot: number } {
+/**
+ * An instance's (or struct's) variable by name: built-ins too on instances (variable_instance_get(id, "x")).
+ * GMS 2.3+ takes a struct anywhere these take an instance; on a struct, built-in names are plain members (gm_gotchas.md).
+ */
+function instVar(g: Game, v: Value, name: string): { inst: Scope; iv: number | undefined; slot: number } {
   const sc = g.vm.scopeOf(v);
-  if (!(sc instanceof Instance)) throw new Unverified('variable_instance_*: not an instance');
-  return { inst: sc, iv: IV_NAMES.get(name), slot: g.a.varSlot(name) };
+  if (!(sc instanceof Instance) && !(sc instanceof GmStruct)) throw new Unverified('variable_instance_*: not an instance or struct');
+  return { inst: sc, iv: sc instanceof Instance ? IV_NAMES.get(name) : undefined, slot: g.a.varSlot(name) };
 }
+/** variable_instance_exists / get_names target: an instance (or one destroyed this step), a struct, or null. */
+const instOrStruct = (g: Game, v: Value): Scope | null => (v instanceof GmStruct ? v : v instanceof Scope ? null : g.addressable(real(v)));
 define('var_inst_get', (g, s, t) => {
   const { inst, iv, slot } = instVar(g, s[t], str(s, t, 1));
-  return iv !== undefined ? g.getIV(inst, iv, NOI) : inst.vars.get(slot);
+  return iv !== undefined ? g.getIV(inst as Instance, iv, NOI) : inst.vars.get(slot);
 });
 define('var_inst_set', (g, s, t) => {
   const { inst, iv, slot } = instVar(g, s[t], str(s, t, 1));
-  if (iv !== undefined) g.setIV(inst, iv, s[t - 2], NOI); else inst.vars.set(slot, s[t - 2]);
+  if (iv !== undefined) g.setIV(inst as Instance, iv, s[t - 2], NOI); else inst.vars.set(slot, s[t - 2]);
   return undefined;
 });
 define('var_inst_exists', (g, s, t) => {
-  const inst = g.addressable(real(s[t]));
+  const inst = instOrStruct(g, s[t]);
   if (!inst) return false;
   const name = str(s, t, 1);
-  return IV_NAMES.has(name) || inst.vars.has(g.a.varSlot(name));
+  return (inst instanceof Instance && IV_NAMES.has(name)) || inst.vars.has(g.a.varSlot(name));
 });
 define('var_inst_names', (g, s, t) => {
-  const inst = g.addressable(real(s[t]));
+  const inst = instOrStruct(g, s[t]);
   if (!inst) throw new Unverified(`variable_instance_get_names: instance ${String(s[t])} does not exist`);
   return [...inst.vars.keys()].map((k) => g.a.varNames[k]);
 });

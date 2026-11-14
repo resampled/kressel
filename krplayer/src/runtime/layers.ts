@@ -132,8 +132,11 @@ export class Layers {
     if (!l) throw new Unverified(`layer ${JSON.stringify(v)} does not exist`);
     return l;
   }
+  /** Names match case-insensitively, as in GM (Ch5 floortex looks up "TILES_Grass" in rooms that call it TILES_GRASS). */
   find(v: number | string): RtLayer | undefined {
-    return typeof v === 'string' ? this.list.find((l) => l.name === v) : this.list.find((l) => l.id === v);
+    if (typeof v !== 'string') return this.list.find((l) => l.id === v);
+    const n = v.toLowerCase();
+    return this.list.find((l) => l.name.toLowerCase() === n);
   }
   /** The layer at exactly this depth used for instances placed by depth (GM's managed layers). */
   atDepth(depth: number): RtLayer {
